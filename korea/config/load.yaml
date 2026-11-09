@@ -1,0 +1,128 @@
+standby_power:
+  value: 45.0
+  unit: "W"
+  source: "한국전기연구원 전국 대기전력 실태조사 가구 평균 대기전력"
+  status: "UNVERIFIED"
+
+fridge_continuous_power:
+  value: 35.0
+  unit: "W"
+  source: "한국에너지공단 냉장고 1등급 연간소비전력량(312 kWh/년) 환산"
+  status: "VERIFIED"
+
+water_purifier_continuous_power:
+  value: 16.7
+  unit: "W"
+  source: "한국에너지공단 직수형 냉온정수기 1등급 연간소비전력량(146 kWh/년) 환산"
+  status: "VERIFIED"
+
+erv_continuous_power:
+  value: 30.0
+  unit: "W"
+  source: "전열교환기(ERV) 0.5 ACH 저속 연속가동 소비전력"
+  status: "PLACEHOLDER"
+
+washing_machine_daily_kwh:
+  value: 0.3562
+  unit: "kWh/day"
+  source: "드럼세탁기 21kg 1등급 연간 130 kWh/년 / 365"
+  status: "VERIFIED"
+
+washtower_daily_kwh:
+  value: 0.9452
+  unit: "kWh/day"
+  source: "워시타워(세탁기 130 + 건조기 215 = 345 kWh/년) / 365"
+  status: "VERIFIED"
+
+induction_daily_kwh:
+  value: 1.1507
+  unit: "kWh/day"
+  source: "3구 인덕션 연간 420 kWh/년 / 365"
+  status: "VERIFIED"
+
+dishwasher_daily_kwh:
+  value: 0.5068
+  unit: "kWh/day"
+  source: "12인용 식기세척기 연간 185 kWh/년 / 365"
+  status: "VERIFIED"
+
+lightwave_oven_daily_kwh:
+  value: 0.2603
+  unit: "kWh/day"
+  source: "빌트인 광파오븐 연간 95 kWh/년 / 365"
+  status: "VERIFIED"
+
+lighting_annual_kwh_per_m2:
+  value: 4.3452
+  unit: "kWh/(m2*year)"
+  source: "LH 공동주택 조명설계기준 (84m2 기준 365 kWh/년 환산)"
+  status: "VERIFIED"
+
+base_plug_load_per_person_day:
+  value: 0.90
+  unit: "kWh/(person*day)"
+  source: "TV, PC, 소형가전 등 인원 연동 일반 가전 플러그 부하 (2인 연간 657 kWh, 3인 연간 985.5 kWh)"
+  status: "VERIFIED"
+
+dhw_consumption_per_person_day:
+  value: 75.0
+  unit: "L/(person*day)"
+  source: "KDS 건축설계기준 및 급탕표준 (75 L/인·일)"
+  status: "VERIFIED"
+
+dhw_inlet_water_temp:
+  value: 15.0
+  unit: "C"
+  source: "환경부 상수도 연평균 수온"
+  status: "VERIFIED"
+
+dhw_target_water_temp:
+  value: 55.0
+  unit: "C"
+  source: "건축물 에너지절약설계기준 급탕 기준 온도"
+  status: "VERIFIED"
+
+ev_battery_capacity:
+  value: 60.0
+  unit: "kWh"
+  source: "표준 EV 배터리 용량"
+  status: "VERIFIED"
+
+ev_efficiency_km_per_kwh:
+  value: 5.2
+  unit: "km/kWh"
+  source: "공인 복합 전비 5.2 km/kWh"
+  status: "VERIFIED"
+
+ev_annual_base_mileage_km:
+  value: 13140.0
+  unit: "km/year"
+  source: "한국교통안전공단 승용차 연평균 주행거리"
+  status: "VERIFIED"
+
+ev_charge_start_hour:
+  value: 23
+  unit: "hour"
+  source: "야간 완속 충전 시작 시간"
+  status: "PLACEHOLDER"
+
+ev_charger_power_kw:
+  value: 7.0
+  unit: "kW"
+  source: "표준 주택용 완속 충전기 용량"
+  status: "VERIFIED"
+
+peak_summer_season_months:
+  value:
+    - 7
+    - 8
+  unit: "month"
+  source: "하계 휴가 피크 시즌"
+  status: "VERIFIED"
+
+peak_fall_season_months:
+  value:
+    - 10
+  unit: "month"
+  source: "단풍철 주말 세컨드홈 피크 시즌"
+  status: "VERIFIED"

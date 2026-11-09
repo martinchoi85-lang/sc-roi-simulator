@@ -1,0 +1,130 @@
+country_name:
+  value: "korea"
+  unit: "none"
+  source: "Project Specification"
+  grade: "A"
+  status: "VERIFIED"
+
+location_name:
+  value: "Chuncheon, Gangwon (WMO 471010)"
+  unit: "none"
+  source: "Climate.OneBuilding Chuncheon 471010 TMYx (2009-2023)"
+  grade: "A"
+  status: "VERIFIED"
+
+latitude:
+  value: 37.9025
+  unit: "deg"
+  source: "Climate.OneBuilding EPW Metadata / KMA"
+  grade: "A"
+  status: "VERIFIED"
+
+longitude:
+  value: 127.7358
+  unit: "deg"
+  source: "Climate.OneBuilding EPW Metadata / KMA"
+  grade: "A"
+  status: "VERIFIED"
+
+elevation:
+  value: 78.7
+  unit: "m"
+  source: "Climate.OneBuilding EPW Metadata / NGII"
+  grade: "A"
+  status: "VERIFIED"
+
+timezone:
+  value: "Asia/Seoul"
+  unit: "none"
+  source: "IANA Time Zone Database"
+  grade: "A"
+  status: "VERIFIED"
+
+currency:
+  value: "KRW"
+  unit: "none"
+  source: "Bank of Korea"
+  grade: "A"
+  status: "VERIFIED"
+
+scenario_axes:
+  house_models:
+    value:
+      - "MONO Core 54"
+      - "MONO Core 72"
+      - "DUO Max 45"
+    unit: "none"
+    source: "LG Smart Cottage Product Lineup 2026 Specification"
+    grade: "A"
+    status: "VERIFIED"
+
+  heating_packages:
+    value:
+      - "PV+ESS+가스보일러"
+      - "PV+ESS+AWHP"
+    unit: "none"
+    source: "Project Specification"
+    grade: "A"
+    status: "VERIFIED"
+
+  ev_options:
+    value:
+      - 0
+      - 1
+    unit: "vehicle"
+    source: "Project Specification"
+    grade: "A"
+    status: "VERIFIED"
+
+  occupancy_rates:
+    value:
+      - 1.00
+      - 0.70
+      - 0.50
+      - 0.30
+      - 0.10
+      - 0.05
+    unit: "fraction"
+    source: "Second Home Usage Statistics (Korea Tourism Organization)"
+    grade: "B"
+    status: "VERIFIED"
+
+  target_models:
+    value:
+      - "zero_energy"
+      - "zero_bill"
+      - "near_zero_bill"
+    unit: "none"
+    source: "Project Sizing Definitions"
+    grade: "A"
+    status: "VERIFIED"
+
+  subsidy_options:
+    value:
+      - true
+      - false
+    unit: "boolean"
+    source: "Project Financial Assumptions"
+    grade: "A"
+    status: "VERIFIED"
+
+weather_file:
+  value: "korea/source/tmy_chuncheon_471010_15min.csv"
+  unit: "path"
+  source: "Climate.OneBuilding Chuncheon 471010 TMYx Interpolated 15-minute Dataset"
+  grade: "A"
+  status: "VERIFIED"
+
+epw_source_file:
+  value: "korea/source/KOR_KW_Chuncheon.471010_TMYx.2009-2023.epw"
+  unit: "path"
+  source: "Climate.OneBuilding Official Repository (WMO 471010)"
+  grade: "A"
+  status: "VERIFIED"
+
+design_margin:
+  value: 1.0
+  unit: "fraction"
+  source: "User Guideline: Default design margin 1.0"
+  grade: "A"
+  status: "VERIFIED"

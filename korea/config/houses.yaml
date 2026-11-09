@@ -1,0 +1,379 @@
+"MONO Core 54":
+  floor_area:
+    value: 54.0
+    unit: "m2"
+    source: "LG Smart Cottage Spec Sheet 2026"
+    grade: "A"
+    status: "VERIFIED"
+  dimensions:
+    value: "12.36x6.72x3.3m"
+    unit: "m"
+    source: "LG Smart Cottage Spec Sheet 2026"
+    grade: "A"
+    status: "VERIFIED"
+  occupants:
+    value: 2
+    unit: "person"
+    source: "LG Smart Cottage Design Basis (2 occupants)"
+    grade: "A"
+    status: "VERIFIED"
+  roof_area:
+    value: 83.0
+    unit: "m2"
+    source: "LG Smart Cottage Architectural Blueprint (12.36m x 6.72m footprint)"
+    grade: "A"
+    status: "VERIFIED"
+  gross_wall_area:
+    value: 125.9
+    unit: "m2"
+    source: "LG Smart Cottage Architectural Blueprint (2*(12.36+6.72)*3.3m)"
+    grade: "A"
+    status: "VERIFIED"
+  roof_tilt:
+    value: 25.0
+    unit: "deg"
+    source: "LG Smart Cottage Standard Roof Pitch"
+    grade: "A"
+    status: "VERIFIED"
+  roof_azimuth:
+    value: 180.0
+    unit: "deg"
+    source: "South Facing Standard"
+    grade: "A"
+    status: "VERIFIED"
+  u_wall:
+    value: 0.15
+    unit: "W/(m2*K)"
+    source: "Passive House Standard Building Envelope"
+    grade: "A"
+    status: "VERIFIED"
+  u_roof:
+    value: 0.12
+    unit: "W/(m2*K)"
+    source: "Passive House Standard Building Envelope"
+    grade: "A"
+    status: "VERIFIED"
+  u_floor:
+    value: 0.15
+    unit: "W/(m2*K)"
+    source: "Passive House Standard Building Envelope"
+    grade: "A"
+    status: "VERIFIED"
+  u_window:
+    value: 0.90
+    unit: "W/(m2*K)"
+    source: "Triple Glazed Low-E Window Specification"
+    grade: "A"
+    status: "VERIFIED"
+  window_area:
+    value: 15.0
+    unit: "m2"
+    source: "Fenestration Schedule"
+    grade: "A"
+    status: "VERIFIED"
+  shgc:
+    value: 0.40
+    unit: "fraction"
+    source: "Window Thermal Performance Report"
+    grade: "A"
+    status: "VERIFIED"
+  c_internal:
+    value: 165000.0
+    unit: "J/(m2*K)"
+    source: "ISO 13790 Medium Thermal Mass Category"
+    grade: "B"
+    status: "VERIFIED"
+  infiltration_ach:
+    value: 0.50
+    unit: "1/h"
+    source: "Air Infiltration Standard"
+    grade: "A"
+    status: "VERIFIED"
+  setpoint_heat_occupied:
+    value: 21.0
+    unit: "C"
+    source: "ASHRAE Standard 55 / Korean Indoor Comfort Guideline"
+    grade: "A"
+    status: "VERIFIED"
+  setpoint_cool_occupied:
+    value: 26.0
+    unit: "C"
+    source: "Korean Summer Indoor Guideline"
+    grade: "A"
+    status: "VERIFIED"
+  setpoint_heat_unoccupied:
+    value: 8.0
+    unit: "C"
+    source: "Korean Freeze Prevention Guideline"
+    grade: "A"
+    status: "VERIFIED"
+  appliances_desc:
+    value: "냉장고·세탁기·인덕션"
+    unit: "none"
+    source: "LG Smart Cottage Spec Sheet 2026"
+    status: "VERIFIED"
+  included_appliances:
+    value:
+      - "fridge"
+      - "washing_machine"
+      - "induction"
+    unit: "list"
+    source: "LG Smart Cottage Spec Sheet 2026"
+    status: "VERIFIED"
+
+"MONO Core 72":
+  floor_area:
+    value: 72.9
+    unit: "m2"
+    source: "LG Smart Cottage Spec Sheet 2026"
+    grade: "A"
+    status: "VERIFIED"
+  dimensions:
+    value: "12.36x6.36x4.03m"
+    unit: "m"
+    source: "LG Smart Cottage Spec Sheet 2026"
+    grade: "A"
+    status: "VERIFIED"
+  occupants:
+    value: 3
+    unit: "person"
+    source: "LG Smart Cottage Design Basis (3 occupants)"
+    grade: "A"
+    status: "VERIFIED"
+  roof_area:
+    value: 78.6
+    unit: "m2"
+    source: "LG Smart Cottage Architectural Blueprint (12.36m x 6.36m footprint)"
+    grade: "A"
+    status: "VERIFIED"
+  gross_wall_area:
+    value: 150.9
+    unit: "m2"
+    source: "LG Smart Cottage Architectural Blueprint (2*(12.36+6.36)*4.03m)"
+    grade: "A"
+    status: "VERIFIED"
+  roof_tilt:
+    value: 25.0
+    unit: "deg"
+    source: "LG Smart Cottage Standard Roof Pitch"
+    grade: "A"
+    status: "VERIFIED"
+  roof_azimuth:
+    value: 180.0
+    unit: "deg"
+    source: "South Facing Standard"
+    grade: "A"
+    status: "VERIFIED"
+  u_wall:
+    value: 0.15
+    unit: "W/(m2*K)"
+    source: "Passive House Standard Building Envelope"
+    grade: "A"
+    status: "VERIFIED"
+  u_roof:
+    value: 0.12
+    unit: "W/(m2*K)"
+    source: "Passive House Standard Building Envelope"
+    grade: "A"
+    status: "VERIFIED"
+  u_floor:
+    value: 0.15
+    unit: "W/(m2*K)"
+    source: "Passive House Standard Building Envelope"
+    grade: "A"
+    status: "VERIFIED"
+  u_window:
+    value: 0.90
+    unit: "W/(m2*K)"
+    source: "Triple Glazed Low-E Window Specification"
+    grade: "A"
+    status: "VERIFIED"
+  window_area:
+    value: 18.0
+    unit: "m2"
+    source: "Fenestration Schedule"
+    grade: "A"
+    status: "VERIFIED"
+  shgc:
+    value: 0.40
+    unit: "fraction"
+    source: "Window Thermal Performance Report"
+    grade: "A"
+    status: "VERIFIED"
+  c_internal:
+    value: 165000.0
+    unit: "J/(m2*K)"
+    source: "ISO 13790 Medium Thermal Mass Category"
+    grade: "B"
+    status: "VERIFIED"
+  infiltration_ach:
+    value: 0.50
+    unit: "1/h"
+    source: "Air Infiltration Standard"
+    grade: "A"
+    status: "VERIFIED"
+  setpoint_heat_occupied:
+    value: 21.0
+    unit: "C"
+    source: "ASHRAE Standard 55 / Korean Indoor Comfort Guideline"
+    grade: "A"
+    status: "VERIFIED"
+  setpoint_cool_occupied:
+    value: 26.0
+    unit: "C"
+    source: "Korean Summer Indoor Guideline"
+    grade: "A"
+    status: "VERIFIED"
+  setpoint_heat_unoccupied:
+    value: 8.0
+    unit: "C"
+    source: "Korean Freeze Prevention Guideline"
+    grade: "A"
+    status: "VERIFIED"
+  appliances_desc:
+    value: "냉장고·워시타워·인덕션·식기세척기"
+    unit: "none"
+    source: "Specification Description (Household assumption)"
+    status: "UNVERIFIED"
+  included_appliances:
+    value:
+      - "fridge"
+      - "washtower"
+      - "dishwasher"
+      - "induction"
+    unit: "list"
+    source: "Specification Description"
+    status: "UNVERIFIED"
+
+"DUO Max 45":
+  floor_area:
+    value: 45.4
+    unit: "m2"
+    source: "LG Smart Cottage DUO Max 45 Spec Sheet 2026 (1F 29.4m2, 2F 16.0m2)"
+    grade: "A"
+    status: "VERIFIED"
+  dimensions:
+    value: "11.0x3.3x6.5m"
+    unit: "m"
+    source: "LG Smart Cottage Spec Sheet 2026"
+    grade: "A"
+    status: "VERIFIED"
+  occupants:
+    value: 2
+    unit: "person"
+    source: "LG Smart Cottage Design Basis (2 occupants)"
+    grade: "A"
+    status: "VERIFIED"
+  base_pv_capacity_kw:
+    value: 5.0
+    unit: "kW"
+    source: "DUO Max Standard Integrated Rooftop PV Specification"
+    grade: "B"
+    status: "UNVERIFIED"
+  roof_area:
+    value: 36.3
+    unit: "m2"
+    source: "LG Smart Cottage Architectural Blueprint (11.0m x 3.3m footprint)"
+    grade: "A"
+    status: "VERIFIED"
+  gross_wall_area:
+    value: 185.9
+    unit: "m2"
+    source: "LG Smart Cottage Architectural Blueprint (2*(11.0+3.3)*6.5m)"
+    grade: "A"
+    status: "VERIFIED"
+  roof_tilt:
+    value: 25.0
+    unit: "deg"
+    source: "LG Smart Cottage Standard Roof Pitch"
+    grade: "A"
+    status: "VERIFIED"
+  roof_azimuth:
+    value: 180.0
+    unit: "deg"
+    source: "South Facing Standard"
+    grade: "A"
+    status: "VERIFIED"
+  u_wall:
+    value: 0.15
+    unit: "W/(m2*K)"
+    source: "Passive House Standard Building Envelope"
+    grade: "A"
+    status: "VERIFIED"
+  u_roof:
+    value: 0.12
+    unit: "W/(m2*K)"
+    source: "Passive House Standard Building Envelope"
+    grade: "A"
+    status: "VERIFIED"
+  u_floor:
+    value: 0.15
+    unit: "W/(m2*K)"
+    source: "Passive House Standard Building Envelope"
+    grade: "A"
+    status: "VERIFIED"
+  u_window:
+    value: 0.90
+    unit: "W/(m2*K)"
+    source: "Triple Glazed Low-E Window Specification"
+    grade: "A"
+    status: "VERIFIED"
+  window_area:
+    value: 14.0
+    unit: "m2"
+    source: "Fenestration Schedule"
+    grade: "A"
+    status: "VERIFIED"
+  shgc:
+    value: 0.40
+    unit: "fraction"
+    source: "Window Thermal Performance Report"
+    grade: "A"
+    status: "VERIFIED"
+  c_internal:
+    value: 165000.0
+    unit: "J/(m2*K)"
+    source: "ISO 13790 Medium Thermal Mass Category"
+    grade: "B"
+    status: "VERIFIED"
+  infiltration_ach:
+    value: 0.50
+    unit: "1/h"
+    source: "Air Infiltration Standard"
+    grade: "A"
+    status: "VERIFIED"
+  setpoint_heat_occupied:
+    value: 21.0
+    unit: "C"
+    source: "ASHRAE Standard 55 / Korean Indoor Comfort Guideline"
+    grade: "A"
+    status: "VERIFIED"
+  setpoint_cool_occupied:
+    value: 26.0
+    unit: "C"
+    source: "Korean Summer Indoor Guideline"
+    grade: "A"
+    status: "VERIFIED"
+  setpoint_heat_unoccupied:
+    value: 8.0
+    unit: "C"
+    source: "Korean Freeze Prevention Guideline"
+    grade: "A"
+    status: "VERIFIED"
+  appliances_desc:
+    value: "워시타워 컴팩트, 식기세척기, 인덕션, 광파오븐, 정수기, ERV, 냉장고"
+    unit: "none"
+    source: "LG Smart Cottage Spec Sheet 2026"
+    status: "VERIFIED"
+  included_appliances:
+    value:
+      - "fridge"
+      - "washtower"
+      - "dishwasher"
+      - "induction"
+      - "lightwave_oven"
+      - "water_purifier"
+      - "erv"
+    unit: "list"
+    source: "LG Smart Cottage Spec Sheet 2026"
+    status: "VERIFIED"

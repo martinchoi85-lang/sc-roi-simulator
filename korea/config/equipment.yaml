@@ -1,0 +1,183 @@
+pv_system:
+  module_efficiency:
+    value: 0.21
+    unit: "fraction"
+    source: "LG NeON R High Efficiency N-type Module Benchmark"
+    grade: "A"
+    status: "VERIFIED"
+  temp_coefficient_power:
+    value: -0.0035
+    unit: "1/C"
+    source: "LG Solar PV Technical Datasheet"
+    grade: "A"
+    status: "VERIFIED"
+  annual_degradation_rate:
+    value: 0.005
+    unit: "fraction/year"
+    source: "Project Requirement: 0.5%/year PV degradation"
+    grade: "A"
+    status: "VERIFIED"
+  inverter_efficiency:
+    value: 0.97
+    unit: "fraction"
+    source: "European Weighted Inverter Efficiency"
+    grade: "A"
+    status: "VERIFIED"
+  bos_loss_factor:
+    value: 0.14
+    unit: "fraction"
+    source: "NREL PVWatts System Losses (wiring, soiling, mismatch)"
+    grade: "B"
+    status: "VERIFIED"
+
+ess_system:
+  round_trip_efficiency:
+    value: 0.90
+    unit: "fraction"
+    source: "LG Energy Solution Residential ESS Specification"
+    grade: "A"
+    status: "VERIFIED"
+  usable_dod:
+    value: 0.70
+    unit: "fraction"
+    source: "Project Requirement: Usable capacity 70%"
+    grade: "A"
+    status: "VERIFIED"
+  soc_min:
+    value: 0.15
+    unit: "fraction"
+    source: "BMS Operational Minimum (Usable range 15%~85%)"
+    grade: "A"
+    status: "VERIFIED"
+  soc_max:
+    value: 0.85
+    unit: "fraction"
+    source: "BMS Operational Maximum (Usable range 15%~85%)"
+    grade: "A"
+    status: "VERIFIED"
+  c_rate_max:
+    value: 0.50
+    unit: "1/h"
+    source: "Standard 0.5C Continuous Charge/Discharge Limit"
+    grade: "A"
+    status: "VERIFIED"
+  min_module_kwh:
+    value: 9.6
+    unit: "kWh"
+    source: "G7 RESU 10H Prime 9.6kWh Module"
+    grade: "B"
+    status: "VERIFIED"
+
+gas_boiler:
+  thermal_efficiency:
+    value: 0.90
+    unit: "fraction"
+    source: "Korean Grade 1 Condensing Gas Boiler Efficiency Standard"
+    grade: "A"
+    status: "VERIFIED"
+  max_heating_capacity_kw:
+    value: 20.0
+    unit: "kW"
+    source: "Standard Condensing Gas Boiler Heating Capacity (20kW)"
+    grade: "A"
+    status: "VERIFIED"
+
+awhp_system:
+  nominal_heating_capacity_kw:
+    value: 9.0
+    unit: "kW"
+    source: "HM091HF 9kW Cap (G6 removed)"
+    grade: "C"
+    status: "PLACEHOLDER"
+  max_heating_capacity_kw:
+    value: 9.0
+    unit: "kW"
+    source: "User Guideline: 9kW flat cap across all ambient temps (PLACEHOLDER)"
+    grade: "C"
+    status: "PLACEHOLDER"
+  backup_heater_capacity_kw:
+    value: 3.0
+    unit: "kW"
+    source: "Therma V Integrated Electric Backup Heater Specification"
+    grade: "A"
+    status: "VERIFIED"
+  backup_heater_cop:
+    value: 1.0
+    unit: "fraction"
+    source: "Direct Electric Resistance Heating COP"
+    grade: "A"
+    status: "VERIFIED"
+  heating_leaving_water_temp:
+    value: 40.0
+    unit: "C"
+    source: "Korean Radiant Floor Heating Standard Supply Temp / User Requirement"
+    grade: "A"
+    status: "VERIFIED"
+  dhw_leaving_water_temp:
+    value: 55.0
+    unit: "C"
+    source: "Domestic Hot Water Supply Temp / User Requirement"
+    grade: "A"
+    status: "VERIFIED"
+  cop_cool_nominal:
+    value: 4.40
+    unit: "fraction"
+    source: "G4.csv (13): LG 시스템에어컨 냉방 효율 4.40 W/W"
+    grade: "A"
+    status: "VERIFIED"
+
+  # HM091HF Performance Specifications
+  cop_a7_w35:
+    value: 4.7
+    unit: "fraction"
+    source: "HM091HF Official Datasheet"
+    grade: "A"
+    status: "VERIFIED"
+  cop_a2_w35:
+    value: 3.7
+    unit: "fraction"
+    source: "HM091HF Official Datasheet"
+    grade: "A"
+    status: "VERIFIED"
+  cop_am7_w35:
+    value: 2.7
+    unit: "fraction"
+    source: "HM091HF Official Datasheet"
+    grade: "A"
+    status: "VERIFIED"
+  cop_a7_w55:
+    value: 3.3
+    unit: "fraction"
+    source: "HM091HF Official Datasheet"
+    grade: "A"
+    status: "VERIFIED"
+  cop_am7_w55:
+    value: 2.2
+    unit: "fraction"
+    source: "HM091HF Official Datasheet"
+    grade: "A"
+    status: "VERIFIED"
+  cop_a2_w55:
+    value: 2.75
+    unit: "fraction"
+    source: "HM091HF Estimated Value"
+    grade: "B"
+    status: "UNVERIFIED"
+  extrapolation_slope_under_am7:
+    value: 0.111
+    unit: "1/C"
+    source: "User Guideline: A2~A-7 slope 0.111/C linear extrapolation"
+    grade: "B"
+    status: "VERIFIED"
+  w55_factor_under_am7:
+    value: 0.815
+    unit: "fraction"
+    source: "User Guideline: W55 = W35 * 0.815 below A-7"
+    grade: "B"
+    status: "VERIFIED"
+  cop_lower_bound:
+    value: 1.0
+    unit: "fraction"
+    source: "Thermodynamic lower bound for heat pump"
+    grade: "A"
+    status: "VERIFIED"

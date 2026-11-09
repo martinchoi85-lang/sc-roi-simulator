@@ -1,0 +1,173 @@
+tariff_type:
+  value: "residential_low_voltage"
+  unit: "none"
+  source: "KEPCO Electricity Tariff Table 2026 / G1.csv"
+  grade: "A"
+  status: "VERIFIED"
+
+net_metering_scheme:
+  value: "monthly_net"
+  unit: "none"
+  source: "KEPCO PPA Net-metering Regulation / G1.csv (17, 33, 34)"
+  grade: "A"
+  status: "VERIFIED"
+
+rollover_scheme:
+  value: "indefinite"
+  unit: "none"
+  source: "G1.csv (17: 무기한 누적 이월 (소멸 없음))"
+  grade: "A"
+  status: "VERIFIED"
+
+supported_rollover_schemes:
+  value:
+    - "indefinite"
+    - "limited_months"
+    - "annual_reset"
+  unit: "none"
+  source: "Project Requirements"
+  grade: "A"
+  status: "VERIFIED"
+
+base_rates_standard:
+  tier1_up_to_200kwh:
+    value: 910.0
+    unit: "KRW/month"
+    source: "KEPCO Tariff Schedule / G1.csv (1)"
+    grade: "A"
+    status: "VERIFIED"
+  tier2_201_to_400kwh:
+    value: 1600.0
+    unit: "KRW/month"
+    source: "KEPCO Tariff Schedule / G1.csv (2)"
+    grade: "A"
+    status: "VERIFIED"
+  tier3_above_400kwh:
+    value: 7300.0
+    unit: "KRW/month"
+    source: "KEPCO Tariff Schedule / G1.csv (3)"
+    grade: "A"
+    status: "VERIFIED"
+
+base_rates_summer:
+  tier1_up_to_300kwh:
+    value: 910.0
+    unit: "KRW/month"
+    source: "KEPCO Summer Tariff Schedule (July-August) / G1.csv (1)"
+    grade: "A"
+    status: "VERIFIED"
+  tier2_301_to_450kwh:
+    value: 1600.0
+    unit: "KRW/month"
+    source: "KEPCO Summer Tariff Schedule (July-August) / G1.csv (2)"
+    grade: "A"
+    status: "VERIFIED"
+  tier3_above_450kwh:
+    value: 7300.0
+    unit: "KRW/month"
+    source: "KEPCO Summer Tariff Schedule (July-August) / G1.csv (3)"
+    grade: "A"
+    status: "VERIFIED"
+
+energy_rates_standard:
+  tier1_up_to_200kwh:
+    value: 120.0
+    unit: "KRW/kWh"
+    source: "KEPCO Tariff Schedule / G1.csv (4)"
+    grade: "A"
+    status: "VERIFIED"
+  tier2_201_to_400kwh:
+    value: 214.6
+    unit: "KRW/kWh"
+    source: "KEPCO Tariff Schedule / G1.csv (5)"
+    grade: "A"
+    status: "VERIFIED"
+  tier3_above_400kwh:
+    value: 307.3
+    unit: "KRW/kWh"
+    source: "KEPCO Tariff Schedule / G1.csv (6)"
+    grade: "A"
+    status: "VERIFIED"
+
+energy_rates_summer:
+  tier1_up_to_300kwh:
+    value: 120.0
+    unit: "KRW/kWh"
+    source: "KEPCO Summer Tariff Schedule (July-August) / G1.csv (4)"
+    grade: "A"
+    status: "VERIFIED"
+  tier2_301_to_450kwh:
+    value: 214.6
+    unit: "KRW/kWh"
+    source: "KEPCO Summer Tariff Schedule (July-August) / G1.csv (5)"
+    grade: "A"
+    status: "VERIFIED"
+  tier3_above_450kwh:
+    value: 307.3
+    unit: "KRW/kWh"
+    source: "KEPCO Summer Tariff Schedule (July-August) / G1.csv (6)"
+    grade: "A"
+    status: "VERIFIED"
+
+super_user_rate:
+  value: 736.2
+  unit: "KRW/kWh"
+  source: "G5.csv (5: 하계 7~8월·동계 12~2월 1,000kWh 초과분 736.2원/kWh)"
+  grade: "B"
+  status: "UNVERIFIED"
+
+super_user_threshold_kwh:
+  value: 1000.0
+  unit: "kWh/month"
+  source: "KEPCO Super-user Rule / G5.csv (5)"
+  grade: "A"
+  status: "VERIFIED"
+
+climate_rate:
+  value: 9.0
+  unit: "KRW/kWh"
+  source: "KEPCO Climate Environment Charge 2026 / G1.csv (7)"
+  grade: "A"
+  status: "VERIFIED"
+
+fuel_adjust_rate:
+  value: 5.0
+  unit: "KRW/kWh"
+  source: "KEPCO Fuel Cost Adjustment Cap (+5 KRW/kWh) / G1.csv (8)"
+  grade: "A"
+  status: "VERIFIED"
+
+vat_rate:
+  value: 0.10
+  unit: "fraction"
+  source: "Value Added Tax Act Korea / G1.csv (9)"
+  grade: "A"
+  status: "VERIFIED"
+
+power_fund_rate:
+  value: 0.027
+  unit: "fraction"
+  source: "Electric Utility Act Enforcement Decree Annex 8 (2.7% as of 2025/2026) / G1.csv (10)"
+  grade: "A"
+  status: "VERIFIED"
+
+lpg_unit_price:
+  value: 2780.15
+  unit: "KRW/kg"
+  source: "Korea Petroleum Association Opinet Gangwon Region Retail Propane Price / G1.csv (25)"
+  grade: "A"
+  status: "VERIFIED"
+
+lpg_net_heating_value_mj_per_kg:
+  value: 46.3
+  unit: "MJ/kg"
+  source: "Energy Law Enforcement Rules Annex 1 Calorific Value Standards (Net) / G1.csv (32)"
+  grade: "A"
+  status: "VERIFIED"
+
+lpg_heating_value_kwh_per_kg:
+  value: 12.8611
+  unit: "kWh/kg"
+  source: "Converted from 46.3 MJ/kg (1 MJ = 1/3.6 kWh)"
+  grade: "A"
+  status: "VERIFIED"

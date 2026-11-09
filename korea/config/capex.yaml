@@ -1,0 +1,177 @@
+# Granular CAPEX Configuration with Low / Central / High Brackets
+# Reflecting User Guidelines (VAT Included)
+
+fx_krw_per_usd:
+  value: 1400.0
+  unit: "KRW/USD"
+  source: "User Guideline: Standard exchange rate assumption 1400 KRW/USD"
+  status: "PLACEHOLDER"
+
+pv_system:
+  unit_cost_per_kw:
+    low:
+      value: 1100000.0
+      unit: "KRW/kW"
+      source: "100kW 규모 참고값, https://tilnote.io/pages/69e81f1923c4724b7b705122"
+      status: "UNVERIFIED"
+    central:
+      value: 1513667.0
+      unit: "KRW/kW"
+      source: "2026 주택지원 3kW 상한 4,541,000원 / 3kW"
+      status: "UNVERIFIED"
+    high:
+      value: 2000000.0
+      unit: "KRW/kW"
+      source: "https://glasswallet.com/calculate/solar-panel-roi/installation-cost"
+      status: "UNVERIFIED"
+
+ground_mount_pv:
+  threshold_kw:
+    value: 5.0
+    unit: "kW"
+    source: "User Guideline: Standard rooftop capacity threshold"
+    status: "PLACEHOLDER"
+  excess_cost_per_kw:
+    value: 0.0
+    unit: "KRW/kW"
+    source: "User Guideline: 지상 추가비 삭제 및 0원 적용"
+    status: "PLACEHOLDER"
+
+ess_system:
+  min_module_kwh:
+    value: 9.6
+    unit: "kWh"
+    source: "LG RESU 10H Prime 9.6kWh 모듈 단위"
+    status: "UNVERIFIED"
+  unit_cost_usd_per_kwh:
+    low:
+      value: 283.0
+      unit: "USD/kWh"
+      source: "NREL ATB 배터리 팩 $283/kWh (팩 단가만, 2022 USD), https://atb.nrel.gov/electricity/2024/residential_battery_storage"
+      status: "UNVERIFIED"
+    central:
+      value: 1268.0
+      unit: "USD/kWh"
+      source: "NREL Q1 2021 Benchmark, 5kW/12.5kWh DC $15,852, 2020 USD, https://www.nrel.gov/docs/fy22osti/81408.pdf"
+      status: "UNVERIFIED"
+    high:
+      value: 1337.0
+      unit: "USD/kWh"
+      source: "NREL Q1 2021 Benchmark, 5kW/12.5kWh AC $16,715, 2020 USD, https://www.nrel.gov/docs/fy22osti/81408.pdf"
+      status: "UNVERIFIED"
+  unit_cost_per_kwh:
+    low:
+      value: 396200.0
+      unit: "KRW/kWh"
+      source: "NREL ATB 배터리 팩 $283/kWh * 1400 KRW/USD (팩 단가만, 시공 제외)"
+      status: "UNVERIFIED"
+      note: "NREL ATB 팩 단가 기준 (시공 제외, 해외값)"
+    central:
+      value: 1775200.0
+      unit: "KRW/kWh"
+      source: "NREL Q1 2021 Benchmark $1,268/kWh * 1400 KRW/USD"
+      status: "UNVERIFIED"
+      note: "NREL Q1 2021 DC Benchmark 해외값"
+    high:
+      value: 1871800.0
+      unit: "KRW/kWh"
+      source: "NREL Q1 2021 Benchmark $1,337/kWh * 1400 KRW/USD"
+      status: "UNVERIFIED"
+      note: "NREL Q1 2021 AC Benchmark 해외값"
+
+awhp_system:
+  turnkey_installation_cost:
+    low:
+      value: 14000000.0
+      unit: "KRW"
+      source: "https://www.kharn.kr/news/article.html?no=31533"
+      status: "UNVERIFIED"
+    central:
+      value: 14000000.0
+      unit: "KRW"
+      source: "https://www.kharn.kr/news/article.html?no=31533"
+      status: "UNVERIFIED"
+    high:
+      value: 14000000.0
+      unit: "KRW"
+      source: "https://www.kharn.kr/news/article.html?no=31533"
+      status: "UNVERIFIED"
+  breakdown_major_equipment:
+    value: 12000000.0
+    unit: "KRW"
+    source: "User Guideline: 주요설비 12,000,000원"
+    status: "UNVERIFIED"
+  breakdown_electric_and_other:
+    value: 2000000.0
+    unit: "KRW"
+    source: "User Guideline: 전기·기타 2,000,000원"
+    status: "UNVERIFIED"
+
+replacements:
+  ess_replacement_year:
+    value: 11
+    unit: "year"
+    source: "Project Cashflow Requirement (Year 11)"
+    status: "VERIFIED"
+  ess_replacement_unit_cost_per_kwh:
+    value: 396200.0
+    unit: "KRW/kWh"
+    source: "283 USD/kWh * 1400 KRW/USD (NREL ATB 배터리 팩 단가, 시공비 제외)"
+    status: "UNVERIFIED"
+  inverter_replacement_year:
+    value: 13
+    unit: "year"
+    source: "Project Cashflow Requirement (Year 13)"
+    status: "VERIFIED"
+  inverter_replacement_min_krw:
+    value: 750000.0
+    unit: "KRW"
+    source: "13년 차 인버터 최소 교체비"
+    status: "PLACEHOLDER"
+  inverter_replacement_per_kw:
+    value: 250000.0
+    unit: "KRW/kW"
+    source: "13년 차 인버터 용량당 교체비"
+    status: "PLACEHOLDER"
+
+grid_connection:
+  existing_contract_power_kw:
+    value: 3.0
+    unit: "kW"
+    source: "Standard KEPCO Low Voltage Residential Initial Contract Power"
+    status: "VERIFIED"
+  distribution_board_cost:
+    value: 450000.0
+    unit: "KRW"
+    source: "계약전력 증설 시 분전반 개체비"
+    status: "PLACEHOLDER"
+  wiring_expansion_cost_per_kw:
+    value: 300000.0
+    unit: "KRW/kW"
+    source: "계약전력 증설 내선공사비"
+    status: "PLACEHOLDER"
+  meter_and_inspection_cost:
+    value: 0.0
+    unit: "KRW"
+    source: "계량기·사용전점검 0원"
+    status: "VERIFIED"
+  grid_facility_base_kw:
+    value: 5.0
+    unit: "kW"
+    source: "KEPCO Customer Contribution Standard Base Level (5kW)"
+    status: "VERIFIED"
+  grid_facility_base_fee_under_5kw:
+    value: 306000.0
+    unit: "KRW"
+    source: "한전 기본시설부담금 306,000원 (VAT 별도)"
+    status: "VERIFIED"
+  grid_facility_excess_fee_per_kw:
+    value: 121000.0
+    unit: "KRW/kW"
+    source: "한전 거리시설부담금 121,000원/kW (5kW 초과분, VAT 별도)"
+    status: "VERIFIED"
+  grid_facility_vat_rate:
+    value: 0.10
+    unit: "fraction"
+    source: "Value Added Tax Act (10% VAT on Facility Charges)"
+    status: "VERIFIED"
