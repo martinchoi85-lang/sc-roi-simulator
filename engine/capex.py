@@ -157,6 +157,7 @@ def calculate_capex_tier(
         "contract_power_kw": contract_power_kw,
         "pv_turnkey_cost": round(pv_turnkey_total, 0),
         "pv_turnkey_krw": round(pv_turnkey_total, 0),
+        "pv_land_area_m2": round(pv_capacity_kw * 5.0, 2),
         "ground_mount_cost": 0.0,
         "ground_mount_krw": 0.0,
         "ess_cost": round(ess_cost, 0),

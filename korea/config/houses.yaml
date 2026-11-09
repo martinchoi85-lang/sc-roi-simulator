@@ -270,6 +270,12 @@
     source: "DUO Max Standard Integrated Rooftop PV Specification"
     grade: "B"
     status: "UNVERIFIED"
+  uses_awhp_cooling:
+    value: true
+    unit: "boolean"
+    source: "DUO Max AWHP 냉방(Therma V A35/W7 EER 2.6, 5.5kW 적용)"
+    grade: "A"
+    status: "VERIFIED"
   roof_area:
     value: 36.3
     unit: "m2"

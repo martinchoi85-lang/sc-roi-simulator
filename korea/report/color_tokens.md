@@ -31,3 +31,4 @@ HTML 보고서와 PPT 테마 전반에 일관되게 적용됩니다.
 - **공식 확인 (VERIFIED)**: `#A50034` (Heritage Red) 배경 / `#FFFFFF` 텍스트
 - **미검증 (UNVERIFIED)**: `#707070` (Neutral Gray) 배경 / `#FFFFFF` 텍스트
 - **(가정) (PLACEHOLDER/가정)**: `#F0ECE4` (Warm Gray) 배경 / `#000000` 텍스트 (다크모드: `#2A2A2A` 배경 / `#F5F5F5` 텍스트)
+

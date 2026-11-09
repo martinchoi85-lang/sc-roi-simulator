@@ -92,7 +92,8 @@ def run_all_scenarios(
                     p_ev_kw = calculate_ev_load(ev_opt, occ_rate, is_occ_day, load_cfg)
                     hvac_res = simulate_hvac_and_dhw(
                         heat_pkg, q_heat_kw, q_cool_kw, q_dhw_kw,
-                        weather_df["temp_air"].values, equip_cfg, tariff_cfg
+                        weather_df["temp_air"].values, equip_cfg, tariff_cfg,
+                        house_config=h_cfg,
                     )
 
                     total_p_load_kw = p_app_kw + p_ev_kw + hvac_res["p_hvac_kw"]
@@ -136,6 +137,7 @@ def run_all_scenarios(
                     capex_config=capex_cfg,
                     design_margin=design_margin,
                     ghi_arr=weather_df["ghi"].values,
+                    heating_package=heat_pkg,
                 )
                 key = (h_name, heat_pkg, ev_opt)
                 zero_energy_sizings[key] = ze_res
@@ -358,6 +360,7 @@ def run_all_scenarios(
                                 "pv_capacity_tmy_kw": size_res.get("pv_capacity_tmy_kw", pv_cap),
                                 "pv_capacity_month_avg_kw": size_res.get("pv_capacity_month_avg_kw", pv_cap),
                                 "pv_effective_25y_kw": round(pv_cap * deg_25, 2),
+                                "pv_land_area_m2": round(pv_cap * 5.0, 2),
                                 "ess_capacity_kwh": ess_cap,
                                 "ess_capacity_bol_kwh": size_res.get("ess_capacity_bol_kwh", ess_cap),
                                 "ess_usable_kwh": round(ess_cap * 0.70, 2),

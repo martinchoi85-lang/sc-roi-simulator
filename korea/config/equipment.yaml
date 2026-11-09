@@ -86,15 +86,39 @@ awhp_system:
   nominal_heating_capacity_kw:
     value: 9.0
     unit: "kW"
-    source: "HM091HF 9kW Cap (G6 removed)"
-    grade: "C"
-    status: "PLACEHOLDER"
-  max_heating_capacity_kw:
+    source: "LG Therma V HM091HF UB40 공식 데이터시트"
+    grade: "A"
+    status: "VERIFIED"
+  max_heating_capacity_w35_kw:
     value: 9.0
     unit: "kW"
-    source: "User Guideline: 9kW flat cap across all ambient temps (PLACEHOLDER)"
-    grade: "C"
-    status: "PLACEHOLDER"
+    source: "HM091HF UB40 W35 최대 열출력 상한 (공식 데이터시트)"
+    grade: "A"
+    status: "VERIFIED"
+  max_heating_capacity_w55_kw:
+    value: 8.0
+    unit: "kW"
+    source: "HM091HF UB40 W55 최대 열출력 상한 (A-7/W55 8.0kW 정격, 공식 데이터시트)"
+    grade: "A"
+    status: "VERIFIED"
+  max_electric_input_kw:
+    value: 3.91
+    unit: "kW"
+    source: "HM091HF UB40 최대 입력전력 (17A @ 230V, 공식 데이터시트)"
+    grade: "A"
+    status: "VERIFIED"
+  max_current_a:
+    value: 17.0
+    unit: "A"
+    source: "HM091HF UB40 최대 운전전류 (공식 데이터시트)"
+    grade: "A"
+    status: "VERIFIED"
+  standby_power_w:
+    value: 10.0
+    unit: "W"
+    source: "HM091HF UB40 대기전력 (공식 데이터시트)"
+    grade: "A"
+    status: "VERIFIED"
   backup_heater_capacity_kw:
     value: 3.0
     unit: "kW"
@@ -125,36 +149,49 @@ awhp_system:
     source: "G4.csv (13): LG 시스템에어컨 냉방 효율 4.40 W/W"
     grade: "A"
     status: "VERIFIED"
+  therma_v_cooling_eer:
+    value: 2.6
+    unit: "fraction"
+    source: "HM091HF UB40 A35/W7 냉방 EER (공식 데이터시트)"
+    grade: "A"
+    status: "VERIFIED"
+  therma_v_cooling_capacity_kw:
+    value: 5.5
+    unit: "kW"
+    source: "HM091HF UB40 냉방 정격 용량 5.5kW (공식 데이터시트)"
+    grade: "A"
+    status: "VERIFIED"
 
-  # HM091HF Performance Specifications
+  # HM091HF Performance Specifications (VERIFIED)
+  # 정격 시험값: A7/W35 9.0kW·1.91kW, A2/W35 8.0kW·2.16kW, A-7/W35 9.0kW·3.33kW, A7/W55 5.5kW·1.67kW, A-7/W55 8.0kW·3.64kW
   cop_a7_w35:
     value: 4.7
     unit: "fraction"
-    source: "HM091HF Official Datasheet"
+    source: "HM091HF Official Datasheet (9.0kW / 1.91kW)"
     grade: "A"
     status: "VERIFIED"
   cop_a2_w35:
     value: 3.7
     unit: "fraction"
-    source: "HM091HF Official Datasheet"
+    source: "HM091HF Official Datasheet (8.0kW / 2.16kW)"
     grade: "A"
     status: "VERIFIED"
   cop_am7_w35:
     value: 2.7
     unit: "fraction"
-    source: "HM091HF Official Datasheet"
+    source: "HM091HF Official Datasheet (9.0kW / 3.33kW)"
     grade: "A"
     status: "VERIFIED"
   cop_a7_w55:
     value: 3.3
     unit: "fraction"
-    source: "HM091HF Official Datasheet"
+    source: "HM091HF Official Datasheet (5.5kW / 1.67kW)"
     grade: "A"
     status: "VERIFIED"
   cop_am7_w55:
     value: 2.2
     unit: "fraction"
-    source: "HM091HF Official Datasheet"
+    source: "HM091HF Official Datasheet (8.0kW / 3.64kW)"
     grade: "A"
     status: "VERIFIED"
   cop_a2_w55:
@@ -166,15 +203,15 @@ awhp_system:
   extrapolation_slope_under_am7:
     value: 0.111
     unit: "1/C"
-    source: "User Guideline: A2~A-7 slope 0.111/C linear extrapolation"
-    grade: "B"
-    status: "VERIFIED"
+    source: "A2~A-7 기울기 외삽 (A-7 미만 성능 미검증)"
+    grade: "C"
+    status: "UNVERIFIED"
   w55_factor_under_am7:
     value: 0.815
     unit: "fraction"
-    source: "User Guideline: W55 = W35 * 0.815 below A-7"
-    grade: "B"
-    status: "VERIFIED"
+    source: "W55 = W35 * 0.815 (A-7 미만 성능 미검증)"
+    grade: "C"
+    status: "UNVERIFIED"
   cop_lower_bound:
     value: 1.0
     unit: "fraction"

@@ -1,6 +1,6 @@
 """System sizing algorithms for zero_energy, zero_bill, and near_zero_bill targets."""
 
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 import numpy as np
 import pandas as pd
 from engine.ess import simulate_ess_dispatch, simulate_ess_dispatch_steady_state
@@ -19,16 +19,18 @@ def size_zero_energy(
     capex_config: Dict[str, Any],
     design_margin: float = 1.0,
     ghi_arr: Optional[np.ndarray] = None,
+    heating_package: str = "",
 ) -> Dict[str, Any]:
     """Sizes PV and ESS for zero_energy satisfying 0 external/grid energy across all occupancies.
 
     Rules:
-    - PV = max_d(daily_load / daily_pv1) over 365 days. The day creating this value is critical_day.
+    - PV = max_d(daily_load / (daily_pv1 * 0.995^24)) over 365 days. The day creating this value is critical_day.
     - Performance baseline: PV 25-yr degradation 0.995^24, ESS usable capacity 70%.
     - ESS is integer multiple of 9.6 kWh modules, ceiling based on daily SoC cycle deficit / (DoD * sqrt(rte)).
     - Sized using 100% occupancy load, identical sizing applied across all 6 occupancy rates.
     - Annual 15-minute simulation in periodic steady-state (start SoC == end SoC). Surplus PV curtailed.
-    - If any occupancy has unmet load > 0.001 kWh, increment PV by 0.5kW and ESS by 9.6kWh to find min-CAPEX combination.
+    - Search lower bound for PV lowered to 0.5kW to discover true minimal CAPEX combination.
+    - CAPEX evaluation includes AWHP basis consistently for min_capex and top1.
     - Final loss_of_load_hours must be 0 across all cases.
     - Inverter capacity >= peak load kW including ESS discharge.
     """
@@ -42,27 +44,32 @@ def size_zero_energy(
     daily_loads_100 = np.sum(p_load_100_kw.reshape(365, 96), axis=1) * dt_h
     daily_pv1 = np.sum(p_pv1_kw.reshape(365, 96), axis=1) * dt_h
     daily_pv1_safe = np.maximum(0.01, daily_pv1)
+    daily_pv1_deg = daily_pv1_safe * deg_25
 
-    # 1. Critical Day Search (PV = max_d(load / pv1))
-    ratios = daily_loads_100 / daily_pv1_safe
+    # 1. Critical Day Search (PV = max_d(load / (pv1 * 0.995^24)))
+    ratios = daily_loads_100 / daily_pv1_deg
     crit_day_idx = int(np.argmax(ratios))
     crit_date_str = dates[crit_day_idx * 96].strftime("%Y-%m-%d")
     crit_day_num = crit_day_idx + 1
 
     crit_load_kwh = float(daily_loads_100[crit_day_idx])
     crit_pv1_kwh = float(daily_pv1[crit_day_idx])
+    crit_pv1_deg_kwh = crit_pv1_kwh * deg_25
+
     if ghi_arr is not None:
         daily_ghi = np.sum(ghi_arr.reshape(365, 96), axis=1) * dt_h / 1000.0
         crit_ghi_kwh_m2 = float(daily_ghi[crit_day_idx])
     else:
         crit_ghi_kwh_m2 = 0.2465
 
-    raw_pv_req = (crit_load_kwh / crit_pv1_kwh) * float(design_margin)
-    pv_init = float(np.ceil(raw_pv_req * 2.0) / 2.0)  # 0.5kW step
+    raw_pv_req_no_deg = (crit_load_kwh / crit_pv1_kwh) * float(design_margin)
+    raw_pv_req_deg = (crit_load_kwh / crit_pv1_deg_kwh) * float(design_margin)
+    pv_init_no_deg = float(np.ceil(raw_pv_req_no_deg * 2.0) / 2.0)
+    pv_init = float(np.ceil(raw_pv_req_deg * 2.0) / 2.0)  # 0.5kW step, degradation applied
 
-    # 2. ESS Initial Sizing based on Daily SoC cycle max deficit
-    p_pv_init = pv_init * p_pv1_kw
-    daily_deficits = np.sum(np.maximum(0.0, p_load_100_kw - p_pv_init).reshape(365, 96), axis=1) * dt_h
+    # 2. ESS Initial Sizing based on Daily SoC cycle max deficit under 25-yr PV performance
+    p_pv_init_eff = pv_init * deg_25 * p_pv1_kw
+    daily_deficits = np.sum(np.maximum(0.0, p_load_100_kw - p_pv_init_eff).reshape(365, 96), axis=1) * dt_h
     max_daily_deficit = float(np.max(daily_deficits))
 
     # Usable DoD = 70%
@@ -145,29 +152,67 @@ def size_zero_energy(
     # Check initial sizing
     init_unmet, init_lol = evaluate_combination(pv_init, ess_init)
 
-    # Build candidates sorted strictly by Central CAPEX
+    # Annual energy balance lower bound
+    annual_load_100 = float(np.sum(daily_loads_100))
+    annual_pv1_deg = float(np.sum(daily_pv1) * deg_25)
+    pv_min_physical = max(0.5, float(np.ceil((annual_load_100 / annual_pv1_deg) * 2.0) / 2.0))
+
+    # Candidate search: PV lower bound lowered to 0.5kW up to pv_init + 10kW
     candidates = []
     ess_unit_cfg = capex_config.get("ess_system", {}).get("unit_cost_per_kwh", {}).get("central", {})
     ess_unit_central = float(ess_unit_cfg.get("value", 1775200.0) if isinstance(ess_unit_cfg, dict) else (ess_unit_cfg or 1775200.0))
-    for m in range(0, 8):
-        ess_c = ess_init + m * min_mod_kwh
-        for s in range(0, 21):
-            pv_c = pv_init + s * 0.5
-            cost = get_pv_turnkey_cost(pv_c, capex_config, tier="central") + ess_c * ess_unit_central
+    awhp_fixed_central = 14000000.0 if "AWHP" in heating_package else 0.0
+
+    annual_pv1_tot = float(np.sum(daily_pv1)) * deg_25
+    annual_load_tot = float(np.sum(daily_loads_100))
+
+    max_mods = max(n_modules_init + 8, 16)
+    pv_upper = max(pv_init + 10.0, 40.0)
+    pv_steps = np.arange(max(0.5, pv_min_physical), pv_upper + 0.1, 0.5)
+
+    for m in range(1, max_mods + 1):
+        ess_c = m * min_mod_kwh
+        ess_usable_max = ess_c * 0.70 * rte_sqrt
+        for pv_c in pv_steps:
+            # Physical pruning 1: Annual energy balance
+            if pv_c * annual_pv1_tot < annual_load_tot:
+                continue
+            # Physical pruning 2: Critical day minimum deficit capacity
+            crit_deficit = crit_load_kwh - pv_c * crit_pv1_deg_kwh
+            if crit_deficit > 0 and ess_usable_max < crit_deficit:
+                continue
+
+            cost = get_pv_turnkey_cost(pv_c, capex_config, tier="central") + ess_c * ess_unit_central + awhp_fixed_central
             candidates.append((cost, pv_c, ess_c))
+
+    # Sort strictly by full central CAPEX
     candidates.sort(key=lambda x: x[0])
 
     feasible_candidates = []
     for cost, pv_c, ess_c in candidates:
         u, lol = evaluate_combination(pv_c, ess_c)
         if u <= 0.001 and lol == 0.0:
+            # Use exact breakdown for full fidelity
+            cand_breakdown = calculate_capex_breakdown(
+                pv_capacity_kw=pv_c,
+                ess_capacity_kwh=ess_c,
+                heating_package=heating_package,
+                with_subsidy=False,
+                is_off_grid=True,
+                capex_config=capex_config,
+                subsidy_config={},
+                max_import_kw=0.0,
+                capex_basis="full",
+            )
             feasible_candidates.append({
                 "pv_kw": pv_c,
                 "ess_kwh": ess_c,
-                "capex_central_krw": cost,
+                "capex_central_krw": cand_breakdown["net_capex_central"],
                 "unmet_kwh": u,
                 "lol_hours": lol,
             })
+            if len(feasible_candidates) >= 15:
+                break
 
     if feasible_candidates:
         best_pv = feasible_candidates[0]["pv_kw"]
@@ -176,7 +221,18 @@ def size_zero_energy(
     else:
         best_pv = pv_init
         best_ess = ess_init
-        min_capex_val = get_pv_turnkey_cost(best_pv, capex_config, tier="central") + best_ess * ess_unit_central
+        capex_cand = calculate_capex_breakdown(
+            pv_capacity_kw=best_pv,
+            ess_capacity_kwh=best_ess,
+            heating_package=heating_package,
+            with_subsidy=False,
+            is_off_grid=True,
+            capex_config=capex_config,
+            subsidy_config={},
+            max_import_kw=0.0,
+            capex_basis="full",
+        )
+        min_capex_val = capex_cand["net_capex_central"]
 
     # 5. Required Inverter Capacity (Peak load kW + ESS discharge capacity)
     peak_load_kw = float(np.max(p_load_100_kw))
@@ -205,12 +261,15 @@ def size_zero_energy(
         "critical_day_number": crit_day_num,
         "critical_day_load_kwh": round(crit_load_kwh, 2),
         "critical_day_pv1_kwh": round(crit_pv1_kwh, 2),
+        "critical_day_pv1_deg_kwh": round(crit_pv1_deg_kwh, 2),
         "critical_day_ghi_kwh_m2": round(crit_ghi_kwh_m2, 2),
+        "initial_pv_kw_no_deg": round(pv_init_no_deg, 2),
         "initial_pv_kw": round(pv_init, 2),
         "initial_ess_kwh": round(ess_init, 2),
         "initial_unmet_kwh": round(init_unmet, 4),
         "optimal_pv_kw": round(best_pv, 2),
         "optimal_ess_kwh": round(best_ess, 2),
+        "pv_land_area_m2": round(best_pv * 5.0, 2),
         "inverter_required_kw": inverter_required_kw,
         "final_unmet_kwh": round(final_max_unmet, 6),
         "final_loss_of_load_hours": round(final_max_lol, 2),
