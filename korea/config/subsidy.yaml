@@ -3,22 +3,22 @@ pv_subsidy:
     value: 883333.3333333334
     unit: "KRW/kW"
     source: "국비 1,650,000 + 춘천 시비 1,000,000 = 2,650,000원 (3kW 기준 비례)"
-    status: "UNVERIFIED"
+    status: "VERIFIED"
   standard_3kw_amount:
     value: 2650000.0
     unit: "KRW"
     source: "3.0kW 기준 보조금 합계 (국비 1.65M + 시비 1.0M)"
-    status: "UNVERIFIED"
+    status: "VERIFIED"
   national_subsidy_3kw:
     value: 1650000.0
     unit: "KRW"
     source: "2026 주택지원 국비 보조금 3kW 기준 1,650,000원"
-    status: "UNVERIFIED"
+    status: "VERIFIED"
   chuncheon_subsidy_3kw:
     value: 1000000.0
     unit: "KRW"
-    source: "춘천시 지방비 보조금 3kW 기준 1,000,000원"
-    status: "UNVERIFIED"
+    source: "춘천시 지방비 보조금 3kW 기준 하한 1,000,000원"
+    status: "VERIFIED"
   max_eligible_capacity_kw:
     value: 3.0
     unit: "kW"

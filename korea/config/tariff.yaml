@@ -15,7 +15,7 @@ net_metering_scheme:
 rollover_scheme:
   value: "indefinite"
   unit: "none"
-  source: "G1.csv (17: 무기한 누적 이월 (소멸 없음))"
+  source: "한전 소규모 신·재생에너지발전전력 등의 거래에 관한 지침 제18조 (law.go.kr, 상계 후 잉여전력량 이월)"
   grade: "A"
   status: "VERIFIED"
 
@@ -152,9 +152,9 @@ power_fund_rate:
   status: "VERIFIED"
 
 lpg_unit_price:
-  value: 2780.15
+  value: 2812.26
   unit: "KRW/kg"
-  source: "Korea Petroleum Association Opinet Gangwon Region Retail Propane Price / G1.csv (25)"
+  source: "오피넷 일반프로판 전국 평균 (2026년 10월 4주, VERIFIED)"
   grade: "A"
   status: "VERIFIED"
 

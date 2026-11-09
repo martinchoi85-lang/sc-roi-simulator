@@ -17,8 +17,8 @@ pv_system:
     central:
       value: 1513667.0
       unit: "KRW/kW"
-      source: "2026 주택지원 3kW 상한 4,541,000원 / 3kW"
-      status: "UNVERIFIED"
+      source: "2026 주택지원 3kW 상한 4,541,000원 / 3kW (공식 공고 상한가)"
+      status: "VERIFIED"
     high:
       value: 2000000.0
       unit: "KRW/kW"
