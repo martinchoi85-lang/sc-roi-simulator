@@ -14,6 +14,7 @@ from engine.schema import load_country_config
 from engine.weather import load_weather_data
 from engine.scenarios import run_all_scenarios
 from engine.report import generate_v9_outputs
+from engine.run_id import compute_run_id
 
 
 def main():
@@ -32,6 +33,10 @@ def main():
     if not country_dir.exists():
         print(f"Error: Country directory '{args.country}' does not exist.", file=sys.stderr)
         sys.exit(1)
+
+    # Compute run_id at the very start to guarantee clean working tree
+    run_id = compute_run_id(country_dir)
+    print(f"Locked run_id: {run_id}")
 
     print(f"Loading configuration for country: {args.country}...")
     country_config = load_country_config(country_dir)
@@ -74,6 +79,7 @@ def main():
         config_assumptions=country_config.assumptions,
         weather_df=weather_df,
         annual_ghi=annual_ghi,
+        run_id=run_id,
     )
 
     print("\n[SUCCESS] Completed v9 scenario ROI computations and reports.")

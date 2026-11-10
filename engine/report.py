@@ -61,14 +61,16 @@ def generate_v9_outputs(
     config_assumptions: List[str],
     weather_df: pd.DataFrame,
     annual_ghi: float,
+    run_id: Optional[str] = None,
 ):
     """Executes full generation of v9.1 outputs, report_data.json, HTML report, and validation."""
     output_dir.mkdir(parents=True, exist_ok=True)
     report_dir.mkdir(parents=True, exist_ok=True)
 
     country_dir = output_dir.parent
-    run_id = compute_run_id(country_dir)
-    print(f"Generated run_id: {run_id}")
+    if run_id is None:
+        run_id = compute_run_id(country_dir)
+    print(f"Using run_id: {run_id}")
 
     # 1. results_all.csv (420 rows)
     export_df_results = df_results.drop(columns=["cumulative_cashflow_100y"], errors="ignore").copy()
@@ -303,18 +305,18 @@ def _build_sc_report_data(
 
     # 2. constants
     constants = {
-        "ess_module_kwh": float(capex_cfg["ess_module_kwh"]),
-        "pv_unit_krw_per_kw": int(capex_cfg["pv_unit_cost_krw_per_kw"]),
-        "awhp_capex_krw": int(capex_cfg["awhp_capex_krw"]),
-        "propane_krw_per_kg": float(tariff_cfg["propane_unit_cost_krw_per_kg"]),
+        "ess_module_kwh": float(capex_cfg.get("ess_system", {}).get("min_module_kwh", 9.6)),
+        "pv_unit_krw_per_kw": int(capex_cfg.get("pv_system", {}).get("unit_cost_per_kw", {}).get("central", 1513667)),
+        "awhp_capex_krw": int(capex_cfg.get("awhp_system", {}).get("turnkey_installation_cost", {}).get("central", 14000000)),
+        "propane_krw_per_kg": float(tariff_cfg.get("lpg_unit_price", 2812.26)),
         "tariff_300kwh_krw": 57760,
         "ess_soh_eol": 0.7,
         "ess_soc_window": 0.9,
         "ess_rte": 0.9,
         "pv_degradation_per_year": 0.005,
         "horizon_years": 100,
-        "pv_subsidy_krw_3kw": int(subsidy_cfg["pv_residential_subsidy_krw_3kw"]),
-        "pv_subsidy_max_kw": float(subsidy_cfg["pv_subsidy_max_kw"]),
+        "pv_subsidy_krw_3kw": int(subsidy_cfg.get("pv_residential_subsidy_krw_3kw", {}).get("value", 2650000) if isinstance(subsidy_cfg.get("pv_residential_subsidy_krw_3kw"), dict) else subsidy_cfg.get("pv_residential_subsidy_krw_3kw", 2650000)),
+        "pv_subsidy_max_kw": float(subsidy_cfg.get("pv_subsidy_max_kw", {}).get("value", 3.0) if isinstance(subsidy_cfg.get("pv_subsidy_max_kw"), dict) else subsidy_cfg.get("pv_subsidy_max_kw", 3.0)),
     }
 
     # 3. energy (560 rows = 7 hps x 5 occ x 2 sub x 8 cases)
