@@ -158,20 +158,15 @@ class KoreaTariffCalculator(BaseTariffCalculator):
         months = dates.month.values
         dt_h = 0.25
 
-        monthly_import_kwh = np.zeros(12)
-        monthly_export_kwh = np.zeros(12)
-
-        for m in range(1, 13):
-            mask = months == m
-            if net_metering_scheme == "tou_slot_net":
-                # Instantaneous slot netting without carryover
-                slot_net_imp = np.maximum(0.0, p_grid_import_kw[mask] - p_grid_export_kw[mask])
-                slot_net_exp = np.maximum(0.0, p_grid_export_kw[mask] - p_grid_import_kw[mask])
-                monthly_import_kwh[m - 1] = float(np.sum(slot_net_imp) * dt_h)
-                monthly_export_kwh[m - 1] = float(np.sum(slot_net_exp) * dt_h)
-            else:
-                monthly_import_kwh[m - 1] = float(np.sum(p_grid_import_kw[mask]) * dt_h)
-                monthly_export_kwh[m - 1] = float(np.sum(p_grid_export_kw[mask]) * dt_h)
+        m_idx = months - 1
+        if net_metering_scheme == "tou_slot_net":
+            slot_net_imp = np.maximum(0.0, p_grid_import_kw - p_grid_export_kw)
+            slot_net_exp = np.maximum(0.0, p_grid_export_kw - p_grid_import_kw)
+            monthly_import_kwh = np.bincount(m_idx, weights=slot_net_imp, minlength=12) * dt_h
+            monthly_export_kwh = np.bincount(m_idx, weights=slot_net_exp, minlength=12) * dt_h
+        else:
+            monthly_import_kwh = np.bincount(m_idx, weights=p_grid_import_kw, minlength=12) * dt_h
+            monthly_export_kwh = np.bincount(m_idx, weights=p_grid_export_kw, minlength=12) * dt_h
 
         # Steady-state fixed-point iteration for rollover
         carried_start = 0.0

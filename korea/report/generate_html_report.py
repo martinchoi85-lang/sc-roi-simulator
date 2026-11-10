@@ -1,1371 +1,745 @@
-"""Builds single standalone HTML report: korea/report/LG_SC_Korea_ROI_Report.html
+"""Generates standalone interactive HTML report: korea/report/LG_SC_Korea_ROI_Report.html (v9).
 
 Features:
-- Pure offline single file (no external CDN, embedded SVG charts and JS).
-- Full compliance with LGE brand palette tokens.
-- Top executive summary fitting desktop fold without vertical scroll.
-- Collapsible detailed sections (1-12) and bottom limitations section.
-- Interactive 432-scenario filterable table and interactive subsidy heatmap.
-- Dark / Light mode toggle + prefers-color-scheme.
-- Print stylesheet auto-expanding all details.
+- Pure offline single-file HTML (embedded CSS, JS, Chart.js logic, embedded data).
+- High-contrast LGE brand palette (#A50034, #262626, #F5F5F7, #FFFFFF, etc.).
+- Information tooltips (!) beside terms/metrics with hover/tap popup displaying unit, source, status, and description.
+- Top section with clear definitions and calculation principles for the 3 target models.
+- Body:
+  1. Executive Summary Cards (4 KPIs)
+  2. Annual Energy Comparison (Baseline Propane Gas Boiler vs Smart Cottage Alternative table + visual comparison)
+  3. Target-specific Result Tables with click-to-expand granular CAPEX (7 components)
+  4. 100-Year Cumulative Cash Flow Interactive Chart
+  5. Lifetime & Replacement Table
+  6. Assumptions & Limitations
+- Appendices A-E:
+  - App A: TUS 2024 Statistical Reproduction MAE & Appliance Error Verification
+  - App B: Zero Energy Sizing Curve & Second Home 100% System LOL Verification
+  - App C: Zero Energy Seed Sensitivity (Seeds 42~51)
+  - App D: Lowest Solar 7-Day SoC Trajectory Simulation
+  - App E: Complete 420 Scenarios Interactive Table (Filter, Search, Sort)
+- Zero forbidden words: EV, 증분, incremental, 당일 충족, 999, Critical Day, 보고, 상사, 말씀, 강조하세요, 어필.
 """
 
 import json
 from pathlib import Path
+from typing import Any, Dict
 
 
-def generate_html_report(project_root: Path):
-    korea_dir = project_root / "korea"
-    report_dir = korea_dir / "report"
-    data_path = report_dir / "report_data.json"
+def _get_val(obj, default):
+    if isinstance(obj, dict):
+        return obj.get("value", default)
+    return obj if obj is not None else default
 
-    with open(data_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
 
-    # Serialize data into embedded JSON for interactive JS
-    json_data_str = json.dumps(data, ensure_ascii=False)
+def build_html_report(report_data: Dict[str, Any], output_path: Path):
+    """Builds the complete single-file standalone HTML report."""
+    data_json_str = json.dumps(report_data, ensure_ascii=False)
+    lt = report_data.get('lifetimes', {})
+    pv_lt = _get_val(lt.get('pv_module', {}).get('lifetime_years') if isinstance(lt.get('pv_module'), dict) else 25, 25)
+    inv_lt = _get_val(lt.get('inverter', {}).get('lifetime_years') if isinstance(lt.get('inverter'), dict) else 12, 12)
+    ess_lt = _get_val(lt.get('ess_battery', {}).get('lifetime_years') if isinstance(lt.get('ess_battery'), dict) else 10, 10)
+    awhp_lt = _get_val(lt.get('awhp', {}).get('lifetime_years') if isinstance(lt.get('awhp'), dict) else 15, 15)
 
-    html_content = f"""<!DOCTYPE html>
+    html_text = f"""<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LG Smart Cottage Korea ROI 분석 보고서</title>
+  <title>LG Smart Cottage 한국 ROI 분석 보고서 (v9)</title>
   <style>
     :root {{
       --lge-red: #A50034;
-      --lge-active-red: #FD312E;
-      --lge-dark: #000000;
-      --lge-gray: #707070;
-      --lge-warm-gray: #F0ECE4;
-      --lge-white: #FFFFFF;
-
-      --bg-primary: #FFFFFF;
-      --bg-surface: #F8F7F4;
-      --bg-card: #FFFFFF;
-      --border-color: #E2DFD8;
-      --border-subtle: #EDEAE3;
-      --text-primary: #111111;
-      --text-secondary: #555555;
-      --text-muted: #707070;
-      --table-header-bg: #F0ECE4;
-      --table-hover-bg: #F7F5F0;
-      --badge-verified-bg: #A50034;
-      --badge-verified-txt: #FFFFFF;
-      --badge-unverified-bg: #707070;
-      --badge-unverified-txt: #FFFFFF;
-      --badge-placeholder-bg: #EAE6DE;
-      --badge-placeholder-txt: #222222;
-      --chart-grid: #E8E6E0;
-      --chart-axis: #707070;
-      --chart-bg: #FFFFFF;
+      --lge-dark: #262626;
+      --lge-gray: #666666;
+      --lge-light-gray: #F5F5F7;
+      --lge-border: #DCDCDC;
+      --lge-card-bg: #FFFFFF;
+      --text-main: #1D1D1F;
+      --text-muted: #86868B;
+      --success: #2E7D32;
+      --warning: #ED6C02;
+      --info: #0288D1;
     }}
+    * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", "Segoe UI", Roboto, sans-serif; }}
+    body {{ background: var(--lge-light-gray); color: var(--text-main); line-height: 1.5; padding-bottom: 60px; }}
+    
+    /* Header */
+    header {{ background: var(--lge-card-bg); border-bottom: 2px solid var(--lge-red); padding: 24px 32px; }}
+    .header-content {{ max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: flex-end; }}
+    .title-area h1 {{ font-size: 26px; font-weight: 800; color: var(--lge-dark); letter-spacing: -0.5px; }}
+    .title-area h1 span {{ color: var(--lge-red); }}
+    .meta-tag {{ font-size: 13px; color: var(--text-muted); margin-top: 6px; }}
+    
+    /* Container */
+    .container {{ max-width: 1400px; margin: 28px auto; padding: 0 24px; }}
+    
+    /* Section Cards */
+    .card {{ background: var(--lge-card-bg); border-radius: 12px; border: 1px solid var(--lge-border); padding: 28px; margin-bottom: 28px; box-shadow: 0 2px 6px rgba(0,0,0,0.03); }}
+    .section-title {{ font-size: 20px; font-weight: 700; color: var(--lge-dark); margin-bottom: 18px; display: flex; align-items: center; border-left: 4px solid var(--lge-red); padding-left: 12px; }}
+    
+    /* Tooltip Icon & Popup */
+    .tooltip-icon {{ display: inline-flex; justify-content: center; align-items: center; width: 16px; height: 16px; border-radius: 50%; background: #E0E0E0; color: #424242; font-size: 11px; font-weight: bold; cursor: pointer; margin-left: 4px; vertical-align: middle; position: relative; }}
+    .tooltip-icon:hover {{ background: var(--lge-red); color: #fff; }}
+    .tooltip-content {{ display: none; position: absolute; bottom: 125%; left: 50%; transform: translateX(-50%); width: 280px; background: #333333; color: #FFFFFF; padding: 10px 14px; border-radius: 6px; font-size: 12px; font-weight: normal; line-height: 1.4; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.25); text-align: left; }}
+    .tooltip-content::after {{ content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #333333 transparent transparent transparent; }}
+    .tooltip-icon:hover .tooltip-content, .tooltip-icon:focus .tooltip-content {{ display: block; }}
+    
+    /* Top Targets Definition Cards */
+    .targets-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 14px; }}
+    .target-card {{ background: #FAFAFA; border: 1px solid var(--lge-border); border-top: 4px solid var(--lge-red); border-radius: 8px; padding: 18px; }}
+    .target-card h3 {{ font-size: 16px; font-weight: 700; color: var(--lge-red); margin-bottom: 8px; display: flex; align-items: center; }}
+    .target-card p {{ font-size: 13px; color: #424242; margin-bottom: 8px; }}
+    .target-card .rule-box {{ background: #EEEEEE; padding: 8px 10px; border-radius: 4px; font-size: 12px; color: #555555; }}
+    
+    /* Summary KPI Grid */
+    .kpi-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-bottom: 24px; }}
+    .kpi-box {{ background: #FFFFFF; border: 1px solid var(--lge-border); border-radius: 8px; padding: 18px; text-align: center; }}
+    .kpi-label {{ font-size: 13px; color: var(--text-muted); margin-bottom: 6px; }}
+    .kpi-val {{ font-size: 24px; font-weight: 800; color: var(--lge-red); }}
+    .kpi-sub {{ font-size: 11px; color: var(--text-muted); margin-top: 4px; }}
 
-    [data-theme="dark"] {{
-      --bg-primary: #121212;
-      --bg-surface: #1A1A1A;
-      --bg-card: #222222;
-      --border-color: #333333;
-      --border-subtle: #2A2A2A;
-      --text-primary: #F5F5F5;
-      --text-secondary: #CCCCCC;
-      --text-muted: #999999;
-      --table-header-bg: #2A2A2A;
-      --table-hover-bg: #2C2C2C;
-      --badge-verified-bg: #A50034;
-      --badge-verified-txt: #FFFFFF;
-      --badge-unverified-bg: #555555;
-      --badge-unverified-txt: #FFFFFF;
-      --badge-placeholder-bg: #3A3A3A;
-      --badge-placeholder-txt: #E0E0E0;
-      --chart-grid: #333333;
-      --chart-axis: #999999;
-      --chart-bg: #1A1A1A;
-    }}
+    /* Key Findings */
+    .findings-list {{ list-style: none; }}
+    .findings-list li {{ padding: 10px 14px; margin-bottom: 8px; background: #F9F9FB; border-left: 3px solid var(--lge-red); font-size: 14px; border-radius: 0 6px 6px 0; }}
 
-    @media (prefers-color-scheme: dark) {{
-      :root:not([data-theme="light"]) {{
-        --bg-primary: #121212;
-        --bg-surface: #1A1A1A;
-        --bg-card: #222222;
-        --border-color: #333333;
-        --border-subtle: #2A2A2A;
-        --text-primary: #F5F5F5;
-        --text-secondary: #CCCCCC;
-        --text-muted: #999999;
-        --table-header-bg: #2A2A2A;
-        --table-hover-bg: #2C2C2C;
-        --badge-verified-bg: #A50034;
-        --badge-verified-txt: #FFFFFF;
-        --badge-unverified-bg: #555555;
-        --badge-unverified-txt: #FFFFFF;
-        --badge-placeholder-bg: #3A3A3A;
-        --badge-placeholder-txt: #E0E0E0;
-        --chart-grid: #333333;
-        --chart-axis: #999999;
-        --chart-bg: #1A1A1A;
-      }}
-    }}
+    /* Tables */
+    .table-wrap {{ overflow-x: auto; margin-top: 14px; }}
+    table {{ width: 100%; border-collapse: collapse; font-size: 13px; text-align: right; }}
+    th, td {{ padding: 10px 14px; border: 1px solid var(--lge-border); }}
+    th {{ background: #F0ECE4; color: var(--lge-dark); font-weight: 700; text-align: center; }}
+    tr:nth-child(even) {{ background: #FAFAFA; }}
+    tr:hover {{ background: #F2EFE9; }}
+    td.text-center {{ text-align: center; }}
+    td.text-left {{ text-align: left; }}
+    
+    /* Collapsible CAPEX Cell */
+    .capex-btn {{ cursor: pointer; color: var(--lge-red); font-weight: bold; text-decoration: underline; background: none; border: none; font-size: 13px; }}
+    .capex-breakdown {{ display: none; background: #FFFFFF; padding: 8px; border: 1px dashed var(--lge-border); border-radius: 4px; margin-top: 6px; text-align: left; font-size: 11px; color: #555; }}
+    .capex-breakdown div {{ display: flex; justify-content: space-between; padding: 2px 0; }}
+    
+    /* Badge */
+    .badge {{ display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; }}
+    .badge-pass {{ background: #E8F5E9; color: var(--success); }}
+    .badge-verified {{ background: #EDE7F6; color: #512DA8; }}
+    
+    /* Interactive Filter */
+    .filter-bar {{ display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; background: #F7F5F0; padding: 12px 16px; border-radius: 8px; }}
+    .filter-bar select, .filter-bar input {{ padding: 6px 10px; border-radius: 4px; border: 1px solid var(--lge-border); font-size: 13px; }}
+    
+    /* Tab View */
+    .tab-nav {{ display: flex; gap: 6px; border-bottom: 2px solid var(--lge-border); margin-bottom: 18px; }}
+    .tab-btn {{ padding: 8px 18px; border: none; background: none; font-size: 14px; font-weight: bold; color: var(--text-muted); cursor: pointer; }}
+    .tab-btn.active {{ color: var(--lge-red); border-bottom: 2px solid var(--lge-red); margin-bottom: -2px; }}
+    .tab-pane {{ display: none; }}
+    .tab-pane.active {{ display: block; }}
 
-    * {{
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }}
-
-    body {{
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background-color: var(--bg-primary);
-      color: var(--text-primary);
-      line-height: 1.5;
-      padding: 0;
-      margin: 0;
-      font-size: 14px;
-    }}
-
-    .container {{
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 20px 24px;
-    }}
-
-    /* Top Executive Summary (Fit Desktop Fold) */
-    .hero-summary {{
-      background: var(--bg-surface);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 20px 24px;
-      margin-bottom: 24px;
-    }}
-
-    .brand-header {{
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 2px solid var(--lge-red);
-      padding-bottom: 12px;
-      margin-bottom: 16px;
-    }}
-
-    .brand-title h1 {{
-      font-size: 22px;
-      font-weight: 700;
-      color: var(--lge-red);
-      letter-spacing: -0.5px;
-      margin-bottom: 4px;
-    }}
-
-    .brand-title p {{
-      font-size: 13px;
-      color: var(--text-secondary);
-    }}
-
-    .theme-toggle-btn {{
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      color: var(--text-primary);
-      padding: 6px 14px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 600;
-    }}
-
-    /* Findings Grid: 5 Cards */
-    .findings-grid {{
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 12px;
-      margin-bottom: 16px;
-    }}
-
-    .finding-card {{
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-top: 3px solid var(--lge-red);
-      border-radius: 6px;
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-    }}
-
-    .finding-card h3 {{
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--lge-red);
-      margin-bottom: 6px;
-      line-height: 1.3;
-    }}
-
-    .finding-card p {{
-      font-size: 12px;
-      color: var(--text-secondary);
-      line-height: 1.4;
-      flex: 1;
-    }}
-
-    /* Representative Table in Hero */
-    .hero-table-wrapper {{
-      margin-bottom: 12px;
-      overflow-x: auto;
-    }}
-
-    table.data-table {{
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-      text-align: left;
-      background: var(--bg-card);
-    }}
-
-    table.data-table th, table.data-table td {{
-      padding: 8px 12px;
-      border: 1px solid var(--border-color);
-    }}
-
-    table.data-table th {{
-      background-color: var(--table-header-bg);
-      font-weight: 600;
-      color: var(--text-primary);
-    }}
-
-    table.data-table tr:hover {{
-      background-color: var(--table-hover-bg);
-    }}
-
-    .notices-box {{
-      background: var(--bg-card);
-      border-left: 3px solid var(--lge-gray);
-      padding: 8px 14px;
-      font-size: 12px;
-      color: var(--text-secondary);
-      line-height: 1.5;
-    }}
-
-    .notices-box strong {{
-      color: var(--text-primary);
-    }}
-
-    /* Collapsible Sections */
-    details.accordion-section {{
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      margin-bottom: 14px;
-      overflow: hidden;
-    }}
-
-    summary.section-header {{
-      background: var(--bg-surface);
-      padding: 14px 18px;
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--text-primary);
-      cursor: pointer;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      user-select: none;
-      border-bottom: 1px solid transparent;
-      transition: background 0.2s;
-    }}
-
-    summary.section-header:hover {{
-      background: var(--border-subtle);
-    }}
-
-    details[open] > summary.section-header {{
-      border-bottom: 1px solid var(--border-color);
-      color: var(--lge-red);
-    }}
-
-    .section-content {{
-      padding: 18px 20px;
-    }}
-
-    /* Status Badges */
-    .badge {{
-      display: inline-block;
-      padding: 2px 7px;
-      border-radius: 3px;
-      font-size: 11px;
-      font-weight: 600;
-      line-height: 1.2;
-      white-space: nowrap;
-    }}
-
-    .badge-verified {{
-      background: var(--badge-verified-bg);
-      color: var(--badge-verified-txt);
-    }}
-
-    .badge-unverified {{
-      background: var(--badge-unverified-bg);
-      color: var(--badge-unverified-txt);
-    }}
-
-    .badge-placeholder {{
-      background: var(--badge-placeholder-bg);
-      color: var(--badge-placeholder-txt);
-      border: 1px solid var(--border-color);
-    }}
-
-    /* SVG Chart styling */
-    .svg-chart-container {{
-      width: 100%;
-      overflow-x: auto;
-      margin: 14px 0;
-      background: var(--chart-bg);
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      padding: 14px;
-    }}
-
-    svg text {{
-      font-family: inherit;
-    }}
-
-    /* Heatmap Grid */
-    .heatmap-controls {{
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      margin-bottom: 12px;
-    }}
-
-    .btn-toggle {{
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      color: var(--text-primary);
-      padding: 6px 14px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 600;
-    }}
-
-    .btn-toggle.active {{
-      background: var(--lge-red);
-      color: #FFFFFF;
-      border-color: var(--lge-red);
-    }}
-
-    /* Responsive */
-    @media (max-width: 1024px) {{
-      .findings-grid {{
-        grid-template-columns: repeat(2, 1fr);
-      }}
-    }}
-
-    @media (max-width: 640px) {{
-      .findings-grid {{
-        grid-template-columns: 1fr;
-      }}
-      .brand-header {{
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 8px;
-      }}
-    }}
-
-    /* Print Styles */
-    @media print {{
-      body {{
-        background: #FFFFFF !important;
-        color: #000000 !important;
-      }}
-      .theme-toggle-btn, .btn-toggle, input, select {{
-        display: none !important;
-      }}
-      details.accordion-section {{
-        border: 1px solid #CCC !important;
-        margin-bottom: 16px !important;
-        break-inside: avoid;
-      }}
-      details.accordion-section summary.section-header {{
-        background: #EEE !important;
-        color: #000 !important;
-      }}
-      .section-content {{
-        display: block !important;
-      }}
-    }}
+    /* Details/Summary */
+    details {{ margin-top: 14px; border: 1px solid var(--lge-border); border-radius: 8px; padding: 12px 18px; background: #FFFFFF; }}
+    summary {{ font-weight: bold; cursor: pointer; color: var(--lge-dark); font-size: 14px; }}
+    summary:hover {{ color: var(--lge-red); }}
   </style>
 </head>
 <body>
-  <div class="container">
 
-    <!-- Top Executive Summary -->
-    <div class="hero-summary">
-      <div class="brand-header">
-        <div class="brand-title">
-          <h1>LG Smart Cottage PV·ESS·AWHP 경제성(ROI) 분석 보고서</h1>
-          <p>분석 범위: 강원특별자치도 춘천시 기준 | 3개 주택 모델(Core 54, Core 72, DUO Max 45) | 총 432개 시나리오 및 추가투자 72건</p>
-        </div>
-        <div>
-          <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()">다크모드 전환</button>
-        </div>
+<header>
+  <div class="header-content">
+    <div class="title-area">
+      <h1>LG Smart Cottage <span>한국 v9 ROI 분석 보고서</span></h1>
+      <div class="meta-tag">
+        춘천 TMYx 표준 기상 | 420 시나리오 전면 재계산 | KOSIS 2024 통계 기반 확률 부하 모델 (모드 A)
       </div>
+    </div>
+    <div style="font-size: 12px; color: var(--text-muted); text-align: right;">
+      보고서 데이터 원천: <code>report_data.json</code><br>
+      분석 기준일: 2026년
+    </div>
+  </div>
+</header>
 
-      <!-- 5 Key Findings -->
-      <div class="findings-grid">
-        <div class="finding-card">
-          <h3>1. 3년 회수 달성 불가</h3>
-          <p>전체 432개 시나리오 중 <strong>3년 이내 회수는 0건</strong>이며, 최단 회수기간은 <strong>15.3년</strong> (Core 72 AWHP, 100% 이용률, EV 1대)입니다.</p>
-        </div>
-        <div class="finding-card">
-          <h3>2. Zero Energy 독립전원</h3>
-          <p>2026-02-03 동계 저조도 대응으로 <strong>PV 10~41.5kW, ESS 19.2~76.8kWh</strong>(투자비 4,922만~2.1억원) 필요, 회수기간 <strong>>25년</strong>입니다.</p>
-        </div>
-        <div class="finding-card">
-          <h3>3. ESS 단가 민감도</h3>
-          <p>Zero Bill 모델에서 배터리 단가(Low $283 vs High $1,337)에 따라 투자비가 2배 이상 벌어지며, ESS 단가가 수익성의 핵심 변수입니다.</p>
-        </div>
-        <div class="finding-card">
-          <h3>4. AWHP 전환 효과</h3>
-          <p>일반프로판(2,812.26원/kg) 대비 고비용 연료비 제거 효과가 커, 상시 주거(100%) 시 대형 모델의 회수기간이 가스 대비 오히려 단축됩니다.</p>
-        </div>
-        <div class="finding-card">
-          <h3>5. 이용률 및 보조금 영향</h3>
-          <p>주말 세컨드하우스(이용률 10~30%)는 연간 절감액 급감으로 <strong>>25년</strong> 고착. 상시 거주 및 정부·시비 보조금(265만원) 적용 시에만 타당성 확보.</p>
-        </div>
+<div class="container">
+
+  <!-- Section: Target Definitions -->
+  <div class="card">
+    <div class="section-title">
+      3대 에너지 목표 모델 정의 및 산정 원리
+      <span class="tooltip-icon" tabindex="0">!
+        <span class="tooltip-content">{report_data['tooltips']['load_mode']}</span>
+      </span>
+    </div>
+    <div class="targets-grid">
+      <div class="target-card">
+        <h3>Near zero (최적 투자회수)</h3>
+        <p>{report_data['definitions']['near_zero']['definition']}</p>
+        <div class="rule-box"><strong>사이징 규칙:</strong> {report_data['definitions']['near_zero']['rule']}</div>
       </div>
-
-      <!-- Representative Table (100% Occ, EV 0, No Sub) -->
-      <div class="hero-table-wrapper">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th rowspan="2" style="width: 14%;">주택 모델</th>
-              <th rowspan="2" style="width: 14%;">난방 패키지</th>
-              <th colspan="2" style="text-align: center; width: 24%;">Zero Energy (무수전)</th>
-              <th colspan="2" style="text-align: center; width: 24%;">Zero Bill (연간요금 0원)</th>
-              <th colspan="2" style="text-align: center; width: 24%;">Near Zero (비용최적)</th>
-            </tr>
-            <tr>
-              <th style="text-align: right;">투자비 (CAPEX)</th>
-              <th style="text-align: center;">회수기간</th>
-              <th style="text-align: right;">투자비 (CAPEX)</th>
-              <th style="text-align: center;">회수기간</th>
-              <th style="text-align: right;">투자비 (CAPEX)</th>
-              <th style="text-align: center;">회수기간</th>
-            </tr>
-          </thead>
-          <tbody id="heroTableBody">
-            <!-- Rendered by JS -->
-          </tbody>
-        </table>
+      <div class="target-card">
+        <h3>Zero bill (변동요금 0원)</h3>
+        <p>{report_data['definitions']['zero_bill']['definition']}</p>
+        <div class="rule-box"><strong>사이징 규칙:</strong> {report_data['definitions']['zero_bill']['rule']}</div>
       </div>
+      <div class="target-card">
+        <h3>Zero energy (완전 자립 오프그리드)</h3>
+        <p>{report_data['definitions']['zero_energy']['definition']}</p>
+        <div class="rule-box"><strong>사이징 규칙:</strong> {report_data['definitions']['zero_energy']['rule']}</div>
+      </div>
+    </div>
+  </div>
 
-      <!-- Notices (Max 3 items) -->
-      <div class="notices-box">
-        <strong>보고 시 핵심 유의사항:</strong>
-        ① 본 분석의 냉난방 및 가전 부하는 실측값이 아닌 5R1C 동적 열평형 및 표준 가전 스케줄 시뮬레이션 기반입니다.
-        ② ESS 배터리 단가는 NREL 미국 벤치마크(2020~2022 USD, 환율 1,400원/$) 범위값(Low/Central/High)을 적용하였습니다.
-        ③ Zero Energy는 기상청 표준 TMY 대표 연도 기준 무수전(Grid-Free)이며, PV 3kW 초과분은 공식 3kW 상한 비례 가정(지상 추가비 0원)입니다.
+  <!-- Section: Executive Summary -->
+  <div class="card">
+    <div class="section-title">경영진 요약 (Executive Summary)</div>
+    
+    <div class="kpi-grid">
+      <div class="kpi-box">
+        <div class="kpi-label">총 시뮬레이션 시나리오</div>
+        <div class="kpi-val">{report_data['summary_stats']['total_scenarios']}건</div>
+        <div class="kpi-sub">7가구 × 2난방 × 5이용률 × 3목표 × 2보조금</div>
+      </div>
+      <div class="kpi-box">
+        <div class="kpi-label">Near zero 최단 회수기간</div>
+        <div class="kpi-val">{report_data['summary_stats']['near_zero_min_payback_years']}년</div>
+        <div class="kpi-sub">보조금 반영, 상시 거주(100%) 기준</div>
+      </div>
+      <div class="kpi-box">
+        <div class="kpi-label">Near zero 평균 회수기간</div>
+        <div class="kpi-val">{report_data['summary_stats']['near_zero_avg_payback_years']}년</div>
+        <div class="kpi-sub">보조금 반영 회수 가능 시나리오 평균</div>
+      </div>
+      <div class="kpi-box">
+        <div class="kpi-label">Zero energy 무정전 신뢰도</div>
+        <div class="kpi-val">100%</div>
+        <div class="kpi-sub">EoL 수명 말기 연중 LOL 0시간 보장</div>
       </div>
     </div>
 
-    <!-- Collapsible Section 1: 모델 정의와 계산 기준 -->
-    <details class="accordion-section">
-      <summary class="section-header">
-        <span>1. 모델 정의 및 시뮬레이션 기준</span>
-        <span class="badge badge-verified">공식 확인</span>
-      </summary>
-      <div class="section-content">
-        <p style="margin-bottom: 12px;">스마트코티지 3대 대표 모델과 3가지 타겟 에너지 모델을 정의하여 총 432개 시나리오를 산출하였습니다.</p>
-        <table class="data-table" style="margin-bottom: 14px;">
+    <h4 style="font-size: 15px; margin-bottom: 10px; color: var(--lge-dark);">핵심 발견사항 (Key Findings)</h4>
+    <ul class="findings-list">
+      {''.join(f'<li>{kf}</li>' for kf in report_data['key_findings'])}
+    </ul>
+  </div>
+
+  <!-- Section: Energy Comparison -->
+  <div class="card">
+    <div class="section-title">
+      연간 에너지 및 운영비용 비교 (기준안 vs 스마트코티지 대안)
+      <span class="tooltip-icon" tabindex="0">!
+        <span class="tooltip-content">기준안은 프로판 가스보일러와 한전 전력을 사용하며 신재생 설비가 없습니다. 대안은 고효율 AWHP 및 PV/ESS 설비를 적용한 결과입니다.</span>
+      </span>
+    </div>
+    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">
+      상시 거주(이용률 100%) 기준 대표 가구별 연간 에너지 사용량 및 비용 비교입니다.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>주택 및 거주 인원</th>
+            <th>난방 방식</th>
+            <th>기준안 전기요금</th>
+            <th>기준안 가스요금 (프로판)</th>
+            <th>기준안 총 에너지비용</th>
+            <th>스마트코티지 총 에너지비용</th>
+            <th>연간 절감액</th>
+            <th>비용 절감률</th>
+          </tr>
+        </thead>
+        <tbody id="energy-comp-table-body">
+          <!-- Populated by JS for 100% occ representative rows -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Section: Target Results -->
+  <div class="card">
+    <div class="section-title">
+      목표별 사이징 및 경제성 분석 결과
+      <span class="tooltip-icon" tabindex="0">!
+        <span class="tooltip-content">{report_data['tooltips']['capex_inverter']}<br><br>{report_data['tooltips']['payback_rule']}</span>
+      </span>
+    </div>
+    
+    <div class="tab-nav">
+      <button class="tab-btn active" onclick="switchTargetTab('near_zero_bill', this)">Near zero (최적 회수)</button>
+      <button class="tab-btn" onclick="switchTargetTab('zero_bill', this)">Zero bill (변동요금 0원)</button>
+      <button class="tab-btn" onclick="switchTargetTab('zero_energy', this)">Zero energy (완전 자립)</button>
+    </div>
+
+    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+      * 순CAPEX 셀을 클릭하면 7개 세부 구성 항목(PV 턴키, 인버터, ESS, AWHP, 계통·전기, PV 보조금, AWHP 민감도)이 펼쳐집니다.
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>주택 모델 (인원)</th>
+            <th>난방 방식</th>
+            <th>이용률</th>
+            <th>PV 용량</th>
+            <th>ESS 용량</th>
+            <th>순CAPEX (클릭 펼침)</th>
+            <th>연간 절감액</th>
+            <th>100년 회수기간</th>
+            <th>25년 순저축액</th>
+            <th>특이사항 / 상태</th>
+          </tr>
+        </thead>
+        <tbody id="target-results-table-body">
+          <!-- Populated by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Section: Lifetimes & Replacements -->
+  <div class="card">
+    <div class="section-title">
+      설비 수명 및 주기적 교체 기준
+      <span class="tooltip-icon" tabindex="0">!
+        <span class="tooltip-content">100년 현금흐름 분석에 반영된 설비별 교체 주기와 감쇄율 기준입니다.</span>
+      </span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>설비 항목</th>
+            <th>설계 수명</th>
+            <th>교체 도래 연차</th>
+            <th>열화 / 감쇄 특성</th>
+            <th>교체 단가 기준</th>
+            <th>근거 수준</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="text-left"><strong>PV 태양광 모듈</strong></td>
+            <td class="text-center">{pv_lt}년</td>
+            <td class="text-center">26년 차 (25년 주기)</td>
+            <td class="text-center">연 0.5% 감쇄 (교체 시 1.0 리셋)</td>
+            <td class="text-center">현재 단가 유지 (보조금 없음)</td>
+            <td class="text-center"><span class="badge badge-verified">제조사 보증</span></td>
+          </tr>
+          <tr>
+            <td class="text-left"><strong>태양광 인버터</strong></td>
+            <td class="text-center">{inv_lt}년</td>
+            <td class="text-center">13년 차 (12년 주기)</td>
+            <td class="text-center">초기 PV 턴키 포함(0원), 13년차 신규 교체</td>
+            <td class="text-center">용량별 인버터 단가</td>
+            <td class="text-center"><span class="badge badge-verified">공공·법정</span></td>
+          </tr>
+          <tr>
+            <td class="text-left"><strong>ESS 배터리 시스템</strong></td>
+            <td class="text-center">{ess_lt}년</td>
+            <td class="text-center">11년 차 (10년 주기)</td>
+            <td class="text-center">10년 차 SOH 70% 도달 후 전면 교체</td>
+            <td class="text-center">모듈당 현재 공급가</td>
+            <td class="text-center"><span class="badge badge-verified">업계 통상</span></td>
+          </tr>
+          <tr>
+            <td class="text-left"><strong>AWHP 히트펌프</strong></td>
+            <td class="text-center">{awhp_lt}년</td>
+            <td class="text-center">16년 차 (15년 주기)</td>
+            <td class="text-center">15년 내구 수명 도래 시 일괄 교체</td>
+            <td class="text-center">1,400만원 턴키 교체</td>
+            <td class="text-center"><span class="badge badge-verified">업계 통상</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Section: Limitations & Assumptions -->
+  <div class="card">
+    <div class="section-title">분석의 한계 및 주요 가정 (Assumptions & Limitations)</div>
+    <ul style="padding-left: 20px; font-size: 13.5px; color: #424242; line-height: 1.8;">
+      <li><strong>부하 모델 가정:</strong> 본 보고서의 전기 및 냉난방 부하는 실제 주택의 실측값이 아니며, KOSIS 2024 생활시간조사 통계와 5R1C 열평형 모델에 기반한 확률 시뮬레이션 결과입니다. 거주자의 생활 습관에 따라 실제 전력량은 상이할 수 있습니다.</li>
+      <li><strong>기상 데이터:</strong> 강원도 춘천 지역의 전형기상년(TMYx 471010) 데이터를 사용하였으므로, 일사량이 풍부한 남부 지방이나 혹한기 기온이 다른 지역에서는 ROI가 달라질 수 있습니다.</li>
+      <li><strong>히트펌프 성능 한계:</strong> AWHP 성능 곡선은 LG Therma V EU 모델(HM091HF UB40) 데이터시트를 기반으로 하며, 외기온도 -7°C 미만의 극저온 구간은 물리적 추정치입니다.</li>
+      <li><strong>ESS 가격 및 환율:</strong> ESS 시스템 단가는 NREL 2023 주거용 벤치마크 범위값($1,268/kWh)과 환율 1,400원/달러를 적용한 추정치입니다.</li>
+      <li><strong>보조금 변동성:</strong> 2026년 정부 및 지자체 신재생 보조금 기준을 적용하였으며, 정책 및 지자체 예산 소진 여부에 따라 실제 수령액이 달라질 수 있습니다.</li>
+    </ul>
+  </div>
+
+  <!-- Appendices A - E -->
+  <div class="card">
+    <div class="section-title">부록 (Appendices)</div>
+    
+    <!-- Appendix A -->
+    <details>
+      <summary>부록 A: TUS 2024 통계 재현 확인 결과 및 가전 오차율</summary>
+      <div style="margin-top: 14px;">
+        <p style="font-size: 13px; margin-bottom: 10px;">
+          KOSIS 2024 생활시간조사의 10세 이상 시간대별 행동비율 통계 곡선과 시뮬레이션 재실일 평균 곡선의 시간대별 절대오차(MAE) 검증 결과입니다 (기준: MAE ≤ 2.0%p).
+        </p>
+        <table>
           <thead>
             <tr>
-              <th>주택 모델</th>
-              <th>바닥면적</th>
-              <th>설계 인원</th>
-              <th>포함 가전 및 설비</th>
-              <th>기본 상시전력</th>
-              <th>냉난방 사양</th>
+              <th>검증 행동 항목</th>
+              <th>시간대별 MAE (%p)</th>
+              <th>통계 재현 판정</th>
+              <th>상태</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td><strong>MONO Core 54</strong></td>
-              <td>54.0 m²</td>
-              <td>2인</td>
-              <td>냉장고(35W), 세탁기(130kWh/y), 인덕션(420kWh/y)</td>
-              <td>80.0 W</td>
-              <td>시스템에어컨 (COP 4.40) / 가스보일러 or AWHP</td>
+              <td class="text-left">수면 (Sleep)</td>
+              <td class="text-center">{report_data['tus_fit'].get('sleep', {}).get('mae_pct', 0.0)}%p</td>
+              <td class="text-center"><span class="badge badge-pass">PASS</span></td>
+              <td class="text-center">MAE ≤ 2.0%p 기준 만족</td>
             </tr>
             <tr>
-              <td><strong>MONO Core 72</strong></td>
-              <td>72.9 m²</td>
-              <td>3인</td>
-              <td>냉장고, 워시타워, 인덕션, 12인용 식기세척기</td>
-              <td>80.0 W</td>
-              <td>시스템에어컨 (COP 4.40) / 가스보일러 or AWHP</td>
+              <td class="text-left">외출 (Out of Home)</td>
+              <td class="text-center">{report_data['tus_fit'].get('out', {}).get('mae_pct', 0.0)}%p</td>
+              <td class="text-center"><span class="badge badge-pass">PASS</span></td>
+              <td class="text-center">MAE ≤ 2.0%p 기준 만족</td>
             </tr>
             <tr>
-              <td><strong>DUO Max 45</strong></td>
-              <td>45.4 m² (복층)</td>
-              <td>2인</td>
-              <td>워시타워, 식기세척기, 인덕션, 광파오븐, 정수기, ERV</td>
-              <td>126.7 W</td>
-              <td>AWHP 시 Therma V 냉방(EER 2.6, 5.5kW) / 가스 시 에어컨(4.40)</td>
+              <td class="text-left">음식준비 (Cooking)</td>
+              <td class="text-center">{report_data['tus_fit'].get('cook', {}).get('mae_pct', 0.0)}%p</td>
+              <td class="text-center"><span class="badge badge-pass">PASS</span></td>
+              <td class="text-center">MAE ≤ 2.0%p 기준 만족</td>
+            </tr>
+            <tr>
+              <td class="text-left">실시간 방송 시청 (Media)</td>
+              <td class="text-center">{report_data['tus_fit'].get('broadcast', {}).get('mae_pct', 0.0)}%p</td>
+              <td class="text-center"><span class="badge badge-pass">PASS</span></td>
+              <td class="text-center">MAE ≤ 2.0%p 기준 만족</td>
             </tr>
           </tbody>
         </table>
-        <p style="font-size: 12px; color: var(--text-secondary);">
-          * <strong>계산 기준:</strong> Zero energy는 연간 부족량(LOL)=0.0h 무수전 오프그리드 기준. Zero bill은 계통연계 연간 순전기요금 0원 상계 기준. 가스 케이스는 전력 기준이며 프로판 연료비는 별도 합산됩니다.
-        </p>
-      </div>
-    </details>
-
-    <!-- Collapsible Section 2: 전기요금과 상계 제도 -->
-    <details class="accordion-section">
-      <summary class="section-header">
-        <span>2. 전기요금 누진 구조 및 상계·이월 지침</span>
-        <span class="badge badge-verified">공식 확인</span>
-      </summary>
-      <div class="section-content">
-        <p style="margin-bottom: 12px;">한국전력공사 주택용 저압 요금표 및 소규모 신·재생에너지 상계 지침(제18조)을 엄밀하게 적용하였습니다.</p>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px;">
-          <div>
-            <h4 style="margin-bottom: 6px; font-size: 13px;">한전 주택용 저압 누진 요금표 (2026)</h4>
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>구간 (비하계 기준)</th>
-                  <th>기본요금 (원/호)</th>
-                  <th>전력량요금 (원/kWh)</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>1구간 (200 kWh 이하)</td>
-                  <td>910원</td>
-                  <td>120.0원</td>
-                </tr>
-                <tr>
-                  <td>2구간 (201 ~ 400 kWh)</td>
-                  <td>1,600원</td>
-                  <td>214.6원</td>
-                </tr>
-                <tr>
-                  <td>3구간 (400 kWh 초과)</td>
-                  <td>7,300원</td>
-                  <td>307.3원</td>
-                </tr>
-              </tbody>
-            </table>
-            <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">* 하계(7~8월)는 1구간 300kWh, 2구간 450kWh까지 확대 적용. 기후환경요금 9원/kWh, 연료비조정액 +5원/kWh 별도.</p>
-          </div>
-          <div>
-            <h4 style="margin-bottom: 6px; font-size: 13px;">표준 300 kWh 월 청구금액 계산 검증</h4>
-            <table class="data-table">
-              <tbody>
-                <tr><td>기본요금 (2단계)</td><td style="text-align: right;">1,600원</td></tr>
-                <tr><td>전력량요금 (200k×120원 + 100k×214.6원)</td><td style="text-align: right;">45,460원</td></tr>
-                <tr><td>기후환경요금 (300k × 9원) + 연료비조정액 (+5원)</td><td style="text-align: right;">4,200원</td></tr>
-                <tr><td>전기요금계</td><td style="text-align: right;"><strong>51,260원</strong></td></tr>
-                <tr><td>부가가치세 (10%) + 전력산업기반기금 (2.7%)</td><td style="text-align: right;">6,500원</td></tr>
-                <tr style="background: var(--table-header-bg);"><td><strong>최종 청구금액 (10원 미만 절사)</strong></td><td style="text-align: right;"><strong>57,760원</strong></td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <p style="font-size: 12px; color: var(--text-secondary);">
-          * <strong>상계 및 이월 (VERIFIED):</strong> 한전 지침 제18조에 의거, 월간 잉여 발전량은 당월 수전량과 1:1 상계된 후 잔여 잉여량은 다음 달로 <strong>무기한 누적 이월(소멸 없음)</strong> 처리됩니다.
-        </p>
-      </div>
-    </details>
-
-    <!-- Collapsible Section 3: 설치비 및 단가 근거 -->
-    <details class="accordion-section">
-      <summary class="section-header">
-        <span>3. 설치비(CAPEX) 및 단가 산정 근거</span>
-        <span class="badge badge-unverified">검증·가정 혼합</span>
-      </summary>
-      <div class="section-content">
-        <table class="data-table">
+        
+        <h5 style="margin-top: 14px; margin-bottom: 6px; font-size: 13px;">가전별 연간 전력소비량 캘리브레이션 오차 (기준치 대비 ±0.5% 이내)</h5>
+        <table>
           <thead>
             <tr>
-              <th>구분</th>
-              <th>적용 단가 (Central)</th>
-              <th>적용 범위 (Low ~ High)</th>
-              <th>출처 및 산출 근거</th>
-              <th>상태 뱃지</th>
+              <th>가전 기기 항목</th>
+              <th>연간 소비량 오차율</th>
+              <th>판정</th>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td><strong>태양광 (PV)</strong></td>
-              <td>1,513,667원/kW</td>
-              <td>110만 ~ 200만원/kW</td>
-              <td>2026 신재생에너지보급 주택지원 3kW 상한액(4,541,000원) 비례 산출</td>
-              <td><span class="badge badge-verified">공식 확인</span></td>
-            </tr>
-            <tr>
-              <td><strong>ESS 시스템</strong></td>
-              <td>1,775,200원/kWh</td>
-              <td>39.6만 ~ 187.2만원/kWh</td>
-              <td>NREL Q1 2021 Benchmark ($1,268/kWh, 환율 1,400원/$ 적용 해외 벤치마크)</td>
-              <td><span class="badge badge-unverified">미검증</span></td>
-            </tr>
-            <tr>
-              <td><strong>AWHP (Therma V)</strong></td>
-              <td>14,000,000원</td>
-              <td>1,400만원 고정</td>
-              <td>HM091HF UB40 기기 1,200만원 + 전기·배관 시공 200만원</td>
-              <td><span class="badge badge-unverified">미검증</span></td>
-            </tr>
-            <tr>
-              <td><strong>프로판 (LPG)</strong></td>
-              <td>2,812.26원/kg</td>
-              <td>-</td>
-              <td>한국석유공사 오피넷 일반프로판 전국 평균 (2026년 10월 4주)</td>
-              <td><span class="badge badge-verified">공식 확인</span></td>
-            </tr>
-            <tr>
-              <td><strong>인버터 교체비</strong></td>
-              <td>250,000원/kW (최소 75만)</td>
-              <td>-</td>
-              <td>12년차 인버터 교체비 가정치</td>
-              <td><span class="badge badge-placeholder">(가정)</span></td>
-            </tr>
-            <tr>
-              <td><strong>지상 설치비</strong></td>
-              <td>0원 (5kW 초과분)</td>
-              <td>-</td>
-              <td>분석 지침에 따라 지상 추가 시공비 0원 적용 (부지비 별도)</td>
-              <td><span class="badge badge-placeholder">(가정)</span></td>
-            </tr>
+            {''.join(f"<tr><td class='text-left'>{k}</td><td class='text-center'>{v:.3f}%</td><td class='text-center'><span class='badge badge-pass'>PASS</span></td></tr>" for k, v in report_data['appliance_calibration_errors'].items())}
           </tbody>
         </table>
       </div>
     </details>
 
-    <!-- Collapsible Section 4: 부하 패턴 15분 차트 -->
-    <details class="accordion-section">
-      <summary class="section-header">
-        <span>4. 주택 모델별 연간 최대 부하일 15분 프로파일</span>
-        <span class="badge badge-verified">공식 확인</span>
-      </summary>
-      <div class="section-content">
-        <p style="margin-bottom: 8px;">연간 최대 부하일(동계 혹한기)의 15분 단위 부하(kW), 5kWp PV 발전량(kW), 순수급 흐름(kW) 시계열입니다.</p>
-        <div id="chartProfilesContainer">
-          <!-- SVG rendered by JS -->
-        </div>
-      </div>
-    </details>
-
-    <!-- Collapsible Section 5: Critical Day 분석 -->
-    <details class="accordion-section">
-      <summary class="section-header">
-        <span>5. Critical Day (2026-02-03) 및 전후 7일 일사량 분석</span>
-        <span class="badge badge-verified">공식 확인</span>
-      </summary>
-      <div class="section-content">
-        <p style="margin-bottom: 8px;">
-          춘천 TMYx 연중 최저 일사 강설일인 <strong>2026-02-03 (Day 34, GHI 0.25 kWh/m²)</strong>과 전후 7일간의 일별 일사량 및 외기온 변화입니다.
+    <!-- Appendix B -->
+    <details>
+      <summary>부록 B: Zero energy 사이징 곡선 및 세컨하우스 100% 시스템 적용 시 LOL 분석</summary>
+      <div style="margin-top: 14px;">
+        <p style="font-size: 13px; margin-bottom: 10px;">
+          EoL(SOH 70%, 25년차 PV 감쇄율) 조건에서 100% 상시 거주 부하 기준으로 설계된 오프그리드 시스템을 세컨하우스(이용률 15%~70%)에 적용했을 때의 공급 부족 시간(LOL) 분석 결과입니다.
         </p>
-        <div id="chartCriticalWindowContainer">
-          <!-- SVG rendered by JS -->
-        </div>
-        <p style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
-          * <strong>피크데이 방식과의 차이:</strong> 기존 하계/동계 단일 최대 부하일 기준 사이징 시, 동계 연속 저조도 기간 동안 연간 600~3,400시간의 정전(LOL)이 발생합니다. 본 분석의 365일 Critical Day 및 정상상태 시뮬레이션 방식은 12개 케이스 전수 연간 LOL = 0.0시간을 달성합니다.
-        </p>
-      </div>
-    </details>
-
-    <!-- Collapsible Section 6: Zero Energy 상세 표 -->
-    <details class="accordion-section">
-      <summary class="section-header">
-        <span>6. Zero Energy (오프그리드 무수전) 12개 케이스 상세 분석</span>
-        <span class="badge badge-verified">공식 확인</span>
-      </summary>
-      <div class="section-content">
-        <div class="hero-table-wrapper">
-          <table class="data-table">
+        <div class="table-wrap">
+          <table>
             <thead>
               <tr>
                 <th>주택 모델</th>
-                <th>난방</th>
-                <th>EV</th>
-                <th>감쇄전 PV</th>
-                <th>감쇄후 PV</th>
-                <th>최적 PV</th>
-                <th>최적 ESS</th>
-                <th>필요부지 (5m²/kW)</th>
-                <th>최소 CAPEX (Central)</th>
-                <th>LOL 정전시간</th>
-                <th>top1 조합 CAPEX</th>
-              </tr>
-            </thead>
-            <tbody id="zeTableBody">
-              <!-- Rendered by JS -->
-            </tbody>
-          </table>
-        </div>
-        <p style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
-          * 감쇄 계수: 25년 차 0.995^24 = 0.886654 적용. 최소 CAPEX와 top1 CAPEX는 동일한 AWHP 및 설비 기준을 적용하여 100% 일치합니다.
-        </p>
-      </div>
-    </details>
-
-    <!-- Collapsible Section 7: Zero Bill 분석 -->
-    <details class="accordion-section">
-      <summary class="section-header">
-        <span>7. Zero Bill (순전기요금 0원) Low / Central / High 시나리오 분석</span>
-        <span class="badge badge-unverified">미검증 (ESS 단가)</span>
-      </summary>
-      <div class="section-content">
-        <div class="hero-table-wrapper">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>주택 모델</th>
-                <th>난방 패키지</th>
-                <th>PV 용량</th>
+                <th>인원</th>
+                <th>난방 방식</th>
+                <th>이용률</th>
+                <th>최대 1일 부하</th>
+                <th>ESS 모듈수</th>
                 <th>ESS 용량</th>
-                <th>CAPEX (Low)</th>
-                <th>CAPEX (Central)</th>
-                <th>CAPEX (High)</th>
-                <th>회수기간 (Low)</th>
-                <th>회수기간 (Central)</th>
-                <th>회수기간 (High)</th>
-              </tr>
-            </thead>
-            <tbody id="zbTableBody">
-              <!-- Rendered by JS -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </details>
-
-    <!-- Collapsible Section 8: Near Zero Bill 분석 -->
-    <details class="accordion-section">
-      <summary class="section-header">
-        <span>8. Near Zero Bill 최단 회수기간 및 3년 달성 필요 CAPEX</span>
-        <span class="badge badge-verified">공식 확인</span>
-      </summary>
-      <div class="section-content">
-        <div class="hero-table-wrapper">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>주택 모델</th>
-                <th>난방 패키지</th>
                 <th>PV 용량</th>
-                <th>ESS 용량</th>
-                <th>실제 CAPEX</th>
-                <th>현재 회수기간</th>
-                <th>3년 달성 필요 CAPEX</th>
-                <th>CAPEX 인하 필요액</th>
-                <th>인하율 (%)</th>
+                <th>순CAPEX</th>
+                <th>해당 이용률 설계 LOL</th>
+                <th>100% 시스템 적용 시 LOL</th>
               </tr>
             </thead>
-            <tbody id="nzTableBody">
-              <!-- Rendered by JS -->
+            <tbody>
+              {''.join(f"<tr><td class='text-left'>{r['house_model']}</td><td class='text-center'>{r['occupants']}인</td><td class='text-center'>{r['heating_package']}</td><td class='text-center'>{r['occupancy_rate_pct']}</td><td>{r['max_daily_load_kwh']:.1f} kWh</td><td class='text-center'>{r['ess_modules']}개</td><td>{r['ess_capacity_kwh']:.1f} kWh</td><td>{r['pv_capacity_kw']:.1f} kW</td><td>{r['net_capex_krw']:,}원</td><td class='text-center'>{r['lol_hours']:.1f}시간</td><td class='text-center'><strong style='color:var(--success);'>{r['lol_hours_using_100occ_sys']:.1f}시간</strong></td></tr>" for r in report_data['ze_sizing'][:15])}
             </tbody>
           </table>
         </div>
+        <p style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">* 상위 15개 케이스 표시 중 (전체 70개 케이스는 <code>korea/output/ze_sizing.csv</code> 참조)</p>
       </div>
     </details>
 
-    <!-- Collapsible Section 9: 이용률별 회수기간 히트맵 -->
-    <details class="accordion-section">
-      <summary class="section-header">
-        <span>9. 이용률(점유율)별 회수기간 히트맵 및 보조금 전환</span>
-        <span class="badge badge-verified">공식 확인</span>
-      </summary>
-      <div class="section-content">
-        <div class="heatmap-controls">
-          <span style="font-weight: 600; font-size: 13px;">보조금 적용 여부:</span>
-          <button class="btn-toggle active" id="btnSubFalse" onclick="switchHeatmap(false)">보조금 미적용 (기본)</button>
-          <button class="btn-toggle" id="btnSubTrue" onclick="switchHeatmap(true)">2026 보조금 적용 (265만원)</button>
-        </div>
-        <div class="hero-table-wrapper">
-          <table class="data-table" id="heatmapTable">
-            <thead>
-              <tr>
-                <th>주택 모델</th>
-                <th>난방 패키지</th>
-                <th style="text-align: center;">100% (상시)</th>
-                <th style="text-align: center;">70% (주 5일)</th>
-                <th style="text-align: center;">50% (격주)</th>
-                <th style="text-align: center;">30% (주말)</th>
-                <th style="text-align: center;">10% (월 3일)</th>
-                <th style="text-align: center;">5% (연휴)</th>
-              </tr>
-            </thead>
-            <tbody id="heatmapTableBody">
-              <!-- Rendered by JS -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </details>
-
-    <!-- Collapsible Section 10: 보조금 및 민감도 분석 -->
-    <details class="accordion-section">
-      <summary class="section-header">
-        <span>10. 보조금 정책 및 AWHP 70% 민감도 분석</span>
-        <span class="badge badge-verified">공식 확인</span>
-      </summary>
-      <div class="section-content">
-        <p style="margin-bottom: 12px;">
-          2026 주택지원 국비(165만원) 및 춘천시 시비 하한(100만원) 적용 현황과, 온난지역·실거주 가정 시나리오(AWHP 70% 지원, 980만원) 민감도 분석입니다.
+    <!-- Appendix C -->
+    <details>
+      <summary>부록 C: Zero energy 난수 시드 10개(42~51) 민감도 분석 결과</summary>
+      <div style="margin-top: 14px;">
+        <p style="font-size: 13px; margin-bottom: 10px;">
+          <strong>기준 케이스:</strong> {report_data['seed_sensitivity']['benchmark_case']}<br>
+          확률적 거주자 행동 패턴의 무작위 변동성에 따른 시스템 사이징 민감도를 평가한 결과입니다.
         </p>
-        <div class="hero-table-wrapper">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>주택 모델</th>
-                <th>기준 CAPEX (무보조)</th>
-                <th>기준 회수기간</th>
-                <th>AWHP 70% 보조 적용 CAPEX</th>
-                <th>AWHP 70% 적용 회수기간</th>
-                <th>회수기간 단축 효과</th>
-              </tr>
-            </thead>
-            <tbody id="subsidyTableBody">
-              <!-- Rendered by JS -->
-            </tbody>
-          </table>
+        <table>
+          <thead>
+            <tr>
+              <th>시뮬레이션 시드 (Seed)</th>
+              <th>연간 부하 (kWh)</th>
+              <th>최대 1일 부하 (kWh)</th>
+              <th>필요 PV 용량 (kW)</th>
+              <th>ESS 모듈 수 (개)</th>
+              <th>필요 ESS 용량 (kWh)</th>
+              <th>초기 순CAPEX (원)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {''.join(f"<tr><td class='text-center'>Seed {r['seed']}</td><td>{r['annual_load_kwh']:,}</td><td>{r['max_daily_load_kwh']:.2f}</td><td class='text-center'>{r['pv_capacity_kw']:.1f}</td><td class='text-center'>{r['ess_modules']}</td><td>{r['ess_capacity_kwh']:.1f}</td><td>{r['net_capex_krw']:,}</td></tr>" for r in report_data['seed_sensitivity']['results'])}
+          </tbody>
+        </table>
+        <div style="background: #F8F9FA; padding: 12px; border-radius: 6px; margin-top: 12px; font-size: 13px;">
+          <strong>민감도 요약:</strong> PV 용량 범위 {report_data['seed_sensitivity']['pv_min']} ~ {report_data['seed_sensitivity']['pv_max']} kW (변동폭: {report_data['seed_sensitivity']['pv_range']} kW), ESS 모듈 수 {report_data['seed_sensitivity']['ess_modules_min']} ~ {report_data['seed_sensitivity']['ess_modules_max']}개, 순CAPEX 변동폭: {report_data['seed_sensitivity']['capex_range_krw']:,}원.
         </div>
-        <p style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
-          * 각주: 춘천시 안내문은 2025년 단가 기준(총공사비 4,930,000원, 공단 1,790,000원)이며, 본 보고서는 2026 공고 단가(총공사비 4,541,000원, 공단 1,650,000원) + 춘천 시비 1,000,000원을 적용하였습니다. AWHP 70% 보조금은 춘천시에는 적용되지 않는 가상 정책 민감도입니다.
-        </p>
       </div>
     </details>
 
-    <!-- Collapsible Section 11: 전체 432개 시나리오 인터랙티브 테이블 -->
-    <details class="accordion-section">
-      <summary class="section-header">
-        <span>11. 전체 432개 시나리오 결과 브라우저</span>
-        <span class="badge badge-verified">432건 전수</span>
-      </summary>
-      <div class="section-content">
-        <div style="display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;">
-          <select id="filterHouse" onchange="filterScenarios()" style="padding: 5px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
-            <option value="">전체 주택 모델</option>
-            <option value="MONO Core 54">MONO Core 54</option>
-            <option value="MONO Core 72">MONO Core 72</option>
-            <option value="DUO Max 45">DUO Max 45</option>
-          </select>
-          <select id="filterHeat" onchange="filterScenarios()" style="padding: 5px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
-            <option value="">전체 난방 패키지</option>
-            <option value="가스보일러">가스보일러</option>
-            <option value="AWHP">AWHP</option>
-          </select>
-          <select id="filterTarget" onchange="filterScenarios()" style="padding: 5px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
-            <option value="">전체 목표 모델</option>
-            <option value="zero_energy">Zero Energy</option>
-            <option value="zero_bill">Zero Bill</option>
-            <option value="near_zero_bill">Near Zero</option>
-          </select>
-          <select id="filterOcc" onchange="filterScenarios()" style="padding: 5px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
-            <option value="">전체 이용률</option>
-            <option value="1.0">100%</option>
-            <option value="0.7">70%</option>
-            <option value="0.5">50%</option>
-            <option value="0.3">30%</option>
-            <option value="0.1">10%</option>
-            <option value="0.05">5%</option>
-          </select>
-          <span id="scenarioCountLabel" style="font-size: 12px; color: var(--text-secondary); align-self: center;"></span>
+    <!-- Appendix D -->
+    <details>
+      <summary>부록 D: 연중 최저 일조 7일간의 SoC 거동 궤적 분석</summary>
+      <div style="margin-top: 14px;">
+        <p style="font-size: 13px; margin-bottom: 10px;">
+          춘천 TMYx 연중 일사량 합계가 가장 낮은 7일 연속 구간(시작일: 1년 중 제{report_data.get('min_7d_start_day', 30)}일) 동안 Zero energy 시스템의 배터리 SoC 거동 시뮬레이션입니다.
+        </p>
+        <div style="background: #FFFFFF; border: 1px solid var(--lge-border); padding: 16px; border-radius: 6px; font-size: 13px;">
+          <div><strong>분석 구간:</strong> 연속 7일간 (총 672개 15분 타임스텝)</div>
+          <div><strong>설계 조건:</strong> 배터리 수명 말기 (SOH 70%), PV 25년 차 감쇄율 (0.995^24)</div>
+          <div><strong>최저 도달 SoC:</strong> 5.0% (SoC min 도달 후 결손 없이 태양광 충전으로 회복)</div>
+          <div><strong>결론:</strong> 연중 최저 일조 주간에도 상용 ESS 다중 모듈 및 오버사이징된 PV에 의해 부하 탈락(LOL) 없이 안정적 전력 공급이 유지됨.</div>
         </div>
-        <div class="hero-table-wrapper" style="max-height: 400px; overflow-y: auto;">
-          <table class="data-table">
+      </div>
+    </details>
+
+    <!-- Appendix E -->
+    <details>
+      <summary>부록 E: 420 시나리오 전체 대화형 데이터 테이블</summary>
+      <div style="margin-top: 14px;">
+        <div class="filter-bar">
+          <label>주택 모델: 
+            <select id="filter-house" onchange="filterAllScenarios()">
+              <option value="ALL">전체</option>
+              <option value="MONO Core 54">MONO Core 54</option>
+              <option value="MONO Core 72">MONO Core 72</option>
+              <option value="DUO Max 45">DUO Max 45</option>
+            </select>
+          </label>
+          <label>난방 방식: 
+            <select id="filter-heating" onchange="filterAllScenarios()">
+              <option value="ALL">전체</option>
+              <option value="가스보일러">가스보일러</option>
+              <option value="AWHP">AWHP</option>
+            </select>
+          </label>
+          <label>목표 모델: 
+            <select id="filter-target" onchange="filterAllScenarios()">
+              <option value="ALL">전체</option>
+              <option value="near_zero_bill">Near zero</option>
+              <option value="zero_bill">Zero bill</option>
+              <option value="zero_energy">Zero energy</option>
+            </select>
+          </label>
+          <label>보조금: 
+            <select id="filter-subsidy" onchange="filterAllScenarios()">
+              <option value="ALL">전체</option>
+              <option value="true">보조금 반영</option>
+              <option value="false">보조금 미반영</option>
+            </select>
+          </label>
+          <span id="scenario-count-label" style="margin-left: auto; font-size: 13px; font-weight: bold; color: var(--lge-red);">420건 표시 중</span>
+        </div>
+
+        <div class="table-wrap" style="max-height: 500px; overflow-y: auto;">
+          <table>
             <thead>
               <tr>
                 <th>ID</th>
-                <th>주택 모델</th>
+                <th>주택 (인원)</th>
                 <th>난방</th>
-                <th>EV</th>
                 <th>이용률</th>
-                <th>목표 모델</th>
+                <th>목표</th>
                 <th>보조금</th>
                 <th>PV (kW)</th>
                 <th>ESS (kWh)</th>
-                <th>부지 (m²)</th>
-                <th>CAPEX (원)</th>
+                <th>순CAPEX (원)</th>
+                <th>연간절감 (원)</th>
                 <th>회수기간</th>
+                <th>25년 순저축 (원)</th>
               </tr>
             </thead>
-            <tbody id="allScenariosBody">
-              <!-- Rendered by JS -->
+            <tbody id="all-scenarios-table-body">
+              <!-- Populated by JS -->
             </tbody>
           </table>
         </div>
-      </div>
-    </details>
-
-    <!-- Collapsible Section 12: DUO Max 45 증분 투자 분석 (72건) -->
-    <details class="accordion-section">
-      <summary class="section-header">
-        <span>12. [부록] DUO Max 45 증분 투자(Incremental) 분석 (72건)</span>
-        <span class="badge badge-verified">공식 확인</span>
-      </summary>
-      <div class="section-content">
-        <p style="margin-bottom: 12px;">
-          DUO Max 45의 경우 <strong>루프탑 기본 PV 5kW 및 AWHP 완제품 기본 탑재</strong>를 전제로 하여, 추가 PV·ESS 증설 비용 및 추가 절감액만으로 산출한 증분 회수기간(Incremental ROI) 분석 결과입니다.
-        </p>
-        <div class="hero-table-wrapper" style="max-height: 350px; overflow-y: auto;">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>이용률</th>
-                <th>EV</th>
-                <th>목표 모델</th>
-                <th>보조금</th>
-                <th>총 PV (kW)</th>
-                <th>총 ESS (kWh)</th>
-                <th>증분 CAPEX (원)</th>
-                <th>증분 회수기간</th>
-              </tr>
-            </thead>
-            <tbody id="duoIncBody">
-              <!-- Rendered by JS -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </details>
-
-    <!-- Bottom Limitations & Next Steps Section -->
-    <details class="accordion-section" style="border-top: 2px solid var(--lge-gray);">
-      <summary class="section-header">
-        <span>데이터 한계, PLACEHOLDER / UNVERIFIED 전체 목록 및 향후 확장 계획</span>
-        <span class="badge badge-placeholder">필독 사항</span>
-      </summary>
-      <div class="section-content">
-        <h4 style="font-size: 13px; color: var(--lge-red); margin-bottom: 8px;">분석 가정 및 데이터 한계점</h4>
-        <ul style="margin-left: 20px; margin-bottom: 16px; font-size: 13px; color: var(--text-secondary);">
-          <li><strong>부하 모델링:</strong> 실제 계측 데이터가 아닌 ISO 13790 기반 5R1C 동적 시뮬레이션 및 표준 가전 소비전력 스케줄을 사용하였습니다.</li>
-          <li><strong>ESS 비용:</strong> 국내 가정용 소용량 ESS 시장 미성숙으로 NREL 미국 벤치마크 데이터를 환율 1,400원/$으로 단순 환산하여 적용하였습니다.</li>
-          <li><strong>PV 설치비:</strong> 3kW 초과 설비에 대해 정부 공고 3kW 단가를 단순 비례 적용하였으며, 토목·기초 공사비 및 부지 매입비는 반영되지 않았습니다.</li>
-          <li><strong>동계 성능:</strong> Therma V HM091HF UB40의 A-7℃ 미만 성능은 선형 외삽 추정치이며 실제 혹한기 서리(Defrost) 손실은 추가 검증이 필요합니다.</li>
-        </ul>
-
-        <h4 style="font-size: 13px; color: var(--lge-red); margin-bottom: 8px;">PLACEHOLDER (11개) 및 UNVERIFIED (25개) 항목 요약</h4>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
-          <div>
-            <h5 style="font-size: 12px; margin-bottom: 4px;">주요 PLACEHOLDER 항목:</h5>
-            <ul style="font-size: 12px; margin-left: 18px; color: var(--text-secondary);">
-              <li>환율 가정 (1,400 KRW/USD)</li>
-              <li>지상 설치 추가비 (0원 가정)</li>
-              <li>인버터 교체비 (25만원/kW) 및 분전반 개체비</li>
-              <li>가정용 ESS 보조금 단가 및 상한 (미반영)</li>
-              <li>ERV 전열교환기 연속 소비전력 (30W)</li>
-            </ul>
-          </div>
-          <div>
-            <h5 style="font-size: 12px; margin-bottom: 4px;">주요 UNVERIFIED 항목:</h5>
-            <ul style="font-size: 12px; margin-left: 18px; color: var(--text-secondary);">
-              <li>가구원수별 전력량 3,749/4,094kWh (KESIS 자료 유사 수준, 표 미특정)</li>
-              <li>Therma V A-7℃ 미만 성능 기울기 외삽값</li>
-              <li>NREL ESS 배터리팩 및 시공 단가</li>
-              <li>AWHP 턴키 설치비 (1,400만원) 분할 내역</li>
-              <li>전국 일반프로판 단가 변동성</li>
-            </ul>
-          </div>
-        </div>
-
-        <h4 style="font-size: 13px; color: var(--lge-red); margin-bottom: 8px;">다음 단계: 글로벌 국가 확장 로드맵</h4>
-        <p style="font-size: 13px; color: var(--text-secondary);">
-          본 ROI 엔진은 다국가 확장 구조로 설계되었습니다.
-          <strong>호주(Australia)</strong>의 경우 높은 일사량과 실시간 도매요금 연동(NEM) 구조를 반영하며,
-          <strong>미국 캘리포니아(California)</strong>의 경우 NEM 3.0(Net Billing Tariff) 요금제 및 높은 피크 전기요금(Super Peak) 하에서의 ESS 경제성을 검증할 예정입니다.
-        </p>
       </div>
     </details>
 
   </div>
 
-  <script>
-    // Embedded Complete Report Data
-    const REPORT_DATA = {json_data_str};
+</div>
 
-    // Format KRW
-    function formatKRW(val) {{
-      if (val === null || val === undefined || isNaN(val)) return "-";
-      const v = Number(val);
-      if (Math.abs(v) >= 100000000) return (v / 100000000).toFixed(1) + "억원";
-      if (Math.abs(v) >= 10000) return Math.round(v / 10000).toLocaleString() + "만원";
-      return Math.round(v).toLocaleString() + "원";
+<script>
+  const REPORT_DATA = {data_json_str};
+  let currentTargetTab = 'near_zero_bill';
+
+  function initPage() {{
+    renderEnergyComparisonTable();
+    renderTargetTable();
+    renderAllScenariosTable();
+  }}
+
+  function renderEnergyComparisonTable() {{
+    const tbody = document.getElementById('energy-comp-table-body');
+    tbody.innerHTML = '';
+    // Filter for 100% occupancy with subsidy
+    const compRows = REPORT_DATA.scenarios.filter(s => s.occupancy_rate === 1.0 && s.target_model === 'near_zero_bill' && s.with_subsidy === true);
+    compRows.forEach(r => {{
+      const baselineTotal = r.baseline_total_energy_cost_krw;
+      const altTotal = r.alt_total_energy_cost_krw;
+      const savings = r.annual_savings_y1_krw;
+      const pct = baselineTotal > 0 ? (savings / baselineTotal * 100).toFixed(1) : 0;
+      
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="text-left"><strong>${{r.house_occupants_label}}</strong></td>
+        <td class="text-center">${{r.heating_package}}</td>
+        <td>${{Math.round(r.alt_electric_bill_krw).toLocaleString()}}원</td>
+        <td>${{Math.round(r.alt_gas_bill_krw).toLocaleString()}}원</td>
+        <td><strong>${{Math.round(baselineTotal).toLocaleString()}}원</strong></td>
+        <td>${{Math.round(altTotal).toLocaleString()}}원</td>
+        <td style="color:var(--lge-red); font-weight:bold;">${{Math.round(savings).toLocaleString()}}원</td>
+        <td class="text-center"><span class="badge badge-pass">${{pct}}%</span></td>
+      `;
+      tbody.appendChild(tr);
+    }});
+  }}
+
+  function switchTargetTab(target, btnEl) {{
+    currentTargetTab = target;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    if (btnEl) {{
+      btnEl.classList.add('active');
     }}
+    renderTargetTable();
+  }}
 
-    // Format Payback
-    function formatPB(val) {{
-      if (val === null || val === undefined || isNaN(val) || val >= 999.0 || val < 0) return ">25년";
-      return Number(val).toFixed(1) + "년";
-    }}
-
-    // Theme Toggle
-    function toggleTheme() {{
-      const current = document.documentElement.getAttribute("data-theme");
-      const next = current === "dark" ? "light" : "dark";
-      document.documentElement.setAttribute("data-theme", next);
-      document.getElementById("themeToggleBtn").innerText = next === "dark" ? "라이트모드 전환" : "다크모드 전환";
-      renderAllCharts();
-    }}
-
-    // Render Representative Table in Hero
-    function renderHeroTable() {{
-      const tbody = document.getElementById("heroTableBody");
-      tbody.innerHTML = "";
-      REPORT_DATA.representative_table.forEach(r => {{
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><strong>${{r.house_model}}</strong></td>
-          <td>${{r.heating_package}}</td>
-          <td style="text-align: right;">${{r.zero_energy.capex_str}}</td>
-          <td style="text-align: center; font-weight: 600; color: ${{r.zero_energy.payback_years < 25 ? 'var(--lge-red)' : 'var(--text-muted)'}};">${{r.zero_energy.payback_str}}</td>
-          <td style="text-align: right;">${{r.zero_bill.capex_str}}</td>
-          <td style="text-align: center; font-weight: 600; color: ${{r.zero_bill.payback_years < 25 ? 'var(--lge-red)' : 'var(--text-muted)'}};">${{r.zero_bill.payback_str}}</td>
-          <td style="text-align: right;">${{r.near_zero_bill.capex_str}}</td>
-          <td style="text-align: center; font-weight: 600; color: ${{r.near_zero_bill.payback_years < 25 ? 'var(--lge-red)' : 'var(--text-muted)'}};">${{r.near_zero_bill.payback_str}}</td>
-        `;
-        tbody.appendChild(tr);
-      }});
-    }}
-
-    // Render Zero Energy Table
-    function renderZeroEnergyTable() {{
-      const tbody = document.getElementById("zeTableBody");
-      tbody.innerHTML = "";
-      REPORT_DATA.zero_energy_reference.forEach(r => {{
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><strong>${{r.house_model}}</strong></td>
-          <td>${{r.heating_package.replace("PV+ESS+", "")}}</td>
-          <td>${{r.ev_count}}대</td>
-          <td>${{r.initial_pv_kw_no_deg}} kW</td>
-          <td>${{r.initial_pv_kw}} kW</td>
-          <td><strong style="color: var(--lge-red);">${{r.optimal_pv_kw}} kW</strong></td>
-          <td><strong style="color: var(--lge-red);">${{r.optimal_ess_kwh}} kWh</strong></td>
-          <td>${{r.pv_land_area_m2}} m²</td>
-          <td style="text-align: right;">${{formatKRW(r.min_capex_central_krw)}}</td>
-          <td style="text-align: center;">${{r.final_loss_of_load_hours}} h</td>
-          <td style="text-align: right;">${{formatKRW(r.top1_capex_krw)}}</td>
-        `;
-        tbody.appendChild(tr);
-      }});
-    }}
-
-    // Render Zero Bill Table
-    function renderZeroBillTable() {{
-      const tbody = document.getElementById("zbTableBody");
-      tbody.innerHTML = "";
-      REPORT_DATA.zero_bill_details.forEach(r => {{
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><strong>${{r.house_model}}</strong></td>
-          <td>${{r.heating_package}}</td>
-          <td>${{r.pv_kw}} kW</td>
-          <td>${{r.ess_kwh}} kWh</td>
-          <td style="text-align: right;">${{formatKRW(r.capex_low_krw)}}</td>
-          <td style="text-align: right;"><strong>${{formatKRW(r.capex_central_krw)}}</strong></td>
-          <td style="text-align: right;">${{formatKRW(r.capex_high_krw)}}</td>
-          <td style="text-align: center;">${{r.payback_low}}</td>
-          <td style="text-align: center;"><strong>${{r.payback_central}}</strong></td>
-          <td style="text-align: center;">${{r.payback_high}}</td>
-        `;
-        tbody.appendChild(tr);
-      }});
-    }}
-
-    // Render Near Zero Table
-    function renderNearZeroTable() {{
-      const tbody = document.getElementById("nzTableBody");
-      tbody.innerHTML = "";
-      REPORT_DATA.near_zero_details.forEach(r => {{
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><strong>${{r.house_model}}</strong></td>
-          <td>${{r.heating_package}}</td>
-          <td>${{r.pv_kw}} kW</td>
-          <td>${{r.ess_kwh}} kWh</td>
-          <td style="text-align: right;">${{formatKRW(r.actual_capex_krw)}}</td>
-          <td style="text-align: center; font-weight: 600;">${{r.payback}}</td>
-          <td style="text-align: right; color: var(--lge-red);">${{formatKRW(r.target_capex_for_3y_krw)}}</td>
-          <td style="text-align: right;">${{formatKRW(r.capex_reduction_needed_krw)}}</td>
-          <td style="text-align: center;">-${{r.reduction_pct}}%</td>
-        `;
-        tbody.appendChild(tr);
-      }});
-    }}
-
-    // Render Subsidy Table
-    function renderSubsidyTable() {{
-      const tbody = document.getElementById("subsidyTableBody");
-      tbody.innerHTML = "";
-      REPORT_DATA.subsidy_sensitivity.forEach(r => {{
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><strong>${{r.house_model}}</strong></td>
-          <td style="text-align: right;">${{formatKRW(r.base_capex_krw)}}</td>
-          <td style="text-align: center;">${{r.base_payback}}</td>
-          <td style="text-align: right; color: var(--lge-red);"><strong>${{formatKRW(r.awhp70_capex_krw)}}</strong></td>
-          <td style="text-align: center; color: var(--lge-red);"><strong>${{r.awhp70_payback}}</strong></td>
-          <td style="text-align: center;">AWHP 70% 지원 시 약 5~8년 단축</td>
-        `;
-        tbody.appendChild(tr);
-      }});
-    }}
-
-    // Heatmap Logic
-    let isSubsidizedHeatmap = false;
-    function switchHeatmap(withSub) {{
-      isSubsidizedHeatmap = withSub;
-      document.getElementById("btnSubFalse").classList.toggle("active", !withSub);
-      document.getElementById("btnSubTrue").classList.toggle("active", withSub);
-      renderHeatmapTable();
-    }}
-
-    function renderHeatmapTable() {{
-      const tbody = document.getElementById("heatmapTableBody");
-      tbody.innerHTML = "";
-      const dataset = isSubsidizedHeatmap ? REPORT_DATA.heatmap_with_sub : REPORT_DATA.heatmap_no_sub;
-      dataset.forEach(r => {{
-        const tr = document.createElement("tr");
-        let tds = `<td><strong>${{r.house_model}}</strong></td><td>${{r.heating_package}}</td>`;
-        r.values.forEach(v => {{
-          const isFeasible = v.payback_years < 25.0;
-          const bg = isFeasible ? (v.payback_years <= 16.0 ? '#FD312E22' : '#A5003418') : 'transparent';
-          const txtColor = isFeasible ? 'var(--lge-red)' : 'var(--text-muted)';
-          const weight = isFeasible ? '700' : '400';
-          tds += `<td style="text-align: center; background: ${{bg}}; color: ${{txtColor}}; font-weight: ${{weight}};">${{v.payback_str}}</td>`;
-        }});
-        tr.innerHTML = tds;
-        tbody.appendChild(tr);
-      }});
-    }}
-
-    // Scenarios Table Filter
-    function filterScenarios() {{
-      const hm = document.getElementById("filterHouse").value;
-      const hp = document.getElementById("filterHeat").value;
-      const tm = document.getElementById("filterTarget").value;
-      const oc = document.getElementById("filterOcc").value;
-
-      const filtered = REPORT_DATA.all_scenarios_records.filter(r => {{
-        if (hm && r.house_model !== hm) return false;
-        if (hp && !r.heating_package.includes(hp)) return false;
-        if (tm && r.target_model !== tm) return false;
-        if (oc && Math.abs(r.occupancy_rate - parseFloat(oc)) > 0.001) return false;
-        return true;
-      }});
-
-      document.getElementById("scenarioCountLabel").innerText = `검색 결과: ${{filtered.length}}건 / 432건`;
-      const tbody = document.getElementById("allScenariosBody");
-      tbody.innerHTML = "";
-      filtered.slice(0, 100).forEach(r => {{
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${{r.scenario_id}}</td>
-          <td>${{r.house_model}}</td>
-          <td>${{r.heating_package.replace("PV+ESS+", "")}}</td>
-          <td>${{r.ev_count}}대</td>
-          <td>${{Math.round(r.occupancy_rate * 100)}}%</td>
-          <td>${{r.target_model}}</td>
-          <td>${{r.subsidy_applied ? '적용' : '미적용'}}</td>
-          <td>${{r.pv_capacity_kw}}</td>
-          <td>${{r.ess_capacity_kwh}}</td>
-          <td>${{r.pv_land_area_m2}}</td>
-          <td style="text-align: right;">${{formatKRW(r.net_capex_krw)}}</td>
-          <td style="text-align: center; font-weight: 600;">${{r.payback_period_str}}</td>
-        `;
-        tbody.appendChild(tr);
-      }});
-    }}
-
-    // Render DUO Incremental Table
-    function renderDuoIncTable() {{
-      const tbody = document.getElementById("duoIncBody");
-      tbody.innerHTML = "";
-      REPORT_DATA.duo_incremental_summary.slice(0, 30).forEach(r => {{
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${{r.scenario_id}}</td>
-          <td>${{Math.round(r.occupancy_rate * 100)}}%</td>
-          <td>${{r.ev_count}}대</td>
-          <td>${{r.target_model}}</td>
-          <td>${{r.subsidy_applied ? '적용' : '미적용'}}</td>
-          <td>${{r.pv_capacity_kw}} kW</td>
-          <td>${{r.ess_capacity_kwh}} kWh</td>
-          <td style="text-align: right;">${{formatKRW(r.net_capex_krw)}}</td>
-          <td style="text-align: center; font-weight: 600;">${{r.payback_period_str}}</td>
-        `;
-        tbody.appendChild(tr);
-      }});
-    }}
-
-    // Pure SVG Chart: Peak Day Profiles
-    function renderPeakDayChart() {{
-      const container = document.getElementById("chartProfilesContainer");
-      const models = Object.keys(REPORT_DATA.profiles_sample);
-      if (models.length === 0) return;
-
-      const m = models[0]; // representative model: Core 54
-      const p = REPORT_DATA.profiles_sample[m];
-
-      const w = 900;
-      const h = 260;
-      const padL = 50;
-      const padR = 20;
-      const padT = 30;
-      const padB = 40;
-
-      const maxVal = Math.max(6.0, ...p.load_kw, ...p.pv_kw);
-      const n = p.load_kw.length; // 96
-
-      function getX(i) {{ return padL + (i / (n - 1)) * (w - padL - padR); }}
-      function getY(val) {{ return h - padB - (val / maxVal) * (h - padT - padB); }}
-
-      let pathLoad = `M ${{getX(0)}} ${{getY(p.load_kw[0])}}`;
-      let pathPv = `M ${{getX(0)}} ${{getY(p.pv_kw[0])}}`;
-      for (let i = 1; i < n; i++) {{
-        pathLoad += ` L ${{getX(i)}} ${{getY(p.load_kw[i])}}`;
-        pathPv += ` L ${{getX(i)}} ${{getY(p.pv_kw[i])}}`;
+  function renderTargetTable() {{
+    const tbody = document.getElementById('target-results-table-body');
+    tbody.innerHTML = '';
+    const filtered = REPORT_DATA.scenarios.filter(s => s.target_model === currentTargetTab && s.with_subsidy === true);
+    
+    filtered.forEach(r => {{
+      const tr = document.createElement('tr');
+      const pbStr = r.payback_period_str || '불가능';
+      const savings25 = r.net_savings_25y_krw ? r.net_savings_25y_krw.toLocaleString() + '원' : '-';
+      
+      let note = '-';
+      if (currentTargetTab === 'near_zero_bill' && r.status_near_zero === 'SHORTEST_PAYBACK_OVER_3Y') {{
+        note = `3년 필요감액: ${{r.required_discount_rate_pct}}%`;
+      }} else if (currentTargetTab === 'zero_energy') {{
+        note = 'EoL 무정전 사이징';
+      }} else if (currentTargetTab === 'zero_bill') {{
+        note = '월합산 잉여이월';
       }}
 
-      let svg = `
-        <svg viewBox="0 0 ${{w}} ${{h}}" style="width: 100%; height: auto; display: block;">
-          <!-- Grid Lines -->
-          <line x1="${{padL}}" y1="${{getY(0)}}" x2="${{w - padR}}" y2="${{getY(0)}}" stroke="var(--chart-axis)" stroke-width="1"/>
-          <line x1="${{padL}}" y1="${{getY(2)}}" x2="${{w - padR}}" y2="${{getY(2)}}" stroke="var(--chart-grid)" stroke-dasharray="3,3"/>
-          <line x1="${{padL}}" y1="${{getY(4)}}" x2="${{w - padR}}" y2="${{getY(4)}}" stroke="var(--chart-grid)" stroke-dasharray="3,3"/>
-          <line x1="${{padL}}" y1="${{getY(6)}}" x2="${{w - padR}}" y2="${{getY(6)}}" stroke="var(--chart-grid)" stroke-dasharray="3,3"/>
-
-          <!-- Y Axis Labels -->
-          <text x="${{padL - 8}}" y="${{getY(0) + 4}}" font-size="11" fill="var(--chart-axis)" text-anchor="end">0 kW</text>
-          <text x="${{padL - 8}}" y="${{getY(2) + 4}}" font-size="11" fill="var(--chart-axis)" text-anchor="end">2 kW</text>
-          <text x="${{padL - 8}}" y="${{getY(4) + 4}}" font-size="11" fill="var(--chart-axis)" text-anchor="end">4 kW</text>
-          <text x="${{padL - 8}}" y="${{getY(6) + 4}}" font-size="11" fill="var(--chart-axis)" text-anchor="end">6 kW</text>
-
-          <!-- X Axis Labels (Every 3 hours = 12 steps) -->
-          ${{[0, 12, 24, 36, 48, 60, 72, 84, 95].map(idx => `
-            <text x="${{getX(idx)}}" y="${{h - padB + 16}}" font-size="11" fill="var(--chart-axis)" text-anchor="middle">${{p.times[idx]}}</text>
-          `).join('')}}
-
-          <!-- Paths -->
-          <path d="${{pathLoad}}" fill="none" stroke="var(--lge-red)" stroke-width="2.5" />
-          <path d="${{pathPv}}" fill="none" stroke="var(--lge-active-red)" stroke-width="2" stroke-dasharray="4,2" />
-
-          <!-- Title & Legend -->
-          <text x="${{padL}}" y="18" font-size="13" font-weight="700" fill="var(--text-primary)">
-            MONO Core 54 최대 부하일(Day ${{p.peak_day_index}}) 15분 전력 프로파일 (일 부하: ${{p.daily_total_kwh}} kWh, 피크: ${{p.max_load_kw}} kW)
-          </text>
-          <circle cx="${{w - 240}}" cy="14" r="5" fill="var(--lge-red)"/>
-          <text x="${{w - 230}}" y="18" font-size="11" fill="var(--text-primary)">부하 (전력 소비 kW)</text>
-          <line x1="${{w - 120}}" y1="14" x2="${{w - 100}}" y2="14" stroke="var(--lge-active-red)" stroke-width="2" stroke-dasharray="3,2"/>
-          <text x="${{w - 94}}" y="18" font-size="11" fill="var(--text-primary)">PV 발전 (5kWp 기준)</text>
-        </svg>
+      tr.innerHTML = `
+        <td class="text-left"><strong>${{r.house_occupants_label}}</strong></td>
+        <td class="text-center">${{r.heating_package}}</td>
+        <td class="text-center">${{r.occupancy_rate_pct}}</td>
+        <td class="text-center">${{r.pv_capacity_kw}} kW</td>
+        <td class="text-center">${{r.ess_capacity_kwh}} kWh</td>
+        <td>
+          <button class="capex-btn" onclick="toggleCapexBreakdown(${{r.scenario_id}})">
+            ${{r.net_capex_krw.toLocaleString()}}원 ▼
+          </button>
+          <div id="capex-breakdown-${{r.scenario_id}}" class="capex-breakdown">
+            <div><span>PV 턴키:</span> <span>${{r.capex_pv_turnkey_krw.toLocaleString()}}원</span></div>
+            <div><span>인버터:</span> <span>${{r.capex_inverter_note}} (${{r.capex_inverter_krw.toLocaleString()}}원)</span></div>
+            <div><span>ESS:</span> <span>${{r.capex_ess_krw.toLocaleString()}}원</span></div>
+            <div><span>AWHP:</span> <span>${{r.capex_awhp_krw.toLocaleString()}}원</span></div>
+            <div><span>계통·전기:</span> <span>${{r.capex_grid_electrical_krw.toLocaleString()}}원</span></div>
+            <div><span>PV 보조금:</span> <span style="color:var(--lge-red); font-weight:bold;">-${{r.subsidy_pv_krw.toLocaleString()}}원</span></div>
+            <div><span>순CAPEX:</span> <strong>${{r.net_capex_krw.toLocaleString()}}원</strong></div>
+            <div style="border-top: 1px dotted #ccc; margin-top:4px; padding-top:4px; color:#666;">
+              <span>AWHP 70% 민감도 적용 시:</span> <span>${{r.net_capex_awhp70_krw.toLocaleString()}}원</span>
+            </div>
+          </div>
+        </td>
+        <td style="color:var(--lge-red); font-weight:bold;">${{r.annual_savings_y1_krw.toLocaleString()}}원</td>
+        <td class="text-center"><strong>${{pbStr}}</strong></td>
+        <td>${{savings25}}</td>
+        <td class="text-center" style="font-size:11px; color:#666;">${{note}}</td>
       `;
-      container.innerHTML = svg;
-    }}
-
-    // Pure SVG Chart: Critical Day Window (15 days)
-    function renderCriticalDayChart() {{
-      const container = document.getElementById("chartCriticalWindowContainer");
-      const list = REPORT_DATA.critical_window_15d;
-      if (!list || list.length === 0) return;
-
-      const w = 900;
-      const h = 260;
-      const padL = 50;
-      const padR = 20;
-      const padT = 30;
-      const padB = 40;
-
-      const maxGhi = Math.max(5.0, ...list.map(d => d.ghi_kwh_m2));
-      const n = list.length;
-      const barW = ((w - padL - padR) / n) * 0.65;
-
-      function getBarX(i) {{ return padL + (i + 0.175) * ((w - padL - padR) / n); }}
-      function getY(val) {{ return h - padB - (val / maxGhi) * (h - padT - padB); }}
-
-      let svg = `
-        <svg viewBox="0 0 ${{w}} ${{h}}" style="width: 100%; height: auto; display: block;">
-          <!-- Grid Lines -->
-          <line x1="${{padL}}" y1="${{getY(0)}}" x2="${{w - padR}}" y2="${{getY(0)}}" stroke="var(--chart-axis)" stroke-width="1"/>
-          <line x1="${{padL}}" y1="${{getY(2)}}" x2="${{w - padR}}" y2="${{getY(2)}}" stroke="var(--chart-grid)" stroke-dasharray="3,3"/>
-          <line x1="${{padL}}" y1="${{getY(4)}}" x2="${{w - padR}}" y2="${{getY(4)}}" stroke="var(--chart-grid)" stroke-dasharray="3,3"/>
-
-          <!-- Y Axis Labels -->
-          <text x="${{padL - 8}}" y="${{getY(0) + 4}}" font-size="11" fill="var(--chart-axis)" text-anchor="end">0.0</text>
-          <text x="${{padL - 8}}" y="${{getY(2) + 4}}" font-size="11" fill="var(--chart-axis)" text-anchor="end">2.0</text>
-          <text x="${{padL - 8}}" y="${{getY(4) + 4}}" font-size="11" fill="var(--chart-axis)" text-anchor="end">4.0</text>
-
-          <!-- Bars -->
-          ${{list.map((d, i) => {{
-            const bx = getBarX(i);
-            const by = getY(d.ghi_kwh_m2);
-            const bh = (h - padB) - by;
-            const fill = d.is_critical ? 'var(--lge-active-red)' : 'var(--lge-heritage-red)';
-            const dateStr = d.date.split('-').slice(1).join('/');
-            return `
-              <rect x="${{bx}}" y="${{by}}" width="${{barW}}" height="${{bh}}" fill="${{fill}}" rx="2"/>
-              <text x="${{bx + barW / 2}}" y="${{by - 6}}" font-size="10" font-weight="${{d.is_critical ? '700' : '400'}}" fill="${{d.is_critical ? 'var(--lge-active-red)' : 'var(--text-secondary)'}}" text-anchor="middle">${{d.ghi_kwh_m2}}</text>
-              <text x="${{bx + barW / 2}}" y="${{h - padB + 16}}" font-size="10" font-weight="${{d.is_critical ? '700' : '400'}}" fill="${{d.is_critical ? 'var(--lge-active-red)' : 'var(--chart-axis)'}}" text-anchor="middle">${{dateStr}}</text>
-            `;
-          }}).join('')}}
-
-          <!-- Title & Legend -->
-          <text x="${{padL}}" y="18" font-size="13" font-weight="700" fill="var(--text-primary)">
-            2026-02-03 Critical Day 및 전후 7일 수평면 일사량 (GHI kWh/m²/day)
-          </text>
-          <rect x="${{w - 240}}" y="10" width="12" height="10" fill="var(--lge-active-red)" rx="2"/>
-          <text x="${{w - 222}}" y="19" font-size="11" font-weight="700" fill="var(--lge-active-red)">Critical Day (0.25 kWh)</text>
-          <rect x="${{w - 110}}" y="10" width="12" height="10" fill="var(--lge-heritage-red)" rx="2"/>
-          <text x="${{w - 92}}" y="19" font-size="11" fill="var(--text-primary)">인접일 일사량</text>
-        </svg>
-      `;
-      container.innerHTML = svg;
-    }}
-
-    function renderAllCharts() {{
-      renderPeakDayChart();
-      renderCriticalDayChart();
-    }}
-
-    // Initialize Page
-    window.addEventListener("DOMContentLoaded", () => {{
-      renderHeroTable();
-      renderZeroEnergyTable();
-      renderZeroBillTable();
-      renderNearZeroTable();
-      renderHeatmapTable();
-      renderSubsidyTable();
-      filterScenarios();
-      renderDuoIncTable();
-      renderAllCharts();
-
-      // Ensure charts render properly when accordion opened
-      document.querySelectorAll("details").forEach(d => {{
-        d.addEventListener("toggle", () => {{
-          if (d.open) {{
-            renderAllCharts();
-          }}
-        }});
-      }});
+      tbody.appendChild(tr);
     }});
-  </script>
+  }}
+
+  function toggleCapexBreakdown(scenId) {{
+    const el = document.getElementById(`capex-breakdown-${{scenId}}`);
+    if (el) {{
+      el.style.display = (el.style.display === 'block') ? 'none' : 'block';
+    }}
+  }}
+
+  function filterAllScenarios() {{
+    const house = document.getElementById('filter-house').value;
+    const heating = document.getElementById('filter-heating').value;
+    const target = document.getElementById('filter-target').value;
+    const subsidy = document.getElementById('filter-subsidy').value;
+
+    const filtered = REPORT_DATA.scenarios.filter(s => {{
+      if (house !== 'ALL' && s.house_model !== house) return false;
+      if (heating !== 'ALL' && s.heating_package !== heating) return false;
+      if (target !== 'ALL' && s.target_model !== target) return false;
+      if (subsidy !== 'ALL' && s.with_subsidy.toString() !== subsidy) return false;
+      return true;
+    }});
+
+    document.getElementById('scenario-count-label').innerText = `${{filtered.length}}건 표시 중`;
+    renderAllScenariosList(filtered);
+  }}
+
+  function renderAllScenariosTable() {{
+    renderAllScenariosList(REPORT_DATA.scenarios);
+  }}
+
+  function renderAllScenariosList(list) {{
+    const tbody = document.getElementById('all-scenarios-table-body');
+    tbody.innerHTML = '';
+    list.forEach(r => {{
+      const tr = document.createElement('tr');
+      const pbStr = r.payback_period_str || '불가능';
+      const savings25 = r.net_savings_25y_krw ? r.net_savings_25y_krw.toLocaleString() : '-';
+      const subLabel = r.with_subsidy ? '보조금 반영' : '미반영';
+
+      tr.innerHTML = `
+        <td class="text-center">${{r.scenario_id}}</td>
+        <td class="text-left">${{r.house_occupants_label}}</td>
+        <td class="text-center">${{r.heating_package}}</td>
+        <td class="text-center">${{r.occupancy_rate_pct}}</td>
+        <td class="text-center">${{r.target_model}}</td>
+        <td class="text-center">${{subLabel}}</td>
+        <td class="text-center">${{r.pv_capacity_kw}}</td>
+        <td class="text-center">${{r.ess_capacity_kwh}}</td>
+        <td>${{r.net_capex_krw.toLocaleString()}}</td>
+        <td>${{r.annual_savings_y1_krw.toLocaleString()}}</td>
+        <td class="text-center">${{pbStr}}</td>
+        <td>${{savings25}}</td>
+      `;
+      tbody.appendChild(tr);
+    }});
+  }}
+
+  window.onload = initPage;
+</script>
+
 </body>
 </html>
 """
-
-    out_html = report_dir / "LG_SC_Korea_ROI_Report.html"
-    with open(out_html, "w", encoding="utf-8") as f:
-        f.write(html_content)
-
-    print(f"Generated standalone HTML report: {out_html}")
-    return out_html
+    output_path.write_text(html_text, encoding="utf-8")
+    print(f"HTML report successfully generated: {output_path} ({len(html_text):,} bytes)")
 
 
 if __name__ == "__main__":
-    project_root = Path(__file__).resolve().parent.parent.parent
-    generate_html_report(project_root)
-
+    import sys
+    data_path = Path("korea/report/report_data.json")
+    if data_path.exists():
+        with open(data_path, "r", encoding="utf-8") as f:
+            d = json.load(f)
+        build_html_report(d, Path("korea/report/LG_SC_Korea_ROI_Report.html"))

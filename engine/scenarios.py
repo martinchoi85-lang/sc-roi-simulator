@@ -1,23 +1,34 @@
-"""Full scenario execution runner across the 432 parameter combinations."""
+"""Full scenario execution runner for LG Smart Cottage ROI Calculation (v9).
 
-from typing import Dict, Any, List, Tuple
+Simulates all 420 scenarios across:
+- 7 House-Occupant pairs:
+  - MONO Core 54 (1p, 2p)
+  - MONO Core 72 (1p, 2p, 3p)
+  - DUO Max 45 (1p, 2p)
+- 2 Heating packages:
+  - Gas boiler (Propane)
+  - AWHP (LG Therma V)
+- 5 Occupancy rates: 1.00, 0.70, 0.50, 0.30, 0.15
+- 3 Target models: near_zero_bill, zero_bill, zero_energy
+- 2 Subsidy options: False (None), True (2026 PV Subsidy)
+Total scenarios: 7 * 2 * 5 * 3 * 2 = 420.
+All models start with 0 pre-installed PV/ESS/AWHP.
+"""
+
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
 from engine.weather import load_weather_data
-from engine.occupancy import generate_occupancy_calendar
 from engine.thermal_5r1c import simulate_thermal_5r1c
-from engine.dhw import calculate_dhw_load
-from engine.ev import calculate_ev_load
-from engine.appliance_load import calculate_appliance_load
 from engine.heat_pump import simulate_hvac_and_dhw
 from engine.pv import simulate_pv_generation_1kwp
-from engine.ess import simulate_ess_dispatch, simulate_ess_dispatch_steady_state
 from engine.tariffs.korea import KoreaTariffCalculator
 from engine.capex import calculate_capex_breakdown
-from engine.cashflow import calculate_25y_cashflow
-from engine.sizing import size_zero_energy, size_zero_bill, size_near_zero_bill
+from engine.cashflow import calculate_100y_cashflow
+from engine.occupancy_tus import OccupancyTUSModel
+from engine.sizing import size_zero_energy, size_zero_bill, size_near_zero_bill, fast_simulate_offgrid
 
 
 def run_all_scenarios(
@@ -25,12 +36,16 @@ def run_all_scenarios(
     weather_df: pd.DataFrame,
     placeholders_list: List[str] = None,
     unverifieds_list: List[str] = None,
-) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, Any], Dict[str, Any]]:
-    """Runs all 432 scenarios and returns results, DUO Max incremental, profiles, and verification data."""
+    assumptions_list: List[str] = None,
+    kosis_dir: Optional[Path] = None,
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, Dict[str, Any]]:
+    """Runs all 420 scenarios and returns results, energy comparison, ZE sizing, and metadata."""
     if placeholders_list is None:
         placeholders_list = []
     if unverifieds_list is None:
         unverifieds_list = []
+    if assumptions_list is None:
+        assumptions_list = []
 
     country_cfg = config_values["country"]
     houses_cfg = config_values["houses"]
@@ -39,11 +54,10 @@ def run_all_scenarios(
     subsidy_cfg = config_values["subsidy"]
     load_cfg = config_values["load"]
     equip_cfg = config_values["equipment"]
+    lifetimes_cfg = config_values.get("lifetimes", {})
 
     dates = pd.DatetimeIndex(weather_df["timestamp"])
     dt_h = 0.25
-    design_margin = float(country_cfg.get("design_margin", 1.0))
-    deg_25 = 0.995**24
 
     lat = float(country_cfg["latitude"])
     lon = float(country_cfg["longitude"])
@@ -53,496 +67,466 @@ def run_all_scenarios(
     )
 
     tariff_calc = KoreaTariffCalculator(tariff_cfg)
-    net_metering_scheme = str(tariff_cfg.get("net_metering_scheme", "monthly_net"))
+    propane_unit_cost = float(tariff_cfg.get("propane_unit_cost_krw_per_kg", {}).get("value", 2812.26) if isinstance(tariff_cfg.get("propane_unit_cost_krw_per_kg"), dict) else tariff_cfg.get("propane_unit_cost_krw_per_kg", 2812.26))
+    propane_energy_density_mj = float(tariff_cfg.get("propane_heating_value_mj_per_kg", {}).get("value", 46.3) if isinstance(tariff_cfg.get("propane_heating_value_mj_per_kg"), dict) else tariff_cfg.get("propane_heating_value_mj_per_kg", 46.3))
+    propane_kwh_per_kg = propane_energy_density_mj / 3.6  # 12.861 kWh/kg
 
-    peak_months = [int(m) for m in load_cfg.get("peak_summer_season_months", [7, 8])]
-    if "peak_fall_season_months" in load_cfg:
-        peak_months.extend([int(m) for m in load_cfg["peak_fall_season_months"]])
+    boiler_cfg = equip_cfg.get("gas_boiler", {})
+    boiler_eff_raw = boiler_cfg.get("efficiency", 0.90)
+    boiler_eff = float(boiler_eff_raw.get("value", 0.90) if isinstance(boiler_eff_raw, dict) else boiler_eff_raw)
 
-    axes = country_cfg["scenario_axes"]
-    house_models = axes["house_models"]
-    heating_packages = axes["heating_packages"]
-    ev_options = [int(v) for v in axes["ev_options"]]
-    occupancy_rates = [float(v) for v in axes["occupancy_rates"]]
-    target_models = axes["target_models"]
-    subsidy_options = [bool(v) for v in axes["subsidy_options"]]
+    if kosis_dir is None:
+        kosis_dir = Path("korea/source/kosis")
 
-    # Phase 1: Pre-compute the 72 unique load profiles
-    print("Pre-computing 72 load profiles across houses, heating packages, EVs, and occupancies...")
+    # Scenario axes definition (420 scenarios)
+    house_occupant_pairs = [
+        {"house": "MONO Core 54", "occupants": 1},
+        {"house": "MONO Core 54", "occupants": 2},
+        {"house": "MONO Core 72", "occupants": 1},
+        {"house": "MONO Core 72", "occupants": 2},
+        {"house": "MONO Core 72", "occupants": 3},
+        {"house": "DUO Max 45", "occupants": 1},
+        {"house": "DUO Max 45", "occupants": 2},
+    ]
+
+    heating_packages = ["가스보일러", "AWHP"]
+    occupancy_rates = [1.00, 0.70, 0.50, 0.30, 0.15]
+    target_models = ["near_zero_bill", "zero_bill", "zero_energy"]
+    subsidy_options = [False, True]
+
+    # Pre-simulate occupancy and loads across 7 pairs x 5 occupancy rates = 35 load cases
+    print("Pre-computing 35 load sets via OccupancyTUSModel (Mode A/B)...")
     load_cache = {}
+    tus_fit_meta = None
+    load_mode = "B"
+    load_mode_detail = ""
+    kosis_val_meta = {}
+    appliance_err_meta = {}
 
-    for h_name in house_models:
+    for pair in house_occupant_pairs:
+        h_name = pair["house"]
+        occ = pair["occupants"]
         h_cfg = houses_cfg[h_name]
-        occupants = int(h_cfg["occupants"])
 
+        tus_model = OccupancyTUSModel(
+            kosis_dir=kosis_dir,
+            load_config=load_cfg,
+            house_config=h_cfg,
+            weather_df=weather_df,
+            occupants=occ,
+            seed=42,
+        )
+        load_mode = tus_model.mode
+        load_mode_detail = tus_model.mode_detail
+
+        for occ_rate in occupancy_rates:
+            key = (h_name, occ, occ_rate)
+            tus_res = tus_model.simulate_year(occupancy_rate=occ_rate)
+            if tus_fit_meta is None and tus_res["tus_fit"]:
+                tus_fit_meta = tus_res["tus_fit"]
+                kosis_val_meta = tus_res["kosis_validation"]
+                appliance_err_meta = tus_res["appliance_calibration_errors"]
+
+            # Thermal 5R1C simulation
+            q_occ_w = tus_res["occupants_active_15min"] * 80.0
+            t_indoor, q_heat_kw, q_cool_kw = simulate_thermal_5r1c(
+                house_config=h_cfg,
+                temp_air=weather_df["temp_air"].values,
+                ghi=weather_df["ghi"].values,
+                occupant_presence=tus_res["is_occupied_15min"].astype(float),
+                internal_heat_gain_w=q_occ_w,
+                is_occupied_day=tus_res["is_occupied_day_365"],
+                heat_setpoint_schedule=tus_res["heat_setpoint_15min"],
+            )
+
+            # DHW heat requirement (kWh/15min)
+            # Q = m * Cp * delta_T (Cp = 4.186 kJ/kg*K, delta_T = 55 - 15 = 40K)
+            dhw_liters = tus_res["dhw_liters_15min"]
+            q_dhw_kwh = dhw_liters * 4.186 * 40.0 / 3600.0
+            q_dhw_kw = q_dhw_kwh / dt_h
+
+            load_cache[key] = {
+                "tus_res": tus_res,
+                "t_indoor": t_indoor,
+                "q_heat_kw": q_heat_kw,
+                "q_cool_kw": q_cool_kw,
+                "q_dhw_kw": q_dhw_kw,
+                "base_elec_kw": tus_res["total_elec_base_load_kw_15min"],
+            }
+
+    # Pre-calculate Baseline for each of the 35 (h_name, occ, occ_rate) combinations
+    # Baseline = Gas boiler (propane) + KEPCO grid electricity, 0 PV, 0 ESS, 0 Subsidy
+    baseline_cache = {}
+    for pair in house_occupant_pairs:
+        h_name = pair["house"]
+        occ = pair["occupants"]
+        for occ_rate in occupancy_rates:
+            ld = load_cache[(h_name, occ, occ_rate)]
+
+            # Gas boiler covers heating and DHW
+            annual_heat_kwh = float(ld["q_heat_kw"].sum() * dt_h)
+            annual_dhw_kwh = float(ld["q_dhw_kw"].sum() * dt_h)
+            annual_thermal_kwh = annual_heat_kwh + annual_dhw_kwh
+            propane_kg = annual_thermal_kwh / (boiler_eff * propane_kwh_per_kg)
+            gas_bill = propane_kg * propane_unit_cost
+
+            # Grid electricity covers appliances, lighting, and air conditioning cooling (COP 3.0)
+            p_cool_elec = ld["q_cool_kw"] / 3.0
+            p_elec_total = ld["base_elec_kw"] + p_cool_elec
+            elec_bill_res = tariff_calc.calculate_annual_bill(
+                p_grid_import_kw=p_elec_total,
+                p_grid_export_kw=np.zeros(len(dates)),
+                dates=dates,
+                net_metering_scheme="monthly_net",
+            )
+            elec_bill = elec_bill_res["annual_total_bill"]
+
+            baseline_cache[(h_name, occ, occ_rate)] = {
+                "p_elec_total_kw": p_elec_total,
+                "grid_import_kwh": float(p_elec_total.sum() * dt_h),
+                "grid_export_kwh": 0.0,
+                "billed_kwh": float(p_elec_total.sum() * dt_h),
+                "electric_bill_krw": round(elec_bill, 0),
+                "propane_kg": round(propane_kg, 1),
+                "gas_bill_krw": round(gas_bill, 0),
+                "total_energy_cost_krw": round(elec_bill + gas_bill, 0),
+            }
+
+    # Pre-calculate HVAC electric load for AWHP cases
+    awhp_load_cache = {}
+    awhp_equip_cfg = equip_cfg.get("awhp_system", {})
+    for pair in house_occupant_pairs:
+        h_name = pair["house"]
+        occ = pair["occupants"]
+        for occ_rate in occupancy_rates:
+            ld = load_cache[(h_name, occ, occ_rate)]
+            hvac_res = simulate_hvac_and_dhw(
+                heating_package="AWHP",
+                q_heat_kw=ld["q_heat_kw"],
+                q_cool_kw=ld["q_cool_kw"],
+                q_dhw_kw=ld["q_dhw_kw"],
+                temp_air=weather_df["temp_air"].values,
+                equipment_config=equip_cfg,
+                tariff_config=tariff_cfg,
+                house_config=h_cfg,
+            )
+            p_awhp_elec = hvac_res["p_hvac_kw"]
+            p_total_elec_awhp = ld["base_elec_kw"] + p_awhp_elec
+
+            awhp_load_cache[(h_name, occ, occ_rate)] = {
+                "p_awhp_elec": p_awhp_elec,
+                "p_total_elec": p_total_elec_awhp,
+            }
+
+    # Size all 3 targets for the 70 unique cases (7 pairs x 2 heating x 5 occupancies)
+    print("Sizing systems (Zero Energy, Zero Bill, Near Zero) for 70 unique cases...")
+    ze_sizing_cache = {}
+    zb_sizing_cache = {}
+    nz_sizing_cache = {}
+    ze_sizing_rows = []
+
+    for pair in house_occupant_pairs:
+        h_name = pair["house"]
+        occ = pair["occupants"]
         for heat_pkg in heating_packages:
-            for ev_opt in ev_options:
-                for occ_rate in occupancy_rates:
-                    is_occ_day, occ_presence = generate_occupancy_calendar(
-                        occ_rate, dates, peak_months=peak_months, forced_peak_day=None
-                    )
+            is_awhp = heat_pkg == "AWHP"
+            for occ_rate in occupancy_rates:
+                base_data = baseline_cache[(h_name, occ, occ_rate)]
+                base_total_cost = base_data["total_energy_cost_krw"]
+                base_gas_cost = base_data["gas_bill_krw"]
+                base_propane_kg = base_data["propane_kg"]
 
-                    p_app_kw, internal_heat_w = calculate_appliance_load(occupants, is_occ_day, load_cfg, house_config=h_cfg)
-                    q_dhw_kw = calculate_dhw_load(occupants, is_occ_day, load_cfg)
-                    t_in, q_heat_kw, q_cool_kw = simulate_thermal_5r1c(
-                        h_cfg, weather_df["temp_air"].values, weather_df["ghi"].values,
-                        occ_presence, internal_heat_w, is_occ_day
-                    )
+                if is_awhp:
+                    p_load_kw = awhp_load_cache[(h_name, occ, occ_rate)]["p_total_elec"]
+                    alt_propane_kg = 0.0
+                    alt_gas_cost = 0.0
+                else:
+                    p_load_kw = base_data["p_elec_total_kw"]
+                    alt_propane_kg = base_propane_kg
+                    alt_gas_cost = base_gas_cost
 
-                    p_ev_kw = calculate_ev_load(ev_opt, occ_rate, is_occ_day, load_cfg)
-                    hvac_res = simulate_hvac_and_dhw(
-                        heat_pkg, q_heat_kw, q_cool_kw, q_dhw_kw,
-                        weather_df["temp_air"].values, equip_cfg, tariff_cfg,
-                        house_config=h_cfg,
-                    )
-
-                    total_p_load_kw = p_app_kw + p_ev_kw + hvac_res["p_hvac_kw"]
-
-                    key = (h_name, occ_rate, ev_opt, heat_pkg)
-                    load_cache[key] = {
-                        "p_load_kw": total_p_load_kw,
-                        "p_app_kw": p_app_kw,
-                        "p_ev_kw": p_ev_kw,
-                        "p_hvac_kw": hvac_res["p_hvac_kw"],
-                        "propane_kwh": hvac_res["propane_kwh"],
-                        "propane_kg": hvac_res["propane_kg"],
-                        "propane_cost": hvac_res["propane_cost"],
-                        "backup_heater_hours": hvac_res["backup_heater_hours"],
-                        "backup_heater_kwh": hvac_res["backup_heater_kwh"],
-                        "annual_awhp_actual_kwh": hvac_res["annual_awhp_actual_kwh"],
-                        "is_occ_day": is_occ_day,
-                    }
-
-    # Phase 2: Compute Zero-Energy sizing for the 12 combinations (House x Heat x EV)
-    print("Sizing 12 zero_energy configurations (365-day critical_day search & steady-state LOL=0)...")
-    zero_energy_sizings = {}
-    zero_energy_references = {}
-
-    for h_name in house_models:
-        h_cfg = houses_cfg[h_name]
-        for heat_pkg in heating_packages:
-            for ev_opt in ev_options:
-                p_load_100 = load_cache[(h_name, 1.00, ev_opt, heat_pkg)]["p_load_kw"]
-                all_occ_loads = [
-                    load_cache[(h_name, oc, ev_opt, heat_pkg)]["p_load_kw"] for oc in occupancy_rates
-                ]
-
+                # 1. Zero Energy Sizing
                 ze_res = size_zero_energy(
-                    p_load_100_kw=p_load_100,
-                    all_occupancy_loads=all_occ_loads,
+                    p_load_kw=p_load_kw,
                     p_pv1_kw=p_pv1_kw,
                     dates=dates,
-                    house_config=h_cfg,
-                    equipment_config=equip_cfg,
                     capex_config=capex_cfg,
-                    design_margin=design_margin,
-                    ghi_arr=weather_df["ghi"].values,
+                    subsidy_config=subsidy_cfg,
                     heating_package=heat_pkg,
+                    with_subsidy=False,
                 )
-                key = (h_name, heat_pkg, ev_opt)
-                zero_energy_sizings[key] = ze_res
-                zero_energy_references[key] = ze_res["reference_data"]
+                ze_sizing_cache[(h_name, occ, heat_pkg, occ_rate)] = ze_res
 
-    # Phase 3: Compute Baseline costs (Gas Boiler + Grid electricity)
-    baseline_cache = {}
-    for h_name in house_models:
-        for occ_rate in occupancy_rates:
-            for ev_opt in ev_options:
-                gb_data = load_cache[(h_name, occ_rate, ev_opt, "PV+ESS+가스보일러")]
-                p_load_gb = gb_data["p_load_kw"]
-                gb_propane_cost = gb_data["propane_cost"]
-
-                disp_gb = simulate_ess_dispatch(
-                    np.zeros_like(p_load_gb), p_load_gb, 0.0,
-                    equip_cfg["ess_system"], is_off_grid=False, dt_hours=dt_h
+                # Evaluate LOL if 100% occupancy system applied to this occupancy rate
+                ze_100_res = ze_sizing_cache.get((h_name, occ, heat_pkg, 1.00), ze_res)
+                unmet_100_sys, lol_100_sys, _ = fast_simulate_offgrid(
+                    p_load_kw=p_load_kw,
+                    p_pv_kw=p_pv1_kw * ze_100_res["pv_capacity_kw"] * (0.995**24),
+                    ess_kwh=ze_100_res["ess_capacity_kwh"],
                 )
-                bill_gb = tariff_calc.calculate_annual_bill(
-                    disp_gb["p_grid_import_kw"], disp_gb["p_grid_export_kw"], dates, net_metering_scheme
-                )
-                base_total_cost = bill_gb["annual_total_bill"] + gb_propane_cost
 
-                baseline_cache[(h_name, occ_rate, ev_opt)] = {
-                    "baseline_electric_bill": bill_gb["annual_total_bill"],
-                    "baseline_propane_cost": gb_propane_cost,
-                    "baseline_total_cost": base_total_cost,
-                }
+                ze_sizing_rows.append({
+                    "house_model": h_name,
+                    "occupants": occ,
+                    "heating_package": heat_pkg,
+                    "occupancy_rate": occ_rate,
+                    "occupancy_rate_pct": f"{int(occ_rate*100)}%",
+                    "max_daily_load_kwh": ze_res["max_daily_load_kwh"],
+                    "ess_modules": ze_res["ess_modules"],
+                    "ess_capacity_kwh": ze_res["ess_capacity_kwh"],
+                    "usable_ess_kwh": ze_res["usable_ess_kwh"],
+                    "pv_capacity_kw": ze_res["pv_capacity_kw"],
+                    "net_capex_krw": ze_res["capex_info"]["net_capex"],
+                    "gross_capex_krw": ze_res["capex_info"]["gross_capex"],
+                    "unmet_kwh": ze_res["unmet_kwh"],
+                    "lol_hours": ze_res["lol_hours"],
+                    "lol_hours_using_100occ_sys": round(lol_100_sys, 2),
+                })
 
-    # Incremental baseline for DUO Max 45 (AWHP + 5kW PV)
-    duo_incremental_base_cache = {}
-    if "DUO Max 45" in house_models:
-        for occ_rate in occupancy_rates:
-            for ev_opt in ev_options:
-                awhp_data = load_cache[("DUO Max 45", occ_rate, ev_opt, "PV+ESS+AWHP")]
-                p_load_awhp = awhp_data["p_load_kw"]
-                p_pv_5kw = 5.0 * p_pv1_kw
-                disp_5kw = simulate_ess_dispatch(
-                    p_pv_5kw, p_load_awhp, 0.0, equip_cfg["ess_system"], is_off_grid=False, dt_hours=dt_h
+                # 2. Zero Bill Sizing
+                zb_res = size_zero_bill(
+                    p_load_kw=p_load_kw,
+                    p_pv1_kw=p_pv1_kw,
+                    tariff_calc=tariff_calc,
+                    capex_config=capex_cfg,
+                    subsidy_config=subsidy_cfg,
+                    heating_package=heat_pkg,
+                    with_subsidy=False,
+                    dates=dates,
                 )
-                bill_5kw = tariff_calc.calculate_annual_bill(
-                    disp_5kw["p_grid_import_kw"], disp_5kw["p_grid_export_kw"], dates, net_metering_scheme
-                )
-                duo_incremental_base_cache[(occ_rate, ev_opt)] = {
-                    "base_electric_bill": bill_5kw["annual_total_bill"],
-                    "base_total_cost": bill_5kw["annual_total_bill"],
-                }
+                zb_sizing_cache[(h_name, occ, heat_pkg, occ_rate)] = zb_res
 
-    print("Evaluating 432 scenarios + DUO Max incremental (AWHP 72 rows)...")
-    results = []
-    duo_incremental_results = []
-    saved_profiles = {}
+                # 3. Near Zero Sizing
+                nz_res = size_near_zero_bill(
+                    p_load_kw=p_load_kw,
+                    p_pv1_kw=p_pv1_kw,
+                    baseline_energy_cost=base_total_cost,
+                    baseline_propane_cost=base_gas_cost,
+                    alt_propane_cost=alt_gas_cost,
+                    tariff_calc=tariff_calc,
+                    capex_config=capex_cfg,
+                    subsidy_config=subsidy_cfg,
+                    heating_package=heat_pkg,
+                    with_subsidy=False,
+                    is_awhp=is_awhp,
+                    dates=dates,
+                )
+                nz_sizing_cache[(h_name, occ, heat_pkg, occ_rate)] = nz_res
+
+    df_ze_sizing = pd.DataFrame(ze_sizing_rows)
+
+    # Run the 420 scenarios
+    print("Executing all 420 scenarios...")
+    results_all_rows = []
+    energy_comp_rows = []
+
     scenario_id = 1
-    duo_inc_id = 1
+    for pair in house_occupant_pairs:
+        h_name = pair["house"]
+        occ = pair["occupants"]
 
-    placeholder_str = "; ".join(placeholders_list)
-    unverified_str = "; ".join(unverifieds_list)
-
-    peak_import_kw_list = []
-
-    for h_name in house_models:
-        h_cfg = houses_cfg[h_name]
         for heat_pkg in heating_packages:
-            for ev_opt in ev_options:
-                ze_sizing = zero_energy_sizings[(h_name, heat_pkg, ev_opt)]
+            is_awhp = heat_pkg == "AWHP"
 
-                for occ_rate in occupancy_rates:
-                    load_data = load_cache[(h_name, occ_rate, ev_opt, heat_pkg)]
-                    p_load_kw = load_data["p_load_kw"]
-                    alt_propane_cost = load_data["propane_cost"]
+            for occ_rate in occupancy_rates:
+                base_data = baseline_cache[(h_name, occ, occ_rate)]
+                base_total_cost = base_data["total_energy_cost_krw"]
+                base_elec_cost = base_data["electric_bill_krw"]
+                base_gas_cost = base_data["gas_bill_krw"]
+                base_propane_kg = base_data["propane_kg"]
 
-                    base_info = baseline_cache[(h_name, occ_rate, ev_opt)]
-                    base_total_cost = base_info["baseline_total_cost"]
-                    base_propane_cost = base_info["baseline_propane_cost"]
+                if is_awhp:
+                    p_load_kw = awhp_load_cache[(h_name, occ, occ_rate)]["p_total_elec"]
+                    alt_propane_kg = 0.0
+                    alt_gas_cost = 0.0
+                else:
+                    p_load_kw = base_data["p_elec_total_kw"]
+                    alt_propane_kg = base_propane_kg
+                    alt_gas_cost = base_gas_cost
 
-                    for target_m in target_models:
-                        for with_sub in subsidy_options:
-                            is_off_grid = (target_m == "zero_energy")
-                            if "가스보일러" in heat_pkg:
-                                external_energy = "propane (전력 기준, 프로판 별도)" if target_m == "zero_energy" else "propane"
-                            else:
-                                external_energy = "none"
+                for target in target_models:
+                    for with_sub in subsidy_options:
+                        # Fetch pre-sized capacity
+                        if target == "zero_energy":
+                            ze_res = ze_sizing_cache[(h_name, occ, heat_pkg, occ_rate)]
+                            pv_kw = ze_res["pv_capacity_kw"]
+                            ess_kwh = ze_res["ess_capacity_kwh"]
+                            is_off_grid = True
+                            grid_import_kwh = 0.0
+                            grid_export_kwh = 0.0
+                            billed_kwh = 0.0
+                            alt_elec_cost = 0.0
+                            status_near_zero = "N/A"
+                            req_capex_3y = 0.0
+                            req_discount_pct = 0.0
 
-                            if target_m == "zero_energy":
-                                size_res = ze_sizing
-                                pv_cap = size_res["pv_capacity_kw"]
-                                ess_cap = size_res["ess_capacity_kwh"]
-
-                                # Periodic steady-state dispatch under 25-yr performance baseline
-                                sim_ess_cfg = dict(equip_cfg["ess_system"])
-                                sim_ess_cfg["usable_dod"] = 0.70
-                                sim_ess_cfg["soc_min"] = 0.15
-                                sim_ess_cfg["soc_max"] = 0.85
-
-                                p_pv_ze = pv_cap * deg_25 * p_pv1_kw
-                                disp_ze = simulate_ess_dispatch_steady_state(
-                                    p_pv_ze, p_load_kw, ess_cap,
-                                    sim_ess_cfg, is_off_grid=True, dt_hours=dt_h
-                                )
-                                loss_of_load_hrs = round(disp_ze["loss_of_load_hours"], 1)
-
-                                bill_res = {
-                                    "annual_total_bill": 0.0,
-                                    "annual_base_fee": 0.0,
-                                    "annual_variable_fee": 0.0,
-                                    "annual_vat_and_fund": 0.0,
-                                    "annual_billed_kwh": 0.0,
-                                }
-                                dispatch_res = disp_ze
-
-                            elif target_m == "zero_bill":
-                                size_res = size_zero_bill(
-                                    p_load_kw, p_pv1_kw, dates, h_cfg, equip_cfg,
-                                    tariff_calc, net_metering_scheme
-                                )
-                                pv_cap = size_res["pv_capacity_kw"]
-                                ess_cap = size_res["ess_capacity_kwh"]
-                                bill_res = size_res["bill"]
-                                dispatch_res = size_res["dispatch"]
-                                loss_of_load_hrs = 0.0
-
-                            elif target_m == "near_zero_bill":
-                                size_res = size_near_zero_bill(
-                                    p_load_kw, p_pv1_kw, dates, h_cfg, equip_cfg,
-                                    capex_cfg, subsidy_cfg, tariff_calc, heat_pkg, with_sub,
-                                    baseline_annual_cost=base_total_cost,
-                                    baseline_propane_cost=base_propane_cost,
-                                    alternative_propane_cost=alt_propane_cost,
-                                    net_metering_scheme=net_metering_scheme,
-                                )
-                                pv_cap = size_res["pv_capacity_kw"]
-                                ess_cap = size_res["ess_capacity_kwh"]
-                                bill_res = size_res["bill"]
-                                dispatch_res = size_res["dispatch"]
-                                loss_of_load_hrs = 0.0
-
-                            max_imp_kw = float(np.max(dispatch_res["p_grid_import_kw"])) if not is_off_grid else 0.0
-                            peak_import_kw_list.append((max_imp_kw, h_name, heat_pkg, ev_opt, occ_rate))
-
-                            inverter_req_kw = size_res.get("inverter_required_kw", round(max(3.0, float(np.max(p_load_kw))), 1))
-
-                            # Granular CAPEX breakdown across Low / Central / High tiers
-                            capex_info = calculate_capex_breakdown(
-                                pv_capacity_kw=pv_cap,
-                                ess_capacity_kwh=ess_cap,
-                                heating_package=heat_pkg,
-                                with_subsidy=with_sub,
-                                is_off_grid=is_off_grid,
-                                capex_config=capex_cfg,
-                                subsidy_config=subsidy_cfg,
-                                max_import_kw=max_imp_kw,
-                                capex_basis="full",
+                        elif target == "zero_bill":
+                            zb_res = zb_sizing_cache[(h_name, occ, heat_pkg, occ_rate)]
+                            pv_kw = zb_res["pv_capacity_kw"]
+                            ess_kwh = zb_res["ess_capacity_kwh"]
+                            is_off_grid = False
+                            p_pv = p_pv1_kw * pv_kw
+                            bill_res = tariff_calc.calculate_annual_bill(
+                                p_grid_import_kw=np.maximum(0.0, p_load_kw - p_pv),
+                                p_grid_export_kw=np.maximum(0.0, p_pv - p_load_kw),
+                                dates=dates,
+                                net_metering_scheme="monthly_net",
                             )
+                            grid_import_kwh = float(np.maximum(0.0, p_load_kw - p_pv).sum() * dt_h)
+                            grid_export_kwh = float(np.maximum(0.0, p_pv - p_load_kw).sum() * dt_h)
+                            billed_kwh = bill_res["annual_billed_kwh"]
+                            alt_elec_cost = bill_res["annual_total_bill"]
+                            status_near_zero = "N/A"
+                            req_capex_3y = 0.0
+                            req_discount_pct = 0.0
 
-                            alt_total_cost = bill_res["annual_total_bill"] + alt_propane_cost
+                        else:  # near_zero_bill
+                            nz_res = nz_sizing_cache[(h_name, occ, heat_pkg, occ_rate)]
+                            pv_kw = nz_res["pv_capacity_kw"]
+                            ess_kwh = nz_res["ess_capacity_kwh"]
+                            is_off_grid = False
+                            alt_elec_cost = nz_res["alt_elec_cost"]
+                            status_near_zero = nz_res["status_3y"]
 
-                            # Cashflow for Low, Central, High
-                            cf_central = calculate_25y_cashflow(
-                                net_capex=capex_info["net_capex_central"],
-                                baseline_annual_cost=base_total_cost,
-                                alternative_year1_cost=alt_total_cost,
-                                baseline_propane_cost=base_propane_cost,
-                                alternative_propane_cost=alt_propane_cost,
-                                ess_replacement_cost=capex_info["ess_replacement_cost"],
-                                inverter_replacement_cost=capex_info["inverter_replacement_cost"],
-                                pv_degradation_annual=float(equip_cfg["pv_system"]["annual_degradation_rate"]),
+                            p_pv = p_pv1_kw * pv_kw
+                            grid_import_kwh = float(np.maximum(0.0, p_load_kw - p_pv).sum() * dt_h)
+                            grid_export_kwh = float(np.maximum(0.0, p_pv - p_load_kw).sum() * dt_h)
+                            bill_res = tariff_calc.calculate_annual_bill(
+                                p_grid_import_kw=np.maximum(0.0, p_load_kw - p_pv),
+                                p_grid_export_kw=np.maximum(0.0, p_pv - p_load_kw),
+                                dates=dates,
+                                net_metering_scheme="monthly_net",
                             )
-                            cf_res = cf_central
+                            billed_kwh = bill_res["annual_billed_kwh"]
 
-                            cf_low = calculate_25y_cashflow(
-                                net_capex=capex_info["net_capex_low"],
-                                baseline_annual_cost=base_total_cost,
-                                alternative_year1_cost=alt_total_cost,
-                                baseline_propane_cost=base_propane_cost,
-                                alternative_propane_cost=alt_propane_cost,
-                                ess_replacement_cost=capex_info["ess_replacement_cost"],
-                                inverter_replacement_cost=capex_info["inverter_replacement_cost"],
-                                pv_degradation_annual=float(equip_cfg["pv_system"]["annual_degradation_rate"]),
-                            )
+                        # Calculate CAPEX with current subsidy option
+                        capex_info = calculate_capex_breakdown(
+                            pv_capacity_kw=pv_kw,
+                            ess_capacity_kwh=ess_kwh,
+                            heating_package=heat_pkg,
+                            with_subsidy=with_sub,
+                            is_off_grid=is_off_grid,
+                            capex_config=capex_cfg,
+                            subsidy_config=subsidy_cfg,
+                        )
 
-                            cf_high = calculate_25y_cashflow(
-                                net_capex=capex_info["net_capex_high"],
-                                baseline_annual_cost=base_total_cost,
-                                alternative_year1_cost=alt_total_cost,
-                                baseline_propane_cost=base_propane_cost,
-                                alternative_propane_cost=alt_propane_cost,
-                                ess_replacement_cost=capex_info["ess_replacement_cost"],
-                                inverter_replacement_cost=capex_info["inverter_replacement_cost"],
-                                pv_degradation_annual=float(equip_cfg["pv_system"]["annual_degradation_rate"]),
-                            )
+                        alt_total_cost = round(alt_elec_cost + alt_gas_cost, 0)
+                        annual_savings_y1 = round(base_total_cost - alt_total_cost, 0)
 
-                            # AWHP 70% Subsidy Sensitivity Cash Flow
-                            cf_awhp70 = calculate_25y_cashflow(
-                                net_capex=capex_info["net_capex_awhp70"],
-                                baseline_annual_cost=base_total_cost,
-                                alternative_year1_cost=alt_total_cost,
-                                baseline_propane_cost=base_propane_cost,
-                                alternative_propane_cost=alt_propane_cost,
-                                ess_replacement_cost=capex_info["ess_replacement_cost"],
-                                inverter_replacement_cost=capex_info["inverter_replacement_cost"],
-                                pv_degradation_annual=float(equip_cfg["pv_system"]["annual_degradation_rate"]),
-                            )
+                        if target == "near_zero_bill":
+                            req_capex_3y = max(0.0, annual_savings_y1 * 3.0)
+                            act_cap = capex_info["net_capex"]
+                            req_discount_pct = max(0.0, (act_cap - req_capex_3y) / act_cap * 100.0) if act_cap > 0 else 0.0
 
-                            target_capex_3y = size_res.get("target_capex_for_3y", capex_info["net_capex"])
-                            min_payback_val = size_res.get("min_payback_years", cf_res["payback_years"])
+                        # 100-year cash flow and payback calculation
+                        cf_res = calculate_100y_cashflow(
+                            net_capex=capex_info["net_capex"],
+                            baseline_annual_cost=base_total_cost,
+                            alternative_year1_cost=alt_total_cost,
+                            baseline_propane_cost=base_gas_cost,
+                            alternative_propane_cost=alt_gas_cost,
+                            pv_capacity_kw=pv_kw,
+                            ess_capacity_kwh=ess_kwh,
+                            is_awhp=is_awhp,
+                            pv_turnkey_cost=capex_info["pv_turnkey_cost"],
+                            inverter_replacement_cost=capex_info["inverter_replacement_cost"],
+                            ess_replacement_cost=capex_info["ess_replacement_cost"],
+                            awhp_replacement_cost=capex_info["awhp_replacement_cost"],
+                        )
 
-                            row = {
-                                "scenario_id": scenario_id,
-                                "house_model": h_name,
-                                "floor_area_m2": float(h_cfg["floor_area"]),
-                                "heating_package": heat_pkg,
-                                "external_energy": external_energy,
-                                "ev_count": ev_opt,
-                                "occupancy_rate": occ_rate,
-                                "target_model": target_m,
-                                "subsidy_applied": with_sub,
-                                "capex_basis": "full",
-                                "pv_capacity_kw": pv_cap,
-                                "pv_capacity_bol_kw": size_res.get("pv_capacity_bol_kw", pv_cap),
-                                "pv_capacity_tmy_kw": size_res.get("pv_capacity_tmy_kw", pv_cap),
-                                "pv_capacity_month_avg_kw": size_res.get("pv_capacity_month_avg_kw", pv_cap),
-                                "pv_effective_25y_kw": round(pv_cap * deg_25, 2),
-                                "pv_land_area_m2": round(pv_cap * 5.0, 2),
-                                "ess_capacity_kwh": ess_cap,
-                                "ess_capacity_bol_kwh": size_res.get("ess_capacity_bol_kwh", ess_cap),
-                                "ess_usable_kwh": round(ess_cap * 0.70, 2),
-                                "contract_power_kw": capex_info["contract_power_kw"],
-                                "inverter_required_kw": inverter_req_kw,
-                                "critical_day": ze_sizing.get("critical_day", "2026-02-03"),
-                                "sizing_status": size_res.get("sizing_status", "optimal"),
-                                "min_payback_years": min_payback_val,
-                                "target_capex_for_3y_krw": target_capex_3y,
-                                "loss_of_load_hours": loss_of_load_hrs,
-                                # Energy Metrics
-                                "annual_load_total_kwh": round(float(np.sum(p_load_kw) * dt_h), 1),
-                                "annual_pv_generation_kwh": round(float(np.sum(pv_cap * p_pv1_kw) * dt_h), 1),
-                                "annual_grid_import_kwh": round(float(dispatch_res.get("total_import_kwh", 0.0)), 1),
-                                "annual_grid_export_kwh": round(float(dispatch_res.get("total_export_kwh", 0.0)), 1),
-                                "annual_propane_kg": round(load_data["propane_kg"], 1),
-                                "annual_propane_cost_krw": round(alt_propane_cost, 0),
-                                "backup_heater_hours": round(load_data["backup_heater_hours"], 1),
-                                "backup_heater_kwh": round(load_data["backup_heater_kwh"], 1),
-                                "annual_awhp_actual_kwh": round(load_data["annual_awhp_actual_kwh"], 1),
-                                # Electricity Bill Breakdown
-                                "annual_base_fee_krw": round(bill_res["annual_base_fee"], 0),
-                                "annual_variable_fee_krw": round(bill_res["annual_variable_fee"], 0),
-                                "annual_vat_and_fund_krw": round(bill_res["annual_vat_and_fund"], 0),
-                                "annual_total_electricity_bill_krw": round(bill_res["annual_total_bill"], 0),
-                                "baseline_total_energy_cost_krw": round(base_total_cost, 0),
-                                "alternative_year1_energy_cost_krw": round(alt_total_cost, 0),
-                                "annual_savings_year1_krw": cf_res["annual_savings_y1"],
-                                # Granular CAPEX Breakdown (Central)
-                                "pv_turnkey_cost_krw": capex_info["pv_turnkey_cost"],
-                                "pv_turnkey_krw": capex_info["pv_turnkey_krw"],
-                                "ground_mount_cost_krw": capex_info["ground_mount_cost"],
-                                "ground_mount_krw": capex_info["ground_mount_krw"],
-                                "ess_cost_krw": capex_info["ess_cost"],
-                                "awhp_turnkey_cost_krw": capex_info["awhp_turnkey_cost"],
-                                "awhp_major_equipment_cost_krw": capex_info["awhp_major_equipment_cost"],
-                                "awhp_electric_other_cost_krw": capex_info["awhp_electric_other_cost"],
-                                "distribution_board_cost_krw": capex_info["distribution_board_cost"],
-                                "wiring_expansion_cost_krw": capex_info["wiring_expansion_cost"],
-                                "grid_interconnection_cost_krw": capex_info["grid_connection_cost"],
-                                "gross_capex_krw": capex_info["gross_capex"],
-                                "pv_subsidy_krw": capex_info["pv_subsidy"],
-                                "awhp_subsidy_krw": capex_info["awhp_subsidy"],
-                                "ess_subsidy_krw": capex_info["ess_subsidy"],
-                                "total_subsidy_krw": capex_info["total_subsidy"],
-                                "net_capex_krw": capex_info["net_capex"],
-                                "ess_replacement_cost_krw": capex_info["ess_replacement_cost"],
-                                "inverter_replacement_cost_krw": capex_info["inverter_replacement_cost"],
-                                # Low / Central / High Outputs
-                                "net_capex_low_krw": capex_info["net_capex_low"],
-                                "net_capex_central_krw": capex_info["net_capex_central"],
-                                "net_capex_high_krw": capex_info["net_capex_high"],
-                                "payback_low": cf_low["payback_period_str"],
-                                "payback_central": cf_central["payback_period_str"],
-                                "payback_high": cf_high["payback_period_str"],
-                                # Financial metrics (Central)
-                                "payback_period_str": cf_res["payback_period_str"],
-                                "payback_years": cf_res["payback_years"],
-                                "net_savings_25y_krw": cf_res["net_savings_25y"],
-                                "net_capex_awhp70_krw": capex_info["net_capex_awhp70"],
-                                "payback_awhp70": cf_awhp70["payback_period_str"],
-                                # Metadata status
-                                "has_placeholder": len(placeholders_list) > 0,
-                                "placeholder_count": len(placeholders_list),
-                                "placeholder_items": placeholder_str,
-                                "has_unverified": len(unverifieds_list) > 0,
-                                "unverified_count": len(unverifieds_list),
-                                "unverified_items": unverified_str,
-                            }
-                            results.append(row)
+                        # Verify component sum equals net capex within 1 KRW
+                        comp_diff = capex_info["component_sum_difference"]
+                        is_sum_ok = capex_info["is_sum_consistent"]
 
-                            # Save representative profiles
-                            if h_name == "MONO Core 54" and occ_rate in (1.0, 0.5) and ev_opt == 0 and with_sub is True:
-                                profile_name = f"{h_name}_{heat_pkg}_{target_m}_occ{int(occ_rate*100)}"
-                                saved_profiles[profile_name] = {
-                                    "timestamp": weather_df["timestamp"],
-                                    "p_load_kw": np.round(p_load_kw, 3),
-                                    "p_pv_kw": np.round(pv_cap * p_pv1_kw, 3),
-                                    "soc": np.round(dispatch_res["soc"], 3),
-                                    "p_grid_import_kw": np.round(dispatch_res["p_grid_import_kw"], 3),
-                                    "p_grid_export_kw": np.round(dispatch_res["p_grid_export_kw"], 3),
-                                    "peak_day": ze_sizing["critical_day_number"],
-                                    "critical_day": ze_sizing["critical_day_number"],
-                                }
+                        # Assemble results row
+                        row_dict = {
+                            "scenario_id": scenario_id,
+                            "house_model": h_name,
+                            "occupants": occ,
+                            "house_occupants_label": f"{h_name} ({occ}인)",
+                            "heating_package": heat_pkg,
+                            "occupancy_rate": occ_rate,
+                            "occupancy_rate_pct": f"{int(occ_rate*100)}%",
+                            "target_model": target,
+                            "with_subsidy": with_sub,
+                            "pv_capacity_kw": round(pv_kw, 2),
+                            "ess_capacity_kwh": round(ess_kwh, 2),
+                            # Granular CAPEX components
+                            "capex_pv_turnkey_krw": capex_info["pv_turnkey_cost"],
+                            "capex_inverter_note": capex_info["inverter_capex_note"],
+                            "capex_inverter_krw": capex_info["inverter_capex_amount"],
+                            "capex_ess_krw": capex_info["ess_cost"],
+                            "capex_awhp_krw": capex_info["awhp_turnkey_cost"],
+                            "capex_grid_electrical_krw": capex_info["total_grid_electrical_cost"],
+                            "subsidy_pv_krw": capex_info["pv_subsidy"],
+                            "subsidy_awhp_sensitivity_krw": capex_info["awhp_subsidy_sensitivity"],
+                            "gross_capex_krw": capex_info["gross_capex"],
+                            "net_capex_krw": capex_info["net_capex"],
+                            "net_capex_awhp70_krw": capex_info["net_capex_awhp70"],
+                            "capex_sum_consistent": is_sum_ok,
+                            "capex_sum_diff": comp_diff,
+                            # Energy & Operating Costs
+                            "grid_import_kwh": round(grid_import_kwh, 1),
+                            "grid_export_kwh": round(grid_export_kwh, 1),
+                            "billed_kwh": round(billed_kwh, 1),
+                            "alt_electric_bill_krw": round(alt_elec_cost, 0),
+                            "alt_propane_kg": round(alt_propane_kg, 1),
+                            "alt_gas_bill_krw": round(alt_gas_cost, 0),
+                            "alt_total_energy_cost_krw": alt_total_cost,
+                            "baseline_total_energy_cost_krw": base_total_cost,
+                            "annual_savings_y1_krw": annual_savings_y1,
+                            # Financial Metrics
+                            "payback_years": cf_res["payback_years"],
+                            "payback_period_str": cf_res["payback_period_str"],
+                            "payback_reason_code": cf_res["reason_code"],
+                            "net_savings_25y_krw": cf_res["net_savings_25y"],
+                            "net_savings_100y_krw": cf_res["net_savings_100y"],
+                            # Near zero specific
+                            "status_near_zero": status_near_zero,
+                            "required_capex_for_3y_krw": req_capex_3y,
+                            "required_discount_rate_pct": req_discount_pct,
+                            # Cashflow array for charting
+                            "cumulative_cashflow_100y": cf_res["cumulative_cashflow_100y"],
+                        }
 
-                            # DUO Max Incremental: ONLY AWHP cases (72 rows)
-                            if h_name == "DUO Max 45" and heat_pkg == "PV+ESS+AWHP":
-                                inc_base_cost = duo_incremental_base_cache[(occ_rate, ev_opt)]["base_total_cost"]
-                                inc_capex_info = calculate_capex_breakdown(
-                                    pv_capacity_kw=pv_cap,
-                                    ess_capacity_kwh=ess_cap,
-                                    heating_package=heat_pkg,
-                                    with_subsidy=with_sub,
-                                    is_off_grid=is_off_grid,
-                                    capex_config=capex_cfg,
-                                    subsidy_config=subsidy_cfg,
-                                    max_import_kw=max_imp_kw,
-                                    capex_basis="incremental",
-                                )
-                                inc_alt_cost = bill_res["annual_total_bill"]
+                        results_all_rows.append(row_dict)
 
-                                inc_cf = calculate_25y_cashflow(
-                                    net_capex=inc_capex_info["net_capex_central"],
-                                    baseline_annual_cost=inc_base_cost,
-                                    alternative_year1_cost=inc_alt_cost,
-                                    baseline_propane_cost=0.0,
-                                    alternative_propane_cost=0.0,
-                                    ess_replacement_cost=inc_capex_info["ess_replacement_cost"],
-                                    inverter_replacement_cost=inc_capex_info["inverter_replacement_cost"],
-                                    pv_degradation_annual=float(equip_cfg["pv_system"]["annual_degradation_rate"]),
-                                )
+                        # Energy comparison row
+                        energy_comp_rows.append({
+                            "scenario_id": scenario_id,
+                            "house_occupants_label": f"{h_name} ({occ}인)",
+                            "heating_package": heat_pkg,
+                            "occupancy_rate_pct": f"{int(occ_rate*100)}%",
+                            "target_model": target,
+                            "with_subsidy": "보조금 반영" if with_sub else "보조금 미반영",
+                            "baseline_import_kwh": round(base_data["grid_import_kwh"], 1),
+                            "baseline_electric_bill_krw": base_data["electric_bill_krw"],
+                            "baseline_propane_kg": base_data["propane_kg"],
+                            "baseline_gas_bill_krw": base_data["gas_bill_krw"],
+                            "baseline_total_energy_cost_krw": base_data["total_energy_cost_krw"],
+                            "alt_import_kwh": round(grid_import_kwh, 1),
+                            "alt_export_kwh": round(grid_export_kwh, 1),
+                            "alt_billed_kwh": round(billed_kwh, 1),
+                            "alt_electric_bill_krw": round(alt_elec_cost, 0),
+                            "alt_propane_kg": round(alt_propane_kg, 1),
+                            "alt_gas_bill_krw": round(alt_gas_cost, 0),
+                            "alt_total_energy_cost_krw": alt_total_cost,
+                            "annual_savings_krw": annual_savings_y1,
+                        })
 
-                                inc_cf_low = calculate_25y_cashflow(
-                                    net_capex=inc_capex_info["net_capex_low"],
-                                    baseline_annual_cost=inc_base_cost,
-                                    alternative_year1_cost=inc_alt_cost,
-                                    baseline_propane_cost=0.0,
-                                    alternative_propane_cost=0.0,
-                                    ess_replacement_cost=inc_capex_info["ess_replacement_cost"],
-                                    inverter_replacement_cost=inc_capex_info["inverter_replacement_cost"],
-                                    pv_degradation_annual=float(equip_cfg["pv_system"]["annual_degradation_rate"]),
-                                )
+                        scenario_id += 1
 
-                                inc_cf_high = calculate_25y_cashflow(
-                                    net_capex=inc_capex_info["net_capex_high"],
-                                    baseline_annual_cost=inc_base_cost,
-                                    alternative_year1_cost=inc_alt_cost,
-                                    baseline_propane_cost=0.0,
-                                    alternative_propane_cost=0.0,
-                                    ess_replacement_cost=inc_capex_info["ess_replacement_cost"],
-                                    inverter_replacement_cost=inc_capex_info["inverter_replacement_cost"],
-                                    pv_degradation_annual=float(equip_cfg["pv_system"]["annual_degradation_rate"]),
-                                )
+    df_results = pd.DataFrame(results_all_rows)
+    df_energy_comp = pd.DataFrame(energy_comp_rows)
 
-                                inc_row = dict(row)
-                                inc_row["scenario_id"] = duo_inc_id
-                                inc_row["capex_basis"] = "incremental"
-                                inc_row["contract_power_kw"] = inc_capex_info["contract_power_kw"]
-                                inc_row["baseline_total_energy_cost_krw"] = round(inc_base_cost, 0)
-                                inc_row["alternative_year1_energy_cost_krw"] = round(inc_alt_cost, 0)
-                                inc_row["annual_savings_year1_krw"] = inc_cf["annual_savings_y1"]
-                                inc_row["pv_turnkey_cost_krw"] = inc_capex_info["pv_turnkey_cost"]
-                                inc_row["pv_turnkey_krw"] = inc_capex_info["pv_turnkey_krw"]
-                                inc_row["ground_mount_cost_krw"] = inc_capex_info["ground_mount_cost"]
-                                inc_row["ground_mount_krw"] = inc_capex_info["ground_mount_krw"]
-                                inc_row["ess_cost_krw"] = inc_capex_info["ess_cost"]
-                                inc_row["awhp_turnkey_cost_krw"] = inc_capex_info["awhp_turnkey_cost"]
-                                inc_row["awhp_major_equipment_cost_krw"] = inc_capex_info["awhp_major_equipment_cost"]
-                                inc_row["awhp_electric_other_cost_krw"] = inc_capex_info["awhp_electric_other_cost"]
-                                inc_row["grid_interconnection_cost_krw"] = inc_capex_info["grid_connection_cost"]
-                                inc_row["gross_capex_krw"] = inc_capex_info["gross_capex"]
-                                inc_row["pv_subsidy_krw"] = inc_capex_info["pv_subsidy"]
-                                inc_row["awhp_subsidy_krw"] = inc_capex_info["awhp_subsidy"]
-                                inc_row["ess_subsidy_krw"] = inc_capex_info["ess_subsidy"]
-                                inc_row["total_subsidy_krw"] = inc_capex_info["total_subsidy"]
-                                inc_row["net_capex_krw"] = inc_capex_info["net_capex"]
-                                inc_row["net_capex_low_krw"] = inc_capex_info["net_capex_low"]
-                                inc_row["net_capex_central_krw"] = inc_capex_info["net_capex_central"]
-                                inc_row["net_capex_high_krw"] = inc_capex_info["net_capex_high"]
-                                inc_row["payback_low"] = inc_cf_low["payback_period_str"]
-                                inc_row["payback_central"] = inc_cf["payback_period_str"]
-                                inc_row["payback_high"] = inc_cf_high["payback_period_str"]
-                                inc_row["payback_period_str"] = inc_cf["payback_period_str"]
-                                inc_row["payback_years"] = inc_cf["payback_years"]
-                                inc_row["net_savings_25y_krw"] = inc_cf["net_savings_25y"]
-                                duo_incremental_results.append(inc_row)
-                                duo_inc_id += 1
-
-                            scenario_id += 1
-
-    df_results = pd.DataFrame(results)
-    df_duo_inc = pd.DataFrame(duo_incremental_results)
-
-    peak_import_kw_list.sort(key=lambda x: x[0], reverse=True)
-    top_5_peaks = peak_import_kw_list[:5]
-
-    verification_data = {
-        "zero_energy_sizings": zero_energy_sizings,
-        "zero_energy_references": zero_energy_references,
-        "top_5_peaks": top_5_peaks,
-        "peak_import_kw_list": peak_import_kw_list,
-        "load_cache": load_cache,
+    metadata = {
+        "load_mode": load_mode,
+        "load_mode_detail": load_mode_detail,
+        "tus_fit": tus_fit_meta,
+        "kosis_validation": kosis_val_meta,
+        "appliance_calibration_errors": appliance_err_meta,
+        "lifetimes": lifetimes_cfg,
+        "ze_sizing_cache": ze_sizing_cache,
     }
 
-    return df_results, df_duo_inc, saved_profiles, verification_data
+    return df_results, df_energy_comp, df_ze_sizing, metadata

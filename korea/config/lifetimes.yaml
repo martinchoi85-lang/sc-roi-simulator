@@ -1,0 +1,85 @@
+# Lifetimes and Replacement Configuration for Cashflow
+# All costs reflect current price basis (Assumption: no future price reduction, no secondary subsidy)
+
+pv_module:
+  lifetime_years:
+    value: 25
+    unit: "years"
+    source: "한화큐셀 출력보증 25년 (참고: 제품보증 12년, HD현대 출력보증 30년 VERIFIED)"
+    evidence_level: "제조사 보증"
+    status: "VERIFIED"
+  annual_degradation:
+    value: 0.005
+    unit: "fraction/year"
+    source: "NREL PV Degradation Rates & Manufacturer Warranty Standard (0.5%/year)"
+    evidence_level: "업계 통상"
+    status: "VERIFIED"
+
+inverter:
+  lifetime_years:
+    value: 12
+    unit: "years"
+    source: "추정 (참고: 주택지원사업 시공기업 무상 하자보증 3년 VERIFIED)"
+    evidence_level: "추정"
+    status: "PLACEHOLDER"
+  replacement_year_cycle:
+    value: 12
+    unit: "years"
+    source: "12년 주기 교체 (13, 25, 37, 49, 61, 73, 85, 97년 차)"
+    evidence_level: "추정"
+    status: "PLACEHOLDER"
+
+ess_battery:
+  lifetime_years:
+    value: 10
+    unit: "years"
+    source: "ESS 10년·SOH 70%·SoC 창 90%·RTE 90%"
+    evidence_level: "추정"
+    status: "PLACEHOLDER"
+  soh_at_replacement:
+    value: 0.70
+    unit: "fraction"
+    source: "ESS SOH 70% (PLACEHOLDER)"
+    evidence_level: "추정"
+    status: "PLACEHOLDER"
+  soc_window:
+    value: 0.90
+    unit: "fraction"
+    source: "ESS SoC 창 90% (PLACEHOLDER)"
+    evidence_level: "추정"
+    status: "PLACEHOLDER"
+  round_trip_efficiency:
+    value: 0.90
+    unit: "fraction"
+    source: "ESS RTE 90% (PLACEHOLDER)"
+    evidence_level: "추정"
+    status: "PLACEHOLDER"
+  replacement_year_cycle:
+    value: 10
+    unit: "years"
+    source: "10년 주기 교체 (11, 21, 31, 41, 51, 61, 71, 81, 91년 차)"
+    evidence_level: "추정"
+    status: "PLACEHOLDER"
+
+awhp:
+  lifetime_years:
+    value: 15
+    unit: "years"
+    source: "추정 (민감도 10년·20년 가정)"
+    evidence_level: "추정"
+    status: "PLACEHOLDER"
+  replacement_year_cycle:
+    value: 15
+    unit: "years"
+    source: "15년 주기 교체 (16, 31, 46, 61, 76, 91년 차)"
+    evidence_level: "추정"
+    status: "PLACEHOLDER"
+
+baseline_boiler_avoided_cost:
+  enabled:
+    value: false
+    unit: "boolean"
+    source: "프로판 보일러 교체비 미반영 가정 (보수적 평가 기준)"
+    evidence_level: "추정"
+    status: "PLACEHOLDER"
+

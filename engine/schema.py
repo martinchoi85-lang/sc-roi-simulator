@@ -40,8 +40,8 @@ class DataItem(BaseModel):
     @classmethod
     def validate_status(cls, v: str) -> str:
         v_upper = str(v).strip().upper()
-        if v_upper not in ("VERIFIED", "UNVERIFIED", "PLACEHOLDER"):
-            raise ValueError(f"Status must be 'VERIFIED', 'UNVERIFIED', or 'PLACEHOLDER', got '{v}'")
+        if v_upper not in ("VERIFIED", "UNVERIFIED", "PLACEHOLDER", "ASSUMPTION"):
+            raise ValueError(f"Status must be 'VERIFIED', 'UNVERIFIED', 'PLACEHOLDER', or 'ASSUMPTION', got '{v}'")
         return v_upper
 
     @field_validator("grade")
@@ -58,6 +58,9 @@ class DataItem(BaseModel):
     def is_unverified(self) -> bool:
         return self.status == "UNVERIFIED"
 
+    def is_assumption(self) -> bool:
+        return self.status == "ASSUMPTION"
+
 
 REQUIRED_CONFIG_FILES = [
     "country.yaml",
@@ -67,6 +70,10 @@ REQUIRED_CONFIG_FILES = [
     "subsidy.yaml",
     "load.yaml",
     "equipment.yaml",
+]
+
+OPTIONAL_CONFIG_FILES = [
+    "lifetimes.yaml",
 ]
 
 
@@ -80,12 +87,15 @@ def validate_node(
     path: str = "",
     placeholders: Optional[List[str]] = None,
     unverifieds: Optional[List[str]] = None,
+    assumptions: Optional[List[str]] = None,
 ) -> Tuple[Any, Any]:
     """Recursively validate nodes. Returns (validated_tree_with_DataItems, stripped_values_tree)."""
     if placeholders is None:
         placeholders = []
     if unverifieds is None:
         unverifieds = []
+    if assumptions is None:
+        assumptions = []
 
     required_keys = {"value", "unit", "source", "status"}
 
@@ -97,6 +107,8 @@ def validate_node(
                     placeholders.append(path)
                 elif item.is_unverified():
                     unverifieds.append(path)
+                elif item.is_assumption():
+                    assumptions.append(path)
                 return item, item.value
             except Exception as e:
                 raise ConfigValidationError(f"Invalid DataItem at '{path}': {e}") from e
@@ -105,7 +117,7 @@ def validate_node(
         strip_tree = {}
         for k, v in node.items():
             curr_path = f"{path}.{k}" if path else str(k)
-            v_item, v_val = validate_node(v, curr_path, placeholders, unverifieds)
+            v_item, v_val = validate_node(v, curr_path, placeholders, unverifieds, assumptions)
             val_tree[k] = v_item
             strip_tree[k] = v_val
         return val_tree, strip_tree
@@ -115,7 +127,7 @@ def validate_node(
         strip_list = []
         for i, elem in enumerate(node):
             curr_path = f"{path}[{i}]"
-            e_item, e_val = validate_node(elem, curr_path, placeholders, unverifieds)
+            e_item, e_val = validate_node(elem, curr_path, placeholders, unverifieds, assumptions)
             val_list.append(e_item)
             strip_list.append(e_val)
         return val_list, strip_list
@@ -136,12 +148,14 @@ class CountryConfig:
         values: Dict[str, Any],
         placeholders: List[str],
         unverifieds: List[str],
+        assumptions: Optional[List[str]] = None,
     ):
         self.country_name = country_name
         self.raw_items = raw_items
         self.values = values
         self.placeholders = placeholders
         self.unverifieds = unverifieds
+        self.assumptions = assumptions or []
 
     @property
     def has_placeholder(self) -> bool:
@@ -159,6 +173,14 @@ class CountryConfig:
     def unverified_count(self) -> int:
         return len(self.unverifieds)
 
+    @property
+    def has_assumption(self) -> bool:
+        return len(self.assumptions) > 0
+
+    @property
+    def assumption_count(self) -> int:
+        return len(self.assumptions)
+
 
 def load_country_config(country_dir: Union[str, Path]) -> CountryConfig:
     """Loads all yaml files in country_dir/config and validates metadata strictly."""
@@ -171,8 +193,14 @@ def load_country_config(country_dir: Union[str, Path]) -> CountryConfig:
     all_values = {}
     all_placeholders = []
     all_unverifieds = []
+    all_assumptions = []
 
-    for file_name in REQUIRED_CONFIG_FILES:
+    files_to_load = list(REQUIRED_CONFIG_FILES)
+    for opt_file in OPTIONAL_CONFIG_FILES:
+        if (config_dir / opt_file).exists():
+            files_to_load.append(opt_file)
+
+    for file_name in files_to_load:
         file_path = config_dir / file_name
         if not file_path.exists():
             raise FileNotFoundError(f"Required config file missing: {file_path}")
@@ -186,12 +214,16 @@ def load_country_config(country_dir: Union[str, Path]) -> CountryConfig:
         key_prefix = file_name.replace(".yaml", "")
         placeholders_for_file = []
         unverifieds_for_file = []
-        val_tree, strip_tree = validate_node(data, key_prefix, placeholders_for_file, unverifieds_for_file)
+        assumptions_for_file = []
+        val_tree, strip_tree = validate_node(
+            data, key_prefix, placeholders_for_file, unverifieds_for_file, assumptions_for_file
+        )
 
         all_raw_items[key_prefix] = val_tree
         all_values[key_prefix] = strip_tree
         all_placeholders.extend(placeholders_for_file)
         all_unverifieds.extend(unverifieds_for_file)
+        all_assumptions.extend(assumptions_for_file)
 
     return CountryConfig(
         country_name=country_path.name,
@@ -199,4 +231,5 @@ def load_country_config(country_dir: Union[str, Path]) -> CountryConfig:
         values=all_values,
         placeholders=all_placeholders,
         unverifieds=all_unverifieds,
+        assumptions=all_assumptions,
     )

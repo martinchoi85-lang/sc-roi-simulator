@@ -1,4 +1,4 @@
-"""Main entry point for LG Smart Cottage PV/ESS/AWHP ROI Calculation.
+"""Main entry point for LG Smart Cottage PV/ESS/AWHP ROI Calculation (v9).
 
 Usage:
     python run.py --country korea
@@ -13,11 +13,11 @@ import pandas as pd
 from engine.schema import load_country_config
 from engine.weather import load_weather_data
 from engine.scenarios import run_all_scenarios
-from engine.report import generate_outputs
+from engine.report import generate_v9_outputs
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run Smart Cottage PV/ESS/AWHP ROI Calculation")
+    parser = argparse.ArgumentParser(description="Run Smart Cottage PV/ESS/AWHP ROI Calculation v9")
     parser.add_argument(
         "--country",
         type=str,
@@ -39,6 +39,7 @@ def main():
     print(f"Configuration loaded: {len(country_config.values)} categories.")
     print(f"PLACEHOLDER status: {country_config.placeholder_count} items.")
     print(f"UNVERIFIED status: {country_config.unverified_count} items.")
+    print(f"ASSUMPTION status: {country_config.assumption_count} items.")
 
     weather_file_rel = country_config.values["country"]["weather_file"]
     weather_path = project_root / weather_file_rel
@@ -46,35 +47,44 @@ def main():
     weather_df = load_weather_data(weather_path)
     annual_ghi = float(weather_df["ghi"].sum() * 0.25 / 1000.0)
 
-    print("Running full scenario simulations (432 scenarios + DUO Max incremental)...")
-    df_results, df_duo_inc, saved_profiles, verification_data = run_all_scenarios(
+    print("Running full scenario simulations (420 scenarios across 7 pairs x 2 heating x 5 occupancies x 3 targets x 2 subsidies)...")
+    kosis_dir = country_dir / "source" / "kosis"
+    df_results, df_energy_comp, df_ze_sizing, metadata = run_all_scenarios(
         config_values=country_config.values,
         weather_df=weather_df,
         placeholders_list=country_config.placeholders,
         unverifieds_list=country_config.unverifieds,
+        assumptions_list=country_config.assumptions,
+        kosis_dir=kosis_dir,
     )
 
     output_dir = country_dir / "output"
+    report_dir = country_dir / "report"
     print(f"Generating output files and charts in: {output_dir}...")
-    generate_outputs(
+    generate_v9_outputs(
         df_results=df_results,
-        df_duo_inc=df_duo_inc,
-        saved_profiles=saved_profiles,
-        verification_data=verification_data,
+        df_energy_comp=df_energy_comp,
+        df_ze_sizing=df_ze_sizing,
+        metadata=metadata,
         output_dir=output_dir,
+        report_dir=report_dir,
+        config_values=country_config.values,
         config_placeholders=country_config.placeholders,
         config_unverifieds=country_config.unverifieds,
-        weather_file_path=str(weather_path),
+        config_assumptions=country_config.assumptions,
+        weather_df=weather_df,
         annual_ghi=annual_ghi,
     )
 
-    print("\n[SUCCESS] Completed scenario ROI computations.")
+    print("\n[SUCCESS] Completed v9 scenario ROI computations and reports.")
     print(f"- Output Full CSV: {output_dir / 'results_all.csv'} (Rows: {len(df_results)})")
-    print(f"- DUO Max Incremental CSV: {output_dir / 'results_duomax_incremental.csv'} (Rows: {len(df_duo_inc)})")
+    print(f"- Energy Comparison CSV: {output_dir / 'energy_comparison.csv'} (Rows: {len(df_energy_comp)})")
+    print(f"- Zero Energy Sizing CSV: {output_dir / 'ze_sizing.csv'} (Rows: {len(df_ze_sizing)})")
     print(f"- Summary: {output_dir / 'results_summary.md'}")
     print(f"- Validation: {output_dir / 'validation.md'}")
-    print(f"- Profiles: {output_dir / 'profiles'}")
-    print(f"- Charts: {output_dir / 'charts'}")
+    print(f"- Report Data: {report_dir / 'report_data.json'}")
+    print(f"- HTML Report: {report_dir / 'LG_SC_Korea_ROI_Report.html'}")
+    print(f"- PPTX Report: {report_dir / 'LG_SC_Korea_ROI_Report.pptx'}")
 
 
 if __name__ == "__main__":

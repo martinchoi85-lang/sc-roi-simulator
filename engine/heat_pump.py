@@ -151,6 +151,9 @@ def simulate_hvac_and_dhw(
 
         return {
             "p_hvac_kw": p_hvac_kw,
+            "p_heating_kw": np.zeros_like(p_hvac_kw),
+            "p_cooling_kw": p_cool_kw,
+            "p_dhw_kw": np.zeros_like(p_hvac_kw),
             "propane_kwh": propane_kwh,
             "propane_kg": propane_kg,
             "propane_cost": propane_cost,
@@ -198,6 +201,9 @@ def simulate_hvac_and_dhw(
 
         return {
             "p_hvac_kw": p_hvac_kw,
+            "p_heating_kw": p_heat_awhp + p_heat_backup,
+            "p_cooling_kw": p_cool_kw,
+            "p_dhw_kw": p_dhw_awhp + p_dhw_backup,
             "propane_kwh": 0.0,
             "propane_kg": 0.0,
             "propane_cost": 0.0,

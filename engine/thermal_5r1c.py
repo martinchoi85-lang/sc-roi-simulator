@@ -23,6 +23,7 @@ def simulate_thermal_5r1c(
     dt_sec: float = 900.0,  # 15 minutes
     max_heating_capacity_kw: float = 12.0,  # 9kW AWHP + 3kW backup heater
     max_cooling_capacity_kw: float = 8.0,
+    heat_setpoint_schedule: np.ndarray = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Simulates 15-minute building thermal dynamics over 35,040 timesteps.
 
@@ -98,14 +99,19 @@ def simulate_thermal_5r1c(
         t_free = t_inf + (t_curr - t_inf) * decay
 
         is_occ = day_occupied_15min[i]
-        if is_occ:
-            t_set_heat = setpoint_heat_occ
-            t_set_cool = setpoint_cool_occ
-            allow_cooling = True
+        if heat_setpoint_schedule is not None:
+            t_set_heat = float(heat_setpoint_schedule[i])
+            t_set_cool = setpoint_cool_occ if is_occ else 40.0
+            allow_cooling = is_occ
         else:
-            t_set_heat = setpoint_freeze
-            t_set_cool = 40.0
-            allow_cooling = False
+            if is_occ:
+                t_set_heat = setpoint_heat_occ
+                t_set_cool = setpoint_cool_occ
+                allow_cooling = True
+            else:
+                t_set_heat = setpoint_freeze
+                t_set_cool = 40.0
+                allow_cooling = False
 
         if t_free < t_set_heat:
             # Heating demand

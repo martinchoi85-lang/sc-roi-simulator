@@ -32,51 +32,51 @@
   roof_tilt:
     value: 25.0
     unit: "deg"
-    source: "LG Smart Cottage Standard Roof Pitch"
-    grade: "A"
-    status: "VERIFIED"
+    source: "LG Smart Cottage Standard Roof Pitch (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   roof_azimuth:
     value: 180.0
     unit: "deg"
-    source: "South Facing Standard"
-    grade: "A"
-    status: "VERIFIED"
+    source: "South Facing Standard (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   u_wall:
     value: 0.15
     unit: "W/(m2*K)"
-    source: "Passive House Standard Building Envelope"
-    grade: "A"
-    status: "VERIFIED"
+    source: "Passive House Standard Building Envelope (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   u_roof:
     value: 0.12
     unit: "W/(m2*K)"
-    source: "Passive House Standard Building Envelope"
-    grade: "A"
-    status: "VERIFIED"
+    source: "Passive House Standard Building Envelope (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   u_floor:
     value: 0.15
     unit: "W/(m2*K)"
-    source: "Passive House Standard Building Envelope"
-    grade: "A"
-    status: "VERIFIED"
+    source: "Passive House Standard Building Envelope (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   u_window:
     value: 0.90
     unit: "W/(m2*K)"
-    source: "Triple Glazed Low-E Window Specification"
-    grade: "A"
-    status: "VERIFIED"
+    source: "Triple Glazed Low-E Window Specification (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   window_area:
     value: 15.0
     unit: "m2"
-    source: "Fenestration Schedule"
-    grade: "A"
-    status: "VERIFIED"
+    source: "Fenestration Schedule (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   shgc:
     value: 0.40
     unit: "fraction"
-    source: "Window Thermal Performance Report"
-    grade: "A"
-    status: "VERIFIED"
+    source: "Window Thermal Performance Report (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   c_internal:
     value: 165000.0
     unit: "J/(m2*K)"
@@ -108,9 +108,9 @@
     grade: "A"
     status: "VERIFIED"
   appliances_desc:
-    value: "냉장고·세탁기·인덕션"
+    value: "냉장고·세탁기(9kg)·인덕션"
     unit: "none"
-    source: "LG Smart Cottage Spec Sheet 2026"
+    source: "LG Smart Cottage Spec Sheet 2026 (워시타워·식기세척기 없음)"
     status: "VERIFIED"
   included_appliances:
     value:
@@ -155,51 +155,51 @@
   roof_tilt:
     value: 25.0
     unit: "deg"
-    source: "LG Smart Cottage Standard Roof Pitch"
-    grade: "A"
-    status: "VERIFIED"
+    source: "LG Smart Cottage Standard Roof Pitch (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   roof_azimuth:
     value: 180.0
     unit: "deg"
-    source: "South Facing Standard"
-    grade: "A"
-    status: "VERIFIED"
+    source: "South Facing Standard (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   u_wall:
     value: 0.15
     unit: "W/(m2*K)"
-    source: "Passive House Standard Building Envelope"
-    grade: "A"
-    status: "VERIFIED"
+    source: "Passive House Standard Building Envelope (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   u_roof:
     value: 0.12
     unit: "W/(m2*K)"
-    source: "Passive House Standard Building Envelope"
-    grade: "A"
-    status: "VERIFIED"
+    source: "Passive House Standard Building Envelope (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   u_floor:
     value: 0.15
     unit: "W/(m2*K)"
-    source: "Passive House Standard Building Envelope"
-    grade: "A"
-    status: "VERIFIED"
+    source: "Passive House Standard Building Envelope (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   u_window:
     value: 0.90
     unit: "W/(m2*K)"
-    source: "Triple Glazed Low-E Window Specification"
-    grade: "A"
-    status: "VERIFIED"
+    source: "Triple Glazed Low-E Window Specification (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   window_area:
     value: 18.0
     unit: "m2"
-    source: "Fenestration Schedule"
-    grade: "A"
-    status: "VERIFIED"
+    source: "Fenestration Schedule (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   shgc:
     value: 0.40
     unit: "fraction"
-    source: "Window Thermal Performance Report"
-    grade: "A"
-    status: "VERIFIED"
+    source: "Window Thermal Performance Report (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   c_internal:
     value: 165000.0
     unit: "J/(m2*K)"
@@ -231,9 +231,9 @@
     grade: "A"
     status: "VERIFIED"
   appliances_desc:
-    value: "냉장고·워시타워·인덕션·식기세척기"
+    value: "냉장고·워시타워·인덕션·식기세척기 (가정)"
     unit: "none"
-    source: "Specification Description (Household assumption)"
+    source: "가전 별도 계약 모델 (냉장고·워시타워·인덕션·식기세척기 가정 반영)"
     status: "UNVERIFIED"
   included_appliances:
     value:
@@ -265,11 +265,11 @@
     grade: "A"
     status: "VERIFIED"
   base_pv_capacity_kw:
-    value: 5.0
+    value: 0.0
     unit: "kW"
-    source: "DUO Max Standard Integrated Rooftop PV Specification"
-    grade: "B"
-    status: "UNVERIFIED"
+    source: "기본 탑재 설비 없음 (모든 모델 기본 탑재 PV/ESS/AWHP 0)"
+    grade: "A"
+    status: "VERIFIED"
   uses_awhp_cooling:
     value: true
     unit: "boolean"
@@ -291,51 +291,51 @@
   roof_tilt:
     value: 25.0
     unit: "deg"
-    source: "LG Smart Cottage Standard Roof Pitch"
-    grade: "A"
-    status: "VERIFIED"
+    source: "LG Smart Cottage Standard Roof Pitch (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   roof_azimuth:
     value: 180.0
     unit: "deg"
-    source: "South Facing Standard"
-    grade: "A"
-    status: "VERIFIED"
+    source: "South Facing Standard (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   u_wall:
     value: 0.15
     unit: "W/(m2*K)"
-    source: "Passive House Standard Building Envelope"
-    grade: "A"
-    status: "VERIFIED"
+    source: "Passive House Standard Building Envelope (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   u_roof:
     value: 0.12
     unit: "W/(m2*K)"
-    source: "Passive House Standard Building Envelope"
-    grade: "A"
-    status: "VERIFIED"
+    source: "Passive House Standard Building Envelope (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   u_floor:
     value: 0.15
     unit: "W/(m2*K)"
-    source: "Passive House Standard Building Envelope"
-    grade: "A"
-    status: "VERIFIED"
+    source: "Passive House Standard Building Envelope (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   u_window:
     value: 0.90
     unit: "W/(m2*K)"
-    source: "Triple Glazed Low-E Window Specification"
-    grade: "A"
-    status: "VERIFIED"
+    source: "Triple Glazed Low-E Window Specification (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   window_area:
     value: 14.0
     unit: "m2"
-    source: "Fenestration Schedule"
-    grade: "A"
-    status: "VERIFIED"
+    source: "Fenestration Schedule (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   shgc:
     value: 0.40
     unit: "fraction"
-    source: "Window Thermal Performance Report"
-    grade: "A"
-    status: "VERIFIED"
+    source: "Window Thermal Performance Report (가정)"
+    grade: "B"
+    status: "UNVERIFIED"
   c_internal:
     value: 165000.0
     unit: "J/(m2*K)"

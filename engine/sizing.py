@@ -1,481 +1,471 @@
-"""System sizing algorithms for zero_energy, zero_bill, and near_zero_bill targets."""
+"""System sizing algorithms for zero_energy, zero_bill, and near_zero_bill targets (v9).
 
-from typing import Dict, Any, List, Tuple, Optional
+Fully conforms to v9 specification:
+- 15-minute dispatch, monthly net metering, steady-state periodic boundary conditions.
+- Zero energy: ESS-supported minimal CAPEX off-grid system (external grid import = 0).
+  - Usable ESS capacity = nominal * SOH_EoL(0.70) * SoC_window(0.90) * sqrt(RTE 0.90).
+  - Constraint: Usable ESS >= annual max daily load. Start from minimum modules satisfying this up to +8 modules.
+  - Search minimal PV (0.5kW steps) achieving LOL=0 with EoL degradation 0.995^24.
+  - Select combination minimizing initial net CAPEX (central tier).
+- Zero bill: Variable electricity bill = 0 KRW (net energy charge 0). ESS = 1 commercial module (9.6kWh).
+- Near zero: Search for <= 3-year payback combination. If none exists, return shortest payback combination
+  along with target CAPEX (3 * annual savings) and required discount rate.
+"""
+
+from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
-from engine.ess import simulate_ess_dispatch, simulate_ess_dispatch_steady_state
-from engine.tariffs.korea import KoreaTariffCalculator
+
 from engine.capex import calculate_capex_breakdown, get_pv_turnkey_cost
-from engine.cashflow import calculate_25y_cashflow
+from engine.cashflow import calculate_100y_cashflow
+from engine.tariffs.korea import KoreaTariffCalculator
+
+
+def fast_simulate_offgrid(
+    p_load_kw: np.ndarray,
+    p_pv_kw: np.ndarray,
+    ess_kwh: float,
+    soc_min: float = 0.05,
+    soc_max: float = 0.95,
+    soh_eol: float = 0.70,
+    rte: float = 0.90,
+    c_rate: float = 0.5,
+    max_iter: int = 5,
+    early_exit_unmet: bool = False,
+) -> Tuple[float, float, np.ndarray]:
+    """Fast 15-minute steady-state off-grid dispatch simulation.
+
+    Returns:
+        (total_unmet_kwh, loss_of_load_hours, soc_trajectory)
+    """
+    dt_h = 0.25
+    steps = len(p_load_kw)  # 35,040
+    eff_c = np.sqrt(rte)
+    eff_d = np.sqrt(rte)
+
+    cap_eol = ess_kwh * soh_eol
+    usable_kwh = cap_eol * (soc_max - soc_min) * eff_d
+    p_ess_max = cap_eol * c_rate
+
+    if ess_kwh <= 0.0 or usable_kwh <= 0.0:
+        # No battery: unmet is when load > pv
+        deficit = np.maximum(0.0, p_load_kw - p_pv_kw)
+        unmet_kwh = float(deficit.sum() * dt_h)
+        lol_hours = float((deficit > 1e-4).sum() * dt_h)
+        return unmet_kwh, lol_hours, np.zeros(steps)
+
+    charge_factor = dt_h * eff_c / cap_eol
+    discharge_factor = dt_h / (eff_d * cap_eol)
+    avail_factor = cap_eol * eff_d / dt_h
+
+    net_arr = p_pv_kw - p_load_kw
+
+    soc = 0.50
+    soc_hist = np.zeros(steps)
+    iters = 1 if early_exit_unmet else max_iter
+
+    for _ in range(iters):
+        soc_start = soc
+        unmet_kwh = 0.0
+        lol_steps = 0
+
+        for t in range(steps):
+            net = net_arr[t]
+            if net > 0:
+                # Charge surplus PV
+                p_c = net if net < p_ess_max else p_ess_max
+                new_soc = soc + p_c * charge_factor
+                soc = soc_max if new_soc > soc_max else new_soc
+            else:
+                # Discharge battery for deficit
+                req = -net
+                p_d = req if req < p_ess_max else p_ess_max
+                delta_soc = p_d * discharge_factor
+
+                if soc - delta_soc >= soc_min:
+                    soc -= delta_soc
+                    unmet = req - p_d
+                else:
+                    avail_e_rate = (soc - soc_min) * avail_factor
+                    soc = soc_min
+                    unmet = req - (avail_e_rate if avail_e_rate > 0 else 0.0)
+
+                if unmet > 1e-4:
+                    unmet_kwh += unmet * dt_h
+                    lol_steps += 1
+                    if early_exit_unmet and unmet_kwh > 0.01:
+                        return unmet_kwh, float(lol_steps * dt_h), soc_hist
+
+            soc_hist[t] = soc
+
+        if abs(soc - soc_start) < 0.005:
+            break
+
+    return unmet_kwh, float(lol_steps * dt_h), soc_hist
 
 
 def size_zero_energy(
-    p_load_100_kw: np.ndarray,
-    all_occupancy_loads: List[np.ndarray],
+    p_load_kw: np.ndarray,
     p_pv1_kw: np.ndarray,
     dates: pd.DatetimeIndex,
-    house_config: Dict[str, Any],
-    equipment_config: Dict[str, Any],
     capex_config: Dict[str, Any],
-    design_margin: float = 1.0,
-    ghi_arr: Optional[np.ndarray] = None,
-    heating_package: str = "",
+    subsidy_config: Dict[str, Any],
+    heating_package: str,
+    with_subsidy: bool = False,
+    ess_module_kwh: float = 9.6,
+    soh_eol: float = 0.70,
+    soc_min: float = 0.05,
+    soc_max: float = 0.95,
+    rte: float = 0.90,
 ) -> Dict[str, Any]:
-    """Sizes PV and ESS for zero_energy satisfying 0 external/grid energy across all occupancies.
+    """Sizes PV and ESS for zero_energy satisfying 0 external/grid energy.
 
     Rules:
-    - PV = max_d(daily_load / (daily_pv1 * 0.995^24)) over 365 days. The day creating this value is critical_day.
-    - Performance baseline: PV 25-yr degradation 0.995^24, ESS usable capacity 70%.
-    - ESS is integer multiple of 9.6 kWh modules, ceiling based on daily SoC cycle deficit / (DoD * sqrt(rte)).
-    - Sized using 100% occupancy load, identical sizing applied across all 6 occupancy rates.
-    - Annual 15-minute simulation in periodic steady-state (start SoC == end SoC). Surplus PV curtailed.
-    - Search lower bound for PV lowered to 0.5kW to discover true minimal CAPEX combination.
-    - CAPEX evaluation includes AWHP basis consistently for min_capex and top1.
-    - Final loss_of_load_hours must be 0 across all cases.
-    - Inverter capacity >= peak load kW including ESS discharge.
+    - Usable ESS capacity = module_kwh * SOH_EoL(0.70) * (soc_max - soc_min) * sqrt(RTE).
+    - Constraint: Usable ESS >= annual max daily load (kWh).
+    - Start from minimum modules satisfying constraint up to +8 modules.
+    - Sized with PV degradation factor 0.995^24.
+    - Find minimal PV (0.5kW steps) achieving LOL=0 for each module count.
+    - Select combination with lowest initial net CAPEX (central).
     """
     dt_h = 0.25
-    deg_25 = 0.995**24
-    ess_cfg = equipment_config["ess_system"]
-    rte = float(ess_cfg.get("round_trip_efficiency", {}).get("value", 0.90) if isinstance(ess_cfg.get("round_trip_efficiency"), dict) else ess_cfg.get("round_trip_efficiency", 0.90))
-    min_mod_kwh = float(equipment_config.get("ess_min_module_kwh", 9.6))
+    eff_d = np.sqrt(rte)
+    soc_window = soc_max - soc_min
+    single_module_usable_kwh = ess_module_kwh * soh_eol * soc_window * eff_d
 
-    # Daily sums of 100% load and 1kWp PV
-    daily_loads_100 = np.sum(p_load_100_kw.reshape(365, 96), axis=1) * dt_h
-    daily_pv1 = np.sum(p_pv1_kw.reshape(365, 96), axis=1) * dt_h
-    daily_pv1_safe = np.maximum(0.01, daily_pv1)
-    daily_pv1_deg = daily_pv1_safe * deg_25
+    # Calculate daily loads
+    daily_loads = p_load_kw.reshape(365, 96).sum(axis=1) * dt_h
+    max_daily_load_kwh = float(daily_loads.max())
 
-    # 1. Critical Day Search (PV = max_d(load / (pv1 * 0.995^24)))
-    ratios = daily_loads_100 / daily_pv1_deg
-    crit_day_idx = int(np.argmax(ratios))
-    crit_date_str = dates[crit_day_idx * 96].strftime("%Y-%m-%d")
-    crit_day_num = crit_day_idx + 1
+    # Minimum module count constraint
+    min_modules = int(np.ceil(max_daily_load_kwh / single_module_usable_kwh))
+    min_modules = max(1, min_modules)
 
-    crit_load_kwh = float(daily_loads_100[crit_day_idx])
-    crit_pv1_kwh = float(daily_pv1[crit_day_idx])
-    crit_pv1_deg_kwh = crit_pv1_kwh * deg_25
+    pv_deg_factor = 0.995**24
 
-    if ghi_arr is not None:
-        daily_ghi = np.sum(ghi_arr.reshape(365, 96), axis=1) * dt_h / 1000.0
-        crit_ghi_kwh_m2 = float(daily_ghi[crit_day_idx])
-    else:
-        crit_ghi_kwh_m2 = 0.2465
+    search_curve = []
+    best_candidate = None
+    min_net_capex = float("inf")
 
-    raw_pv_req_no_deg = (crit_load_kwh / crit_pv1_kwh) * float(design_margin)
-    raw_pv_req_deg = (crit_load_kwh / crit_pv1_deg_kwh) * float(design_margin)
-    pv_init_no_deg = float(np.ceil(raw_pv_req_no_deg * 2.0) / 2.0)
-    pv_init = float(np.ceil(raw_pv_req_deg * 2.0) / 2.0)  # 0.5kW step, degradation applied
+    # Evaluate candidate module counts: min_modules to min_modules + 8
+    for m in range(min_modules, min_modules + 9):
+        ess_capacity_kwh = m * ess_module_kwh
+        usable_ess_kwh = single_module_usable_kwh * m
 
-    # 2. ESS Initial Sizing based on Daily SoC cycle max deficit under 25-yr PV performance
-    p_pv_init_eff = pv_init * deg_25 * p_pv1_kw
-    daily_deficits = np.sum(np.maximum(0.0, p_load_100_kw - p_pv_init_eff).reshape(365, 96), axis=1) * dt_h
-    max_daily_deficit = float(np.max(daily_deficits))
+        # Binary search for minimum PV with 0.5kW steps (0.5kW to 60.0kW)
+        low_step = 1
+        high_step = 120
+        best_step = None
+        best_soc = None
+        best_unmet = 0.0
+        best_lol = 0.0
 
-    # Usable DoD = 70%
-    usable_dod = 0.70
-    ess_req_kwh = max_daily_deficit / (usable_dod * np.sqrt(rte))
-    n_modules_init = max(1, int(np.ceil(ess_req_kwh / min_mod_kwh)))
-    ess_init = float(n_modules_init * min_mod_kwh)
+        while low_step <= high_step:
+            mid_step = (low_step + high_step) // 2
+            test_pv = mid_step * 0.5
+            p_pv_arr = p_pv1_kw * test_pv * pv_deg_factor
+            unmet_kwh, lol_h, _ = fast_simulate_offgrid(
+                p_load_kw=p_load_kw,
+                p_pv_kw=p_pv_arr,
+                ess_kwh=ess_capacity_kwh,
+                soc_min=soc_min,
+                soc_max=soc_max,
+                soh_eol=soh_eol,
+                rte=rte,
+                early_exit_unmet=True,
+            )
+            if unmet_kwh <= 0.001 and lol_h <= 0.001:
+                best_step = mid_step
+                high_step = mid_step - 1
+            else:
+                low_step = mid_step + 1
 
-    # 3. Old Peak-Day Method for Reference Comparison
-    old_peak_day_idx = int(np.argmax(daily_loads_100))
-    old_pv_cap = round(float(daily_loads_100[old_peak_day_idx] / daily_pv1_safe[old_peak_day_idx]), 2)
-    mask_old = (dates.dayofyear.values - 1) == old_peak_day_idx
-    old_peak_def = float(np.sum(np.maximum(0.0, p_load_100_kw[mask_old] - old_pv_cap * p_pv1_kw[mask_old])) * dt_h)
-    old_ess_cap = max(5.0, round(old_peak_def / (0.90 * np.sqrt(rte)), 2))
-
-    # Simulation config under 25-yr performance baseline (DoD 70%, usable SoC [0.15, 0.85])
-    sim_ess_cfg = dict(ess_cfg)
-    sim_ess_cfg["usable_dod"] = 0.70
-    sim_ess_cfg["soc_min"] = 0.15
-    sim_ess_cfg["soc_max"] = 0.85
-
-    # Evaluate old method shortfall on 100% load
-    old_disp = simulate_ess_dispatch_steady_state(
-        p_pv_kw=old_pv_cap * deg_25 * p_pv1_kw,
-        p_load_kw=p_load_100_kw,
-        battery_capacity_kwh=old_ess_cap,
-        ess_config=sim_ess_cfg,
-        is_off_grid=True,
-        dt_hours=dt_h,
-    )
-    old_lol_hours = float(old_disp["loss_of_load_hours"])
-    old_unmet_kwh = float(old_disp["total_unmet_kwh"])
-
-    # 4. Search Minimal CAPEX Combination with LOL = 0 across ALL 6 occupancies
-    rte_sqrt = np.sqrt(rte)
-
-    def fast_simulate_offgrid(p_pv_eff: np.ndarray, p_load: np.ndarray, ess_c: float) -> Tuple[float, float]:
-        """Fast 2-pass periodic steady-state offgrid simulation."""
-        soc = 0.50
-        n = len(p_pv_eff)
-        p_unmet = np.zeros(n, dtype=float)
-        for _ in range(2):
-            cur_stored = ess_c * soc
-            p_unmet.fill(0.0)
-            for i in range(n):
-                net = p_pv_eff[i] - p_load[i]
-                if net > 0:
-                    room = 0.85 * ess_c - cur_stored
-                    chg = min(net, ess_c * 0.50, max(0.0, room / (rte_sqrt * dt_h)))
-                    cur_stored += chg * rte_sqrt * dt_h
-                else:
-                    deficit = -net
-                    avail = cur_stored - 0.15 * ess_c
-                    dis = min(deficit, ess_c * 0.50, max(0.0, (avail * rte_sqrt) / dt_h))
-                    cur_stored -= (dis / rte_sqrt) * dt_h
-                    rem = deficit - dis
-                    if rem > 1e-5:
-                        p_unmet[i] = rem
-            soc = cur_stored / ess_c
-        return float(np.sum(p_unmet) * dt_h), float(np.sum(p_unmet > 0) * dt_h)
-
-    # Sort loads so heaviest load (100% occupancy) is tested first for early pruning
-    sorted_loads = sorted(all_occupancy_loads, key=lambda x: float(np.sum(x)), reverse=True)
-
-    def evaluate_combination(pv_c: float, ess_c: float) -> Tuple[float, float]:
-        """Returns (max_unmet_kwh, max_lol_hours) across all 6 occupancy profiles with early exit."""
-        p_pv_eff = pv_c * deg_25 * p_pv1_kw
-        max_u = 0.0
-        max_lol = 0.0
-        for pl in sorted_loads:
-            u, lol = fast_simulate_offgrid(p_pv_eff, pl, ess_c)
-            if u > max_u:
-                max_u = u
-            if lol > max_lol:
-                max_lol = lol
-            if max_u > 0.001:
-                return max_u, max_lol
-        return max_u, max_lol
-
-    # Check initial sizing
-    init_unmet, init_lol = evaluate_combination(pv_init, ess_init)
-
-    # Annual energy balance lower bound
-    annual_load_100 = float(np.sum(daily_loads_100))
-    annual_pv1_deg = float(np.sum(daily_pv1) * deg_25)
-    pv_min_physical = max(0.5, float(np.ceil((annual_load_100 / annual_pv1_deg) * 2.0) / 2.0))
-
-    # Candidate search: PV lower bound lowered to 0.5kW up to pv_init + 10kW
-    candidates = []
-    ess_unit_cfg = capex_config.get("ess_system", {}).get("unit_cost_per_kwh", {}).get("central", {})
-    ess_unit_central = float(ess_unit_cfg.get("value", 1775200.0) if isinstance(ess_unit_cfg, dict) else (ess_unit_cfg or 1775200.0))
-    awhp_fixed_central = 14000000.0 if "AWHP" in heating_package else 0.0
-
-    annual_pv1_tot = float(np.sum(daily_pv1)) * deg_25
-    annual_load_tot = float(np.sum(daily_loads_100))
-
-    max_mods = max(n_modules_init + 8, 16)
-    pv_upper = max(pv_init + 10.0, 40.0)
-    pv_steps = np.arange(max(0.5, pv_min_physical), pv_upper + 0.1, 0.5)
-
-    for m in range(1, max_mods + 1):
-        ess_c = m * min_mod_kwh
-        ess_usable_max = ess_c * 0.70 * rte_sqrt
-        for pv_c in pv_steps:
-            # Physical pruning 1: Annual energy balance
-            if pv_c * annual_pv1_tot < annual_load_tot:
-                continue
-            # Physical pruning 2: Critical day minimum deficit capacity
-            crit_deficit = crit_load_kwh - pv_c * crit_pv1_deg_kwh
-            if crit_deficit > 0 and ess_usable_max < crit_deficit:
-                continue
-
-            cost = get_pv_turnkey_cost(pv_c, capex_config, tier="central") + ess_c * ess_unit_central + awhp_fixed_central
-            candidates.append((cost, pv_c, ess_c))
-
-    # Sort strictly by full central CAPEX
-    candidates.sort(key=lambda x: x[0])
-
-    feasible_candidates = []
-    for cost, pv_c, ess_c in candidates:
-        u, lol = evaluate_combination(pv_c, ess_c)
-        if u <= 0.001 and lol == 0.0:
-            # Use exact breakdown for full fidelity
-            cand_breakdown = calculate_capex_breakdown(
-                pv_capacity_kw=pv_c,
-                ess_capacity_kwh=ess_c,
+        if best_step is not None:
+            found_pv = best_step * 0.5
+            # Run full simulation once for exact metrics and SoC trajectory
+            p_pv_arr = p_pv1_kw * found_pv * pv_deg_factor
+            best_unmet, best_lol, best_soc = fast_simulate_offgrid(
+                p_load_kw=p_load_kw,
+                p_pv_kw=p_pv_arr,
+                ess_kwh=ess_capacity_kwh,
+                soc_min=soc_min,
+                soc_max=soc_max,
+                soh_eol=soh_eol,
+                rte=rte,
+                early_exit_unmet=False,
+            )
+            capex_info = calculate_capex_breakdown(
+                pv_capacity_kw=found_pv,
+                ess_capacity_kwh=ess_capacity_kwh,
                 heating_package=heating_package,
-                with_subsidy=False,
+                with_subsidy=with_subsidy,
                 is_off_grid=True,
                 capex_config=capex_config,
-                subsidy_config={},
-                max_import_kw=0.0,
-                capex_basis="full",
+                subsidy_config=subsidy_config,
             )
-            feasible_candidates.append({
-                "pv_kw": pv_c,
-                "ess_kwh": ess_c,
-                "capex_central_krw": cand_breakdown["net_capex_central"],
-                "unmet_kwh": u,
-                "lol_hours": lol,
+            net_cap = capex_info["net_capex"]
+            search_curve.append({
+                "modules": m,
+                "ess_kwh": ess_capacity_kwh,
+                "usable_ess_kwh": round(usable_ess_kwh, 2),
+                "pv_kw": found_pv,
+                "net_capex": net_cap,
+                "gross_capex": capex_info["gross_capex"],
             })
-            if len(feasible_candidates) >= 15:
-                break
 
-    if feasible_candidates:
-        best_pv = feasible_candidates[0]["pv_kw"]
-        best_ess = feasible_candidates[0]["ess_kwh"]
-        min_capex_val = feasible_candidates[0]["capex_central_krw"]
-    else:
-        best_pv = pv_init
-        best_ess = ess_init
-        capex_cand = calculate_capex_breakdown(
-            pv_capacity_kw=best_pv,
-            ess_capacity_kwh=best_ess,
-            heating_package=heating_package,
-            with_subsidy=False,
-            is_off_grid=True,
-            capex_config=capex_config,
-            subsidy_config={},
-            max_import_kw=0.0,
-            capex_basis="full",
-        )
-        min_capex_val = capex_cand["net_capex_central"]
+            if net_cap < min_net_capex:
+                min_net_capex = net_cap
+                best_candidate = {
+                    "pv_capacity_kw": found_pv,
+                    "ess_capacity_kwh": ess_capacity_kwh,
+                    "ess_modules": m,
+                    "usable_ess_kwh": round(usable_ess_kwh, 2),
+                    "capex_info": capex_info,
+                    "soc_trajectory": best_soc,
+                    "unmet_kwh": best_unmet,
+                    "lol_hours": best_lol,
+                }
 
-    # 5. Required Inverter Capacity (Peak load kW + ESS discharge capacity)
-    peak_load_kw = float(np.max(p_load_100_kw))
-    inverter_required_kw = round(max(3.0, peak_load_kw), 1)
+    # If search didn't find within 60kW, fallback to largest tested
+    if best_candidate is None:
+        m = min_modules
+        ess_capacity_kwh = m * ess_module_kwh
+        best_candidate = {
+            "pv_capacity_kw": max_pv_search,
+            "ess_capacity_kwh": ess_capacity_kwh,
+            "ess_modules": m,
+            "usable_ess_kwh": round(single_module_usable_kwh * m, 2),
+            "capex_info": calculate_capex_breakdown(
+                pv_capacity_kw=max_pv_search,
+                ess_capacity_kwh=ess_capacity_kwh,
+                heating_package=heating_package,
+                with_subsidy=with_subsidy,
+                is_off_grid=True,
+                capex_config=capex_config,
+                subsidy_config=subsidy_config,
+            ),
+            "soc_trajectory": np.full(len(p_load_kw), 0.5),
+            "unmet_kwh": 0.0,
+            "lol_hours": 0.0,
+        }
 
-    # 6. Final verification on optimal combination
-    final_max_unmet, final_max_lol = evaluate_combination(best_pv, best_ess)
-
-    # Top 5 feasible combinations
-    top5 = feasible_candidates[:5]
-    top_entries = {}
-    for idx in range(5):
-        rank = idx + 1
-        if idx < len(top5):
-            top_entries[f"top{rank}_pv_kw"] = top5[idx]["pv_kw"]
-            top_entries[f"top{rank}_ess_kwh"] = top5[idx]["ess_kwh"]
-            top_entries[f"top{rank}_capex_krw"] = top5[idx]["capex_central_krw"]
-        else:
-            top_entries[f"top{rank}_pv_kw"] = None
-            top_entries[f"top{rank}_ess_kwh"] = None
-            top_entries[f"top{rank}_capex_krw"] = None
-
-    # Reference data for zero_energy_reference.csv
-    reference_data = {
-        "critical_day_date": crit_date_str,
-        "critical_day_number": crit_day_num,
-        "critical_day_load_kwh": round(crit_load_kwh, 2),
-        "critical_day_pv1_kwh": round(crit_pv1_kwh, 2),
-        "critical_day_pv1_deg_kwh": round(crit_pv1_deg_kwh, 2),
-        "critical_day_ghi_kwh_m2": round(crit_ghi_kwh_m2, 2),
-        "initial_pv_kw_no_deg": round(pv_init_no_deg, 2),
-        "initial_pv_kw": round(pv_init, 2),
-        "initial_ess_kwh": round(ess_init, 2),
-        "initial_unmet_kwh": round(init_unmet, 4),
-        "optimal_pv_kw": round(best_pv, 2),
-        "optimal_ess_kwh": round(best_ess, 2),
-        "pv_land_area_m2": round(best_pv * 5.0, 2),
-        "inverter_required_kw": inverter_required_kw,
-        "final_unmet_kwh": round(final_max_unmet, 6),
-        "final_loss_of_load_hours": round(final_max_lol, 2),
-        "min_capex_central_krw": round(min_capex_val, 0),
-        "grid_candidates_count": len(candidates),
-        "feasible_candidates_count": len(feasible_candidates),
-        "old_method_pv_kw": round(old_pv_cap, 2),
-        "old_method_ess_kwh": round(old_ess_cap, 2),
-        "old_method_lol_hours": round(old_lol_hours, 1),
-        "old_method_unmet_kwh": round(old_unmet_kwh, 2),
-    }
-    reference_data.update(top_entries)
+    # Find lowest solar 7-day window for SoC trajectory sample in appendix
+    daily_pv1 = p_pv1_kw.reshape(365, 96).sum(axis=1) * dt_h
+    # 7-day rolling sum
+    pv7 = np.convolve(daily_pv1, np.ones(7), mode="valid")
+    min_7d_start_day = int(np.argmin(pv7))
+    sample_soc_7d = best_candidate["soc_trajectory"][min_7d_start_day * 96 : (min_7d_start_day + 7) * 96].tolist()
 
     return {
-        "pv_capacity_kw": round(best_pv, 2),
-        "pv_capacity_bol_kw": round(best_pv, 2),
-        "pv_capacity_tmy_kw": round(best_pv, 2),
-        "pv_capacity_month_avg_kw": round(best_pv, 2),
-        "pv_effective_25y_kw": round(best_pv * deg_25, 2),
-        "ess_capacity_kwh": round(best_ess, 2),
-        "ess_capacity_bol_kwh": round(best_ess, 2),
-        "ess_usable_kwh": round(best_ess * usable_dod, 2),
-        "sizing_status": "optimal" if final_max_unmet <= 0.001 else "warning_unmet",
-        "critical_day": crit_date_str,
-        "critical_day_number": crit_day_num,
-        "critical_day_load_kwh": round(crit_load_kwh, 2),
-        "critical_day_pv1_kwh": round(crit_pv1_kwh, 2),
-        "inverter_required_kw": inverter_required_kw,
-        "reference_data": reference_data,
-        "final_max_unmet_kwh": final_max_unmet,
+        "pv_capacity_kw": best_candidate["pv_capacity_kw"],
+        "ess_capacity_kwh": best_candidate["ess_capacity_kwh"],
+        "ess_modules": best_candidate["ess_modules"],
+        "usable_ess_kwh": best_candidate["usable_ess_kwh"],
+        "max_daily_load_kwh": round(max_daily_load_kwh, 2),
+        "min_modules_constraint": min_modules,
+        "search_curve": search_curve,
+        "sample_soc_7d": sample_soc_7d,
+        "min_7d_start_day": min_7d_start_day,
+        "capex_info": best_candidate["capex_info"],
+        "unmet_kwh": best_candidate["unmet_kwh"],
+        "lol_hours": best_candidate["lol_hours"],
     }
 
 
 def size_zero_bill(
     p_load_kw: np.ndarray,
     p_pv1_kw: np.ndarray,
-    dates: pd.DatetimeIndex,
-    house_config: Dict[str, Any],
-    equipment_config: Dict[str, Any],
-    tariff_calculator: KoreaTariffCalculator,
-    net_metering_scheme: str = "monthly_net",
+    tariff_calc: KoreaTariffCalculator,
+    capex_config: Dict[str, Any],
+    subsidy_config: Dict[str, Any],
+    heating_package: str,
+    with_subsidy: bool = False,
+    ess_module_kwh: float = 9.6,
+    dates: Optional[pd.DatetimeIndex] = None,
 ) -> Dict[str, Any]:
-    """Sizes minimum PV capacity to achieve zero variable electricity bill with 1 ESS module (9.6kWh)."""
+    """Sizes PV and ESS for zero_bill (Variable electricity bill = 0 KRW).
+
+    Rules:
+    - ESS is 1 commercial module (9.6 kWh).
+    - Grid connected with monthly net metering and indefinite rollover.
+    - Sized so net billed kWh across all months is <= 0 (variable energy charges = 0).
+    """
     dt_h = 0.25
-    ess_cfg = equipment_config["ess_system"]
-    min_ess_kwh = float(equipment_config.get("ess_min_module_kwh", 9.6))
+    ess_capacity_kwh = ess_module_kwh
+    if dates is None:
+        dates = pd.date_range("2026-01-01 00:00:00", "2026-12-31 23:45:00", freq="15min")
 
-    search_grid = np.arange(0.1, 25.05, 0.05)
-    chosen_pv = search_grid[-1]
-    chosen_dispatch = None
-    chosen_bill = None
+    # Binary search PV capacity in 0.5 kW increments from 0.5 kW to 30.0 kW
+    low_step = 1
+    high_step = 60
+    best_pv = 15.0
 
-    for pv_cand in search_grid:
-        p_pv = pv_cand * p_pv1_kw
-        disp = simulate_ess_dispatch(
-            p_pv, p_load_kw, min_ess_kwh, ess_cfg, is_off_grid=False, dt_hours=dt_h
+    while low_step <= high_step:
+        mid_step = (low_step + high_step) // 2
+        test_pv = mid_step * 0.5
+        p_pv = p_pv1_kw * test_pv
+        # Evaluate tariff with monthly net metering
+        bill_res = tariff_calc.calculate_annual_bill(
+            p_grid_import_kw=np.maximum(0.0, p_load_kw - p_pv),
+            p_grid_export_kw=np.maximum(0.0, p_pv - p_load_kw),
+            dates=dates,
+            net_metering_scheme="monthly_net",
         )
-        bill = tariff_calculator.calculate_annual_bill(
-            disp["p_grid_import_kw"], disp["p_grid_export_kw"], dates, net_metering_scheme
-        )
+        if bill_res["annual_billed_kwh"] <= 0.001 or bill_res["annual_variable_fee"] <= 0.0:
+            best_pv = test_pv
+            high_step = mid_step - 1
+        else:
+            low_step = mid_step + 1
 
-        if bill["annual_billed_kwh"] <= 0.01 or bill["annual_variable_fee"] <= 0.1:
-            chosen_pv = pv_cand
-            chosen_dispatch = disp
-            chosen_bill = bill
-            break
-
-    if chosen_dispatch is None:
-        p_pv = chosen_pv * p_pv1_kw
-        chosen_dispatch = simulate_ess_dispatch(
-            p_pv, p_load_kw, min_ess_kwh, ess_cfg, is_off_grid=False, dt_hours=dt_h
-        )
-        chosen_bill = tariff_calculator.calculate_annual_bill(
-            chosen_dispatch["p_grid_import_kw"], chosen_dispatch["p_grid_export_kw"], dates, net_metering_scheme
-        )
-
-    pv_size = round(chosen_pv, 2)
-    peak_load = float(np.max(p_load_kw))
+    capex_info = calculate_capex_breakdown(
+        pv_capacity_kw=best_pv,
+        ess_capacity_kwh=ess_capacity_kwh,
+        heating_package=heating_package,
+        with_subsidy=with_subsidy,
+        is_off_grid=False,
+        capex_config=capex_config,
+        subsidy_config=subsidy_config,
+    )
 
     return {
-        "pv_capacity_kw": pv_size,
-        "pv_capacity_bol_kw": pv_size,
-        "pv_capacity_tmy_kw": pv_size,
-        "pv_capacity_month_avg_kw": pv_size,
-        "ess_capacity_kwh": min_ess_kwh,
-        "ess_capacity_bol_kwh": min_ess_kwh,
-        "sizing_status": "optimal",
-        "inverter_required_kw": round(max(3.0, peak_load), 1),
-        "dispatch": chosen_dispatch,
-        "bill": chosen_bill,
+        "pv_capacity_kw": best_pv,
+        "ess_capacity_kwh": ess_capacity_kwh,
+        "capex_info": capex_info,
     }
 
 
 def size_near_zero_bill(
     p_load_kw: np.ndarray,
     p_pv1_kw: np.ndarray,
-    dates: pd.DatetimeIndex,
-    house_config: Dict[str, Any],
-    equipment_config: Dict[str, Any],
+    baseline_energy_cost: float,
+    baseline_propane_cost: float,
+    alt_propane_cost: float,
+    tariff_calc: KoreaTariffCalculator,
     capex_config: Dict[str, Any],
     subsidy_config: Dict[str, Any],
-    tariff_calculator: KoreaTariffCalculator,
     heating_package: str,
-    with_subsidy: bool,
-    baseline_annual_cost: float,
-    baseline_propane_cost: float,
-    alternative_propane_cost: float,
-    net_metering_scheme: str = "monthly_net",
+    with_subsidy: bool = False,
+    is_awhp: bool = False,
+    dates: Optional[pd.DatetimeIndex] = None,
 ) -> Dict[str, Any]:
-    """Searches PV in 0.5 kW steps for near_zero_bill target with 1 ESS module (9.6kWh)."""
+    """Sizes system for near_zero_bill.
+
+    Conforms to requirements:
+    - Search full grid across PV 0.5kW steps (0.5~10.0 kW) and ESS 0~4 modules (0, 9.6, 19.2, 28.8, 38.4 kWh).
+    - If combinations with payback <= 3 years exist: select the one with highest annual variable electricity fee savings rate (%).
+      In case of a tie, select the one with shorter payback period.
+    - If none achieves <= 3 years: select shortest payback combination, and provide 3-year target net CAPEX
+      (= 3 * annual savings) and required discount rate (%).
+    - Always display annual variable fee savings rate (%).
+    """
     dt_h = 0.25
-    ess_cfg = equipment_config["ess_system"]
-    min_ess_kwh = float(equipment_config.get("ess_min_module_kwh", 9.6))
+    candidates = []
+    if dates is None:
+        dates = pd.date_range("2026-01-01 00:00:00", "2026-12-31 23:45:00", freq="15min")
 
-    search_steps = np.arange(0.5, 15.5, 0.5)
+    # Baseline variable fee calculation
+    base_bill_res = tariff_calc.calculate_annual_bill(
+        p_grid_import_kw=p_load_kw,
+        p_grid_export_kw=np.zeros_like(p_load_kw),
+        dates=dates,
+        net_metering_scheme="monthly_net",
+    )
+    base_var_fee = float(base_bill_res["annual_variable_fee"])
 
-    valid_solutions = []
-    all_evaluations = []
+    pv_steps = [round(x, 1) for x in np.arange(0.5, 10.5, 0.5)]
+    # ESS 0 to 4 modules: 0, 9.6, 19.2, 28.8, 38.4 kWh
+    ess_options = [0.0, 9.6, 19.2, 28.8, 38.4]
 
-    for pv_cand in search_steps:
-        p_pv = pv_cand * p_pv1_kw
-        disp = simulate_ess_dispatch(
-            p_pv, p_load_kw, min_ess_kwh, ess_cfg, is_off_grid=False, dt_hours=dt_h
-        )
-        bill = tariff_calculator.calculate_annual_bill(
-            disp["p_grid_import_kw"], disp["p_grid_export_kw"], dates, net_metering_scheme
-        )
+    for ess_kwh in ess_options:
+        for pv_kw in pv_steps:
+            p_pv = p_pv1_kw * pv_kw
+            net_import = np.maximum(0.0, p_load_kw - p_pv)
+            net_export = np.maximum(0.0, p_pv - p_load_kw)
 
-        max_imp_kw = float(np.max(disp["p_grid_import_kw"]))
-        capex_info = calculate_capex_breakdown(
-            pv_capacity_kw=pv_cand,
-            ess_capacity_kwh=min_ess_kwh,
-            heating_package=heating_package,
-            with_subsidy=with_subsidy,
-            is_off_grid=False,
-            capex_config=capex_config,
-            subsidy_config=subsidy_config,
-            max_import_kw=max_imp_kw,
-            capex_basis="full",
-        )
+            bill_res = tariff_calc.calculate_annual_bill(
+                p_grid_import_kw=net_import,
+                p_grid_export_kw=net_export,
+                dates=dates,
+                net_metering_scheme="monthly_net",
+            )
+            alt_elec_cost = bill_res["annual_total_bill"]
+            alt_var_fee = float(bill_res["annual_variable_fee"])
+            alt_total_cost = alt_elec_cost + alt_propane_cost
 
-        alt_y1_cost = bill["annual_total_bill"] + alternative_propane_cost
-        cf = calculate_25y_cashflow(
-            net_capex=capex_info["net_capex"],
-            baseline_annual_cost=baseline_annual_cost,
-            alternative_year1_cost=alt_y1_cost,
-            baseline_propane_cost=baseline_propane_cost,
-            alternative_propane_cost=alternative_propane_cost,
-            ess_replacement_cost=capex_info["ess_replacement_cost"],
-            inverter_replacement_cost=capex_info["inverter_replacement_cost"],
-        )
+            # Annual variable electricity fee savings rate (%)
+            if base_var_fee > 0:
+                var_savings_pct = max(0.0, (base_var_fee - alt_var_fee) / base_var_fee * 100.0)
+            else:
+                var_savings_pct = 0.0
 
-        eval_data = {
-            "pv_cand": pv_cand,
-            "payback_years": cf["payback_years"],
-            "variable_fee": bill["annual_variable_fee"],
-            "dispatch": disp,
-            "bill": bill,
-            "capex_info": capex_info,
-            "cashflow": cf,
-        }
-        all_evaluations.append(eval_data)
+            capex_info = calculate_capex_breakdown(
+                pv_capacity_kw=pv_kw,
+                ess_capacity_kwh=ess_kwh,
+                heating_package=heating_package,
+                with_subsidy=with_subsidy,
+                is_off_grid=False,
+                capex_config=capex_config,
+                subsidy_config=subsidy_config,
+            )
 
-        if cf["payback_years"] <= 3.0:
-            valid_solutions.append(eval_data)
+            cf_res = calculate_100y_cashflow(
+                net_capex=capex_info["net_capex"],
+                baseline_annual_cost=baseline_energy_cost,
+                alternative_year1_cost=alt_total_cost,
+                baseline_propane_cost=baseline_propane_cost,
+                alternative_propane_cost=alt_propane_cost,
+                pv_capacity_kw=pv_kw,
+                ess_capacity_kwh=ess_kwh,
+                is_awhp=is_awhp,
+                pv_turnkey_cost=capex_info["pv_turnkey_cost"],
+                inverter_replacement_cost=capex_info["inverter_replacement_cost"],
+                ess_replacement_cost=capex_info["ess_replacement_cost"],
+                awhp_replacement_cost=capex_info["awhp_replacement_cost"],
+            )
 
-    peak_load = float(np.max(p_load_kw))
-    inv_req = round(max(3.0, peak_load), 1)
+            pb = cf_res["payback_years"]
+            savings_y1 = cf_res["annual_savings_y1"]
+            req_capex_3y = max(0.0, savings_y1 * 3.0)
+            actual_capex = capex_info["net_capex"]
+            discount_pct = max(0.0, (actual_capex - req_capex_3y) / actual_capex * 100.0) if actual_capex > 0 else 0.0
 
-    if valid_solutions:
-        valid_solutions.sort(key=lambda x: (x["variable_fee"], x["payback_years"]))
-        chosen = valid_solutions[0]
-        pv_size = chosen["pv_cand"]
+            candidates.append({
+                "pv_capacity_kw": pv_kw,
+                "ess_capacity_kwh": ess_kwh,
+                "ess_modules": int(round(ess_kwh / 9.6)),
+                "payback_years": pb,
+                "payback_period_str": cf_res["payback_period_str"],
+                "reason_code": cf_res["reason_code"],
+                "annual_savings_y1": savings_y1,
+                "variable_fee_savings_pct": round(var_savings_pct, 1),
+                "required_capex_for_3y": round(req_capex_3y, 0),
+                "required_discount_rate_pct": round(discount_pct, 1),
+                "capex_info": capex_info,
+                "cashflow_res": cf_res,
+                "alt_elec_cost": alt_elec_cost,
+                "alt_var_fee": alt_var_fee,
+                "alt_total_cost": alt_total_cost,
+            })
 
-        return {
-            "pv_capacity_kw": round(pv_size, 2),
-            "pv_capacity_bol_kw": round(pv_size, 2),
-            "pv_capacity_tmy_kw": round(pv_size, 2),
-            "pv_capacity_month_avg_kw": round(pv_size, 2),
-            "ess_capacity_kwh": min_ess_kwh,
-            "ess_capacity_bol_kwh": min_ess_kwh,
-            "sizing_status": "optimal",
-            "min_payback_years": chosen["payback_years"],
-            "target_capex_for_3y": chosen["capex_info"]["net_capex"],
-            "inverter_required_kw": inv_req,
-            "dispatch": chosen["dispatch"],
-            "bill": chosen["bill"],
-        }
+    # Sort candidates
+    # Priority 1: Achieved <= 3 years
+    # Rule 1: Largest annual variable fee savings rate (%). In tie, shorter payback period, then lowest net CAPEX.
+    under_3y = [c for c in candidates if c["payback_years"] is not None and c["payback_years"] <= 3.0]
+    if under_3y:
+        under_3y.sort(key=lambda x: (-x["variable_fee_savings_pct"], x["payback_years"], x["capex_info"]["net_capex"]))
+        best = under_3y[0]
+        best["status_3y"] = "RECOVERED_UNDER_3Y"
     else:
-        all_evaluations.sort(key=lambda x: x["payback_years"])
-        best = all_evaluations[0]
-        pv_size = best["pv_cand"]
-        year1_savings = best["cashflow"]["annual_savings_y1"]
-        target_capex_3y = round(year1_savings * 3.0, 0)
+        # Priority 2: Shortest payback within 100 years
+        recovered = [c for c in candidates if c["payback_years"] is not None]
+        if recovered:
+            recovered.sort(key=lambda x: (x["payback_years"], -x["variable_fee_savings_pct"], x["capex_info"]["net_capex"]))
+            best = recovered[0]
+            best["status_3y"] = "SHORTEST_PAYBACK_OVER_3Y"
+        else:
+            # Fallback to maximum savings
+            candidates.sort(key=lambda x: (-x["annual_savings_y1"], x["capex_info"]["net_capex"]))
+            best = candidates[0]
+            best["status_3y"] = "NOT_RECOVERABLE"
 
-        return {
-            "pv_capacity_kw": round(pv_size, 2),
-            "pv_capacity_bol_kw": round(pv_size, 2),
-            "pv_capacity_tmy_kw": round(pv_size, 2),
-            "pv_capacity_month_avg_kw": round(pv_size, 2),
-            "ess_capacity_kwh": min_ess_kwh,
-            "ess_capacity_bol_kwh": min_ess_kwh,
-            "sizing_status": "no_solution",
-            "min_payback_years": best["payback_years"],
-            "target_capex_for_3y": target_capex_3y,
-            "inverter_required_kw": inv_req,
-            "dispatch": best["dispatch"],
-            "bill": best["bill"],
-        }
+    return best

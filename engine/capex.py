@@ -1,14 +1,16 @@
-"""Capital Expenditure (CAPEX), grid connection fees, and replacement costs model.
+"""Capital Expenditure (CAPEX), grid connection fees, and replacement costs model (v9).
+
 Reflecting updated guidelines:
-- PV turnkey: low 1,100,000 / central 1,513,667 / high 2,000,000 KRW/kW (proportional to capacity, UNVERIFIED)
-- Ground mount extra: 0 KRW (PLACEHOLDER)
-- AWHP turnkey: 14,000,000 KRW (12,000,000 major equipment + 2,000,000 electrical/other, UNVERIFIED)
-- ESS: fx=1400 (PLACEHOLDER), low 283 USD/kWh (396,200 KRW), central 1,268 USD/kWh (1,775,200 KRW), high 1,337 USD/kWh (1,871,800 KRW)
-- Replacements: Yr 11 ESS 283 USD/kWh * 1400 (396,200 KRW/kWh), Yr 13 Inverter max(750,000, 250,000 KRW/kW) (PLACEHOLDER)
-- Grid: distribution board 450,000 KRW (PLACEHOLDER), wiring 300,000 KRW/kW (PLACEHOLDER), inspection/meter 0 KRW
+- PV turnkey: low 1,100,000 / central 1,513,667 / high 2,000,000 KRW/kW (includes module, mounting, and inverter).
+- Inverter note: "PV 턴키에 포함" (No double counting).
+- AWHP turnkey: 14,000,000 KRW (12,000,000 major equipment + 2,000,000 electrical/other).
+- ESS: fx=1400, low 396,200 KRW/kWh, central 1,775,200 KRW/kWh, high 1,871,800 KRW/kWh.
+- Grid: distribution board 450,000 KRW, wiring 300,000 KRW/kW, KEPCO customer contribution facility fees.
+- All models start with 0 pre-installed equipment (incremental logic completely removed).
+- Strict validation: sum of components minus subsidies equals net CAPEX within 1 KRW.
 """
 
-from typing import Dict, Any
+from typing import Any, Dict
 import numpy as np
 
 
@@ -38,16 +40,14 @@ def calculate_capex_tier(
     capex_config: Dict[str, Any],
     subsidy_config: Dict[str, Any],
     max_import_kw: float = 0.0,
-    capex_basis: str = "full",
-) -> Dict[str, float]:
-    """Calculates granular CAPEX for a specific tier ('low', 'central', 'high')."""
-    # 1. PV Turnkey
+) -> Dict[str, Any]:
+    """Calculates granular CAPEX components for a specific tier ('low', 'central', 'high')."""
+    # 1. PV Turnkey (Turnkey includes PV panels, mounting, balance of system, and initial inverter)
     pv_turnkey_total = get_pv_turnkey_cost(pv_capacity_kw, capex_config, tier=tier)
+    inverter_capex_note = "PV 턴키에 포함"
+    inverter_capex_amount = 0.0
 
-    # 2. Ground Mount (0 KRW, PLACEHOLDER)
-    ground_mount_cost = 0.0
-
-    # 3. ESS Cost
+    # 2. ESS Cost
     ess_cfg = capex_config.get("ess_system", {})
     ess_unit_cfg = ess_cfg.get("unit_cost_per_kwh", {}).get(tier, {})
     if isinstance(ess_unit_cfg, dict):
@@ -56,7 +56,7 @@ def calculate_capex_tier(
         ess_unit_cost = float(ess_unit_cfg) if ess_unit_cfg else 1775200.0
     ess_cost = ess_capacity_kwh * ess_unit_cost
 
-    # 4. AWHP Turnkey (14M KRW flat across tiers)
+    # 3. AWHP Turnkey (14M KRW flat across tiers)
     is_awhp = "AWHP" in heating_package
     awhp_cfg = capex_config.get("awhp_system", {})
     awhp_turnkey_cfg = awhp_cfg.get("turnkey_installation_cost", {}).get(tier, {})
@@ -68,9 +68,10 @@ def calculate_capex_tier(
     awhp_major_equip = 12000000.0 if is_awhp else 0.0
     awhp_electric_other = 2000000.0 if is_awhp else 0.0
 
-    # 5. Grid Connection & Electrical Work
+    # 4. Grid Connection & Electrical Work
     grid_cfg = capex_config.get("grid_connection", {})
-    base_contract = float(grid_cfg.get("existing_contract_power_kw", {}).get("value", 3.0) if isinstance(grid_cfg.get("existing_contract_power_kw"), dict) else grid_cfg.get("existing_contract_power_kw", 3.0))
+    base_contract_raw = grid_cfg.get("existing_contract_power_kw", 3.0)
+    base_contract = float(base_contract_raw.get("value", 3.0) if isinstance(base_contract_raw, dict) else base_contract_raw)
 
     if is_off_grid:
         contract_power_kw = 0.0
@@ -100,36 +101,19 @@ def calculate_capex_tier(
             net_charge = fee_under_5 + ((contract_power_kw - grid_base_kw) * fee_over_5_per_kw)
         grid_facility_cost = round(net_charge * (1.0 + vat_rate), 0)
 
-    # 6. DUO Max Incremental Adjustments (Pre-equipped with 5kW PV + AWHP)
-    if capex_basis == "incremental":
-        pv_inc_kw = max(0.0, pv_capacity_kw - 5.0)
-        pv_turnkey_5kw = get_pv_turnkey_cost(5.0, capex_config, tier=tier)
-        pv_turnkey_total = max(0.0, pv_turnkey_total - pv_turnkey_5kw)
-        awhp_turnkey = 0.0
-        awhp_major_equip = 0.0
-        awhp_electric_other = 0.0
+    total_grid_electrical_cost = dist_board_cost + wiring_cost + grid_facility_cost
 
-    gross_capex = (
-        pv_turnkey_total
-        + ground_mount_cost
-        + ess_cost
-        + awhp_turnkey
-        + dist_board_cost
-        + wiring_cost
-        + grid_facility_cost
-    )
+    # Gross CAPEX = PV Turnkey + Inverter(0) + ESS + AWHP + Grid/Electrical
+    gross_capex = round(pv_turnkey_total + inverter_capex_amount + ess_cost + awhp_turnkey + total_grid_electrical_cost, 0)
 
-    # 7. Subsidies
+    # 5. Subsidies
     pv_sub = 0.0
     awhp_sub = 0.0
     awhp_sub_sensitivity = 0.0
     ess_sub = 0.0
 
     if with_subsidy:
-        pv_sub_cfg = subsidy_config.get("pv_subsidy", {})
-        max_pv_thresh = float(pv_sub_cfg.get("max_eligible_capacity_kw", {}).get("value", 3.0) if isinstance(pv_sub_cfg.get("max_eligible_capacity_kw"), dict) else pv_sub_cfg.get("max_eligible_capacity_kw", 3.0))
-
-        # National 1.65M + Chuncheon 1.0M = 2.65M at 3.0kW (UNVERIFIED)
+        max_pv_thresh = 3.0
         if (not is_off_grid) and (0 < pv_capacity_kw <= max_pv_thresh):
             rate_under_3 = 2650000.0 / 3.0
             pv_sub = round(pv_capacity_kw * rate_under_3, 0)
@@ -142,7 +126,19 @@ def calculate_capex_tier(
     net_capex = max(0.0, gross_capex - total_subsidy)
     net_capex_awhp70 = max(0.0, gross_capex - (pv_sub + ess_sub + awhp_sub_sensitivity))
 
-    # 8. Replacement Costs
+    # Component sum verification
+    # Item sum = PV + Inverter(0) + ESS + AWHP + Grid - Subsidy
+    component_sum = (
+        round(pv_turnkey_total, 0)
+        + inverter_capex_amount
+        + round(ess_cost, 0)
+        + round(awhp_turnkey, 0)
+        + round(total_grid_electrical_cost, 0)
+        - round(pv_sub, 0)
+    )
+    is_sum_consistent = abs(component_sum - round(net_capex, 0)) <= 1.0
+
+    # 6. Future Replacement Unit Costs
     rep_cfg = capex_config.get("replacements", {})
     ess_rep_unit_val = rep_cfg.get("ess_replacement_unit_cost_per_kwh", 396200.0)
     ess_rep_unit = float(ess_rep_unit_val.get("value", 396200.0) if isinstance(ess_rep_unit_val, dict) else ess_rep_unit_val)
@@ -156,10 +152,8 @@ def calculate_capex_tier(
         "tier": tier,
         "contract_power_kw": contract_power_kw,
         "pv_turnkey_cost": round(pv_turnkey_total, 0),
-        "pv_turnkey_krw": round(pv_turnkey_total, 0),
-        "pv_land_area_m2": round(pv_capacity_kw * 5.0, 2),
-        "ground_mount_cost": 0.0,
-        "ground_mount_krw": 0.0,
+        "inverter_capex_note": inverter_capex_note,
+        "inverter_capex_amount": inverter_capex_amount,
         "ess_cost": round(ess_cost, 0),
         "awhp_turnkey_cost": round(awhp_turnkey, 0),
         "awhp_major_equipment_cost": round(awhp_major_equip, 0),
@@ -167,6 +161,7 @@ def calculate_capex_tier(
         "distribution_board_cost": round(dist_board_cost, 0),
         "wiring_expansion_cost": round(wiring_cost, 0),
         "grid_connection_cost": round(grid_facility_cost, 0),
+        "total_grid_electrical_cost": round(total_grid_electrical_cost, 0),
         "gross_capex": round(gross_capex, 0),
         "pv_subsidy": round(pv_sub, 0),
         "awhp_subsidy": round(awhp_sub, 0),
@@ -175,8 +170,12 @@ def calculate_capex_tier(
         "total_subsidy": round(total_subsidy, 0),
         "net_capex": round(net_capex, 0),
         "net_capex_awhp70": round(net_capex_awhp70, 0),
+        "component_sum_difference": round(component_sum - net_capex, 2),
+        "is_sum_consistent": is_sum_consistent,
         "ess_replacement_cost": round(ess_replacement_cost, 0),
         "inverter_replacement_cost": round(inverter_replacement_cost, 0),
+        "pv_replacement_cost": round(pv_turnkey_total, 0),
+        "awhp_replacement_cost": round(awhp_turnkey, 0),
     }
 
 
@@ -189,7 +188,6 @@ def calculate_capex_breakdown(
     capex_config: Dict[str, Any],
     subsidy_config: Dict[str, Any],
     max_import_kw: float = 0.0,
-    capex_basis: str = "full",
 ) -> Dict[str, Any]:
     """Calculates CAPEX across low, central, and high tiers, returning central as base metrics."""
     res_central = calculate_capex_tier(
@@ -202,7 +200,6 @@ def calculate_capex_breakdown(
         capex_config=capex_config,
         subsidy_config=subsidy_config,
         max_import_kw=max_import_kw,
-        capex_basis=capex_basis,
     )
 
     res_low = calculate_capex_tier(
@@ -215,7 +212,6 @@ def calculate_capex_breakdown(
         capex_config=capex_config,
         subsidy_config=subsidy_config,
         max_import_kw=max_import_kw,
-        capex_basis=capex_basis,
     )
 
     res_high = calculate_capex_tier(
@@ -228,7 +224,6 @@ def calculate_capex_breakdown(
         capex_config=capex_config,
         subsidy_config=subsidy_config,
         max_import_kw=max_import_kw,
-        capex_basis=capex_basis,
     )
 
     combined = dict(res_central)
