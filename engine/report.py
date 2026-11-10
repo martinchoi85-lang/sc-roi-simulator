@@ -459,14 +459,13 @@ def _build_sc_report_data(
                 for tgt_id, tgt_name in [("nz", "near_zero_bill"), ("zb", "zero_bill"), ("ze", "zero_energy")]:
                     for sub_id, with_sub in [("none", False), ("pv2026", True)]:
                         # Find matching result row in df_results
-                        sub_str = "보조금 반영" if with_sub else "보조금 미반영"
                         matched = df_results[
                             (df_results["house_model"] == house_name)
                             & (df_results["occupants"] == occ_n)
                             & (df_results["heating_package"] == heat_label)
                             & (df_results["occupancy_rate"] == occ_rate)
                             & (df_results["target_model"] == tgt_name)
-                            & (df_results["with_subsidy"] == sub_str)
+                            & (df_results["with_subsidy"] == with_sub)
                         ]
                         row = matched.iloc[0]
 
