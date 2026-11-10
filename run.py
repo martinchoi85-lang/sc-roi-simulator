@@ -84,7 +84,6 @@ def main():
     print(f"- Validation: {output_dir / 'validation.md'}")
     print(f"- Report Data: {report_dir / 'report_data.json'}")
     print(f"- HTML Report: {report_dir / 'LG_SC_Korea_ROI_Report.html'}")
-    print(f"- PPTX Report: {report_dir / 'LG_SC_Korea_ROI_Report.pptx'}")
 
 
 if __name__ == "__main__":

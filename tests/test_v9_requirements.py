@@ -115,3 +115,37 @@ def test_req6_scenarios_count_420(project_data):
     assert len(df_energy_comp) == 420
     assert len(df_ze_sizing) == 70
 
+
+def test_req7_subsidy_pv_limit(project_data):
+    """Test 7: Subsidy applies ONLY when PV <= 3.0 kW, 0 for PV > 3.0 kW."""
+    _, cfg, _ = project_data
+    from engine.capex import calculate_pv_subsidy
+    sub_cfg = cfg.values["subsidy"]
+
+    # 3.0 kW -> max subsidy
+    sub_3 = calculate_pv_subsidy(3.0, with_subsidy=True, subsidy_config=sub_cfg)
+    assert sub_3 == 2_650_000.0
+
+    # 1.5 kW -> proportional (1.5 / 3.0 * 2,650,000 = 1,325,000)
+    sub_1_5 = calculate_pv_subsidy(1.5, with_subsidy=True, subsidy_config=sub_cfg)
+    assert sub_1_5 == 1_325_000.0
+
+    # 3.5 kW or 6.0 kW -> 0.0 KRW
+    sub_3_5 = calculate_pv_subsidy(3.5, with_subsidy=True, subsidy_config=sub_cfg)
+    assert sub_3_5 == 0.0
+    sub_6 = calculate_pv_subsidy(6.0, with_subsidy=True, subsidy_config=sub_cfg)
+    assert sub_6 == 0.0
+
+
+def test_req8_kosis_48_slots(project_data):
+    """Test 8: Section 4 - T1~T4, P, H, CR, V, MV all have 48 30-min slots."""
+    root, _, _ = project_data
+    kosis_dir = root / "korea" / "source" / "kosis"
+    tables = ["T1", "T2", "T3", "T4", "P", "H", "CR", "V", "MV"]
+    for t in tables:
+        csv_file = kosis_dir / f"{t}_2024.csv"
+        assert csv_file.exists(), f"Missing {csv_file}"
+        df = pd.read_csv(csv_file)
+        assert df["slot_name"].nunique() == 48, f"{t} slot count {df['slot_name'].nunique()} != 48"
+
+

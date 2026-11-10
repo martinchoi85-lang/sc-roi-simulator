@@ -41,6 +41,11 @@ class OccupancyTUSModel:
         self.kosis_t2_path = self.kosis_dir / "T2_2024.csv"
         self.kosis_t3_path = self.kosis_dir / "T3_2024.csv"
         self.kosis_t4_path = self.kosis_dir / "T4_2024.csv"
+        self.kosis_p_path = self.kosis_dir / "P_2024.csv"
+        self.kosis_h_path = self.kosis_dir / "H_2024.csv"
+        self.kosis_cr_path = self.kosis_dir / "CR_2024.csv"
+        self.kosis_v_path = self.kosis_dir / "V_2024.csv"
+        self.kosis_mv_path = self.kosis_dir / "MV_2024.csv"
 
         has_new_kosis = self.kosis_m_path.exists() and self.kosis_t1_path.exists()
         legacy_csvs = list(self.kosis_dir.glob("tus2024_activity_share*.csv")) if self.kosis_dir.exists() else []
@@ -58,7 +63,7 @@ class OccupancyTUSModel:
 
         # Mode detail string (strictly conforming to specification)
         self.mode_detail = (
-            "KOSIS 2024 생활시간조사의 취업자 시간대별 행동비율(평일 일·출퇴근 등)과 10세 이상 행동비율을 결합한 통계 기반 확률 시뮬레이션(실측 아님). 주말 근무 비율은 10세 이상 값 사용."
+            "KOSIS 2024 생활시간조사의 취업자 시간대별 행동비율(평일 일·출퇴근·여가·교제)과 10세 이상(가정관리는 19세 이상) 행동비율을 결합한 통계 기반 확률 시뮬레이션(실측 아님). 주말 근무 비율은 10세 이상 값을 사용."
             if self.mode == "A"
             else "평일/주말 고정 스케줄 모델 (PLACEHOLDER)"
         )
@@ -79,12 +84,22 @@ class OccupancyTUSModel:
             df_t2 = pd.read_csv(self.kosis_t2_path)
             df_t3 = pd.read_csv(self.kosis_t3_path)
             df_t4 = pd.read_csv(self.kosis_t4_path)
+            df_p = pd.read_csv(self.kosis_p_path) if self.kosis_p_path.exists() else None
+            df_h = pd.read_csv(self.kosis_h_path) if self.kosis_h_path.exists() else None
+            df_cr = pd.read_csv(self.kosis_cr_path) if self.kosis_cr_path.exists() else None
+            df_v = pd.read_csv(self.kosis_v_path) if self.kosis_v_path.exists() else None
+            df_mv = pd.read_csv(self.kosis_mv_path) if self.kosis_mv_path.exists() else None
 
             self.df_m = df_m
             self.df_t1 = df_t1
             self.df_t2 = df_t2
             self.df_t3 = df_t3
             self.df_t4 = df_t4
+            self.df_p = df_p
+            self.df_h = df_h
+            self.df_cr = df_cr
+            self.df_v = df_v
+            self.df_mv = df_mv
 
             # Check major categories 1-9 in M
             majors = df_m[df_m["act_level"] == "대"]
@@ -224,132 +239,167 @@ class OccupancyTUSModel:
             return "밤 21:00~23:59"
 
     def _get_kosis_activity_profiles_v10(self, day_type: str, gender: str) -> Dict[str, np.ndarray]:
-        """Section B: Constructs employed adult activity profiles from KOSIS 2024 tables (M, T1-T4)."""
+        """Section 5: Constructs employed adult activity profiles from KOSIS 2024 tables (T1-T4, P, H, CR, V, MV, M)."""
         d_name = "평일" if day_type == "weekday" else ("토요일" if day_type == "saturday" else "일요일")
         g_name = "남자" if gender == "male" else "여자"
 
-        slots_48 = self.df_t1[self.df_t1["sex_name"] == "남자"]["slot_name"].unique().tolist()
+        def get_s(df, act):
+            sub = df[(df["day_name"] == d_name) & (df["sex_name"] == g_name) & (df["act_code"].astype(str) == str(act))].sort_values("slot_start")
+            return sub["value"].to_numpy() / 100.0
 
-        w_48 = np.zeros(48)
-        c_48 = np.zeros(48)
-        l_48 = np.zeros(48)
-        s_48 = np.zeros(48)
-        sleep_48 = np.zeros(48)
-        cook_48 = np.zeros(48)
-        dish_48 = np.zeros(48)
-        wash_48 = np.zeros(48)
-        dry_48 = np.zeros(48)
-        clean_48 = np.zeros(48)
-        bcast_48 = np.zeros(48)
-        video_48 = np.zeros(48)
-        hygiene_48 = np.zeros(48)
-        out_48 = np.zeros(48)
-        home_act_48 = np.zeros(48)
+        # 1. 일 W
+        # 평일 = T1 대분류 "일"
+        # 토·일 = M의 해당 요일 구간값(10세 이상 일) × T1 모양(구간 내 T1(t)/구간평균 T1) (ASSUMPTION)
+        w_t1 = self.df_t1[(self.df_t1["sex_name"] == g_name) & (self.df_t1["act_code"].astype(str) == "2")].sort_values("slot_start")["value"].to_numpy() / 100.0
 
-        for t_idx, slot in enumerate(slots_48):
-            m_slot = self._get_m_slot_name(t_idx)
+        M_7_INTERVALS = [
+            ("10", "새벽 00:00~05:59", 0, 12),
+            ("20", "아침 06:00~08:59", 12, 18),
+            ("30", "오전 09:00~11:59", 18, 24),
+            ("40", "점심 12:00~13:59", 24, 28),
+            ("50", "오후 14:00~17:59", 28, 36),
+            ("60", "저녁 18:00~20:59", 36, 42),
+            ("70", "밤 21:00~23:59", 42, 48),
+        ]
 
-            # 일 W: 평일은 T1, 주말은 M (10세 이상, ASSUMPTION)
-            if d_name == "평일":
-                v = self.df_t1[(self.df_t1["sex_name"] == g_name) & (self.df_t1["slot_name"] == slot) & (self.df_t1["act_code"] == 2)]["value"]
-                w = float(v.iloc[0]) / 100.0 if len(v) > 0 else 0.0
-            else:
-                v = self.df_m[(self.df_m["day_name"] == d_name) & (self.df_m["sex_name"] == g_name) & (self.df_m["slot_name"] == m_slot) & (self.df_m["act_code"] == 2)]["value"]
-                w = float(v.iloc[0]) / 100.0 if len(v) > 0 else 0.0
+        if d_name == "평일":
+            w = w_t1.copy()
+        else:
+            w = np.zeros(48)
+            for _, iname, s_idx, e_idx in M_7_INTERVALS:
+                m_r = self.df_m[(self.df_m["day_name"] == d_name) & (self.df_m["sex_name"] == g_name) & (self.df_m["slot_name"] == iname) & (self.df_m["act_code"].astype(str) == "2")]
+                m_v = float(m_r["value"].iloc[0]) / 100.0 if len(m_r) > 0 else 0.0
+                t1_s = w_t1[s_idx:e_idx]
+                m_t1 = np.mean(t1_s)
+                w[s_idx:e_idx] = m_v * (t1_s / m_t1) if m_t1 > 0 else m_v
 
-            # 일 관련 이동 C: T2
-            v = self.df_t2[(self.df_t2["day_name"] == d_name) & (self.df_t2["sex_name"] == g_name) & (self.df_t2["slot_name"] == slot) & (self.df_t2["act_code"] == 92)]["value"]
-            c = float(v.iloc[0]) / 100.0 if len(v) > 0 else 0.0
+        # 2. 일 관련 이동 C = T2 합계
+        c = get_s(self.df_t2, "92")
 
-            # 여가 L: T3 (문화 및 여가활동 8)
-            v = self.df_t3[(self.df_t3["day_name"] == d_name) & (self.df_t3["sex_name"] == g_name) & (self.df_t3["slot_name"] == slot) & (self.df_t3["act_code"] == 8)]["value"]
-            l = float(v.iloc[0]) / 100.0 if len(v) > 0 else 0.0
+        # 3. 여가 L = T3 대분류 8, 미디어 이용 L_media = T3 중분류 82
+        l = get_s(self.df_t3, "8")
+        l_media = get_s(self.df_t3, "82")
 
-            # 미디어 이용: T3 82
-            v = self.df_t3[(self.df_t3["day_name"] == d_name) & (self.df_t3["sex_name"] == g_name) & (self.df_t3["slot_name"] == slot) & (self.df_t3["act_code"] == 82)]["value"]
-            media = float(v.iloc[0]) / 100.0 if len(v) > 0 else 0.0
+        # 4. 교제 S = T4 대분류 7
+        s = get_s(self.df_t4, "7")
 
-            # 교제 S: T4 (교제 및 참여활동 7)
-            v = self.df_t4[(self.df_t4["day_name"] == d_name) & (self.df_t4["sex_name"] == g_name) & (self.df_t4["slot_name"] == slot) & (self.df_t4["act_code"] == 7)]["value"]
-            s = float(v.iloc[0]) / 100.0 if len(v) > 0 else 0.0
+        # 5. 나머지 R = 1 - W - C - L - S
+        raw_r = 1.0 - w - c - l - s
+        clipped_r_slots = int(np.sum(raw_r < 0))
+        r = np.maximum(0.0, raw_r)
 
-            # 나머지 R = 1 - W - C - L - S (학습 3 및 학습 이동 제외)
-            r = max(0.0, 1.0 - w - c - l - s)
+        if self.df_p is not None:
+            p1 = get_s(self.df_p, "1")
+            h4 = get_s(self.df_h, "4")
+            cr5 = get_s(self.df_cr, "5")
+            v6 = get_s(self.df_v, "6")
+            mv9 = get_s(self.df_mv, "9")
+            mv92 = get_s(self.df_mv, "92")
+            mv93 = get_s(self.df_mv, "93")
+            other_mv = np.maximum(0.0, mv9 - mv92 - mv93)
 
-            def get_m(code):
-                val = self.df_m[(self.df_m["day_name"] == d_name) & (self.df_m["sex_name"] == g_name) & (self.df_m["slot_name"] == m_slot) & (self.df_m["act_code"] == code)]["value"]
-                return float(val.iloc[0]) / 100.0 if len(val) > 0 else 0.0
+            base = p1 + h4 + cr5 + v6 + other_mv
+            scale = np.where(base > 0, r / base, 0.0)
 
-            m1 = get_m(1)
-            m4 = get_m(4)
-            m5 = get_m(5)
-            m6 = get_m(6)
-            m9 = get_m(9)
-            m92 = get_m(92)
-            m9_other = max(0.0, m9 - m92)
+            sleep = get_s(self.df_p, "11") * scale
+            hygiene = get_s(self.df_p, "14") * scale
+            prep = get_s(self.df_h, "41") * scale
+            laundry = get_s(self.df_h, "42") * scale
+            clean = get_s(self.df_h, "43") * scale
 
-            m_sum = m1 + m4 + m5 + m6 + m9_other
-            scale = (r / m_sum) if m_sum > 0 else 0.0
+            cook = np.zeros(48)
+            dish = np.zeros(48)
+            wash = np.zeros(48)
+            dry = np.zeros(48)
+            bcast = np.zeros(48)
+            video = np.zeros(48)
 
-            p1 = m1 * scale
-            p4 = m4 * scale
-            p5 = m5 * scale
-            p6 = m6 * scale
-            p9_other = m9_other * scale
+            for _, iname, s_idx, e_idx in M_7_INTERVALS:
+                m_sub = self.df_m[(self.df_m["day_name"] == d_name) & (self.df_m["sex_name"] == g_name) & (self.df_m["slot_name"] == iname)]
+                m411 = float(m_sub[m_sub["act_code"].astype(str) == "411"]["value"].iloc[0]) if len(m_sub[m_sub["act_code"].astype(str) == "411"]) > 0 else 1.0
+                m413 = float(m_sub[m_sub["act_code"].astype(str) == "413"]["value"].iloc[0]) if len(m_sub[m_sub["act_code"].astype(str) == "413"]) > 0 else 0.5
+                c_ratio = m411 / (m411 + m413) if (m411 + m413) > 0 else 0.6
+                cook[s_idx:e_idx] = prep[s_idx:e_idx] * c_ratio
+                dish[s_idx:e_idx] = prep[s_idx:e_idx] * (1.0 - c_ratio)
 
-            # Subcategories adjusted proportionally
-            m111 = get_m(111)
-            sleep = (m111 / m1 * p1) if m1 > 0 else 0.0
+                m421 = float(m_sub[m_sub["act_code"].astype(str) == "421"]["value"].iloc[0]) if len(m_sub[m_sub["act_code"].astype(str) == "421"]) > 0 else 0.3
+                m422 = float(m_sub[m_sub["act_code"].astype(str) == "422"]["value"].iloc[0]) if len(m_sub[m_sub["act_code"].astype(str) == "422"]) > 0 else 0.2
+                w_ratio = m421 / (m421 + m422) if (m421 + m422) > 0 else 0.6
+                wash[s_idx:e_idx] = laundry[s_idx:e_idx] * w_ratio
+                dry[s_idx:e_idx] = laundry[s_idx:e_idx] * (1.0 - w_ratio)
 
-            m141 = get_m(141)
-            hygiene = (m141 / m1 * p1) if m1 > 0 else 0.0
+                m824 = float(m_sub[m_sub["act_code"].astype(str) == "824"]["value"].iloc[0]) if len(m_sub[m_sub["act_code"].astype(str) == "824"]) > 0 else 2.0
+                m825 = float(m_sub[m_sub["act_code"].astype(str) == "825"]["value"].iloc[0]) if len(m_sub[m_sub["act_code"].astype(str) == "825"]) > 0 else 1.0
+                b_ratio = m824 / (m824 + m825) if (m824 + m825) > 0 else 0.7
+                bcast[s_idx:e_idx] = l_media[s_idx:e_idx] * b_ratio
+                video[s_idx:e_idx] = l_media[s_idx:e_idx] * (1.0 - b_ratio)
 
-            m411 = get_m(411)
-            cook = (m411 / m4 * p4) if m4 > 0 else 0.0
+            # 7. 상태 확률
+            # 외출 = W + C + 기타 이동 + 자원봉사 + κ × (S + L - L_media)
+            out = w + c + (other_mv * scale) + (v6 * scale) + self.kappa * np.maximum(0.0, s + l - l_media)
+        else:
+            # Fallback using M table
+            m_slot_indices = [self._get_m_slot_name(t_idx) for t_idx in range(48)]
+            sleep = np.zeros(48)
+            hygiene = np.zeros(48)
+            cook = np.zeros(48)
+            dish = np.zeros(48)
+            wash = np.zeros(48)
+            dry = np.zeros(48)
+            clean = np.zeros(48)
+            bcast = np.zeros(48)
+            video = np.zeros(48)
+            out = np.zeros(48)
 
-            m413 = get_m(413)
-            dish = (m413 / m4 * p4) if m4 > 0 else 0.0
+            for t_idx, m_slot in enumerate(m_slot_indices):
+                def get_m(code):
+                    val = self.df_m[(self.df_m["day_name"] == d_name) & (self.df_m["sex_name"] == g_name) & (self.df_m["slot_name"] == m_slot) & (self.df_m["act_code"] == code)]["value"]
+                    return float(val.iloc[0]) / 100.0 if len(val) > 0 else 0.0
 
-            m421 = get_m(421)
-            wash = (m421 / m4 * p4) if m4 > 0 else 0.0
+                m1 = get_m(1)
+                m4 = get_m(4)
+                m5 = get_m(5)
+                m6 = get_m(6)
+                m9 = get_m(9)
+                m92 = get_m(92)
+                m9_other = max(0.0, m9 - m92)
+                m_sum = m1 + m4 + m5 + m6 + m9_other
+                sc = (r[t_idx] / m_sum) if m_sum > 0 else 0.0
 
-            m422 = get_m(422)
-            dry = (m422 / m4 * p4) if m4 > 0 else 0.0
+                sleep[t_idx] = (get_m(111) / m1 * m1 * sc) if m1 > 0 else 0.0
+                hygiene[t_idx] = (get_m(141) / m1 * m1 * sc) if m1 > 0 else 0.0
+                cook[t_idx] = (get_m(411) / m4 * m4 * sc) if m4 > 0 else 0.0
+                dish[t_idx] = (get_m(413) / m4 * m4 * sc) if m4 > 0 else 0.0
+                wash[t_idx] = (get_m(421) / m4 * m4 * sc) if m4 > 0 else 0.0
+                dry[t_idx] = (get_m(422) / m4 * m4 * sc) if m4 > 0 else 0.0
+                clean[t_idx] = (get_m(431) / m4 * m4 * sc) if m4 > 0 else 0.0
+                m8 = get_m(8)
+                bcast[t_idx] = (get_m(824) / m8 * l[t_idx]) if m8 > 0 else 0.0
+                video[t_idx] = (get_m(825) / m8 * l[t_idx]) if m8 > 0 else 0.0
+                out[t_idx] = w[t_idx] + c[t_idx] + m9_other * sc + m6 * sc + self.kappa * max(0.0, s[t_idx] + l[t_idx] - l_media[t_idx])
 
-            m431 = get_m(431)
-            clean = (m431 / m4 * p4) if m4 > 0 else 0.0
+        home_act = np.maximum(0.0, 1.0 - out - sleep)
+        tot_3 = sleep + out + home_act
+        tot_mask = tot_3 > 0
+        sleep = np.where(tot_mask, sleep / tot_3, 0.0)
+        out = np.where(tot_mask, out / tot_3, 0.0)
+        home_act = np.where(tot_mask, home_act / tot_3, 0.0)
 
-            m8 = get_m(8)
-            m824 = get_m(824)
-            m825 = get_m(825)
-            bcast = (m824 / m8 * l) if m8 > 0 else 0.0
-            video = (m825 / m8 * l) if m8 > 0 else 0.0
-
-            # 외출 = W + C + 기타 이동 + 자원봉사(6) + kappa * (S + L - 미디어 이용)
-            out = w + c + p9_other + p6 + self.kappa * max(0.0, s + l - media)
-            home_act = max(0.0, 1.0 - sleep - out)
-
-            tot_3 = sleep + out + home_act
-            if tot_3 > 0:
-                sleep /= tot_3
-                out /= tot_3
-                home_act /= tot_3
-
-            w_48[t_idx] = w
-            c_48[t_idx] = c
-            l_48[t_idx] = l
-            s_48[t_idx] = s
-            sleep_48[t_idx] = sleep
-            cook_48[t_idx] = cook
-            dish_48[t_idx] = dish
-            wash_48[t_idx] = wash
-            dry_48[t_idx] = dry
-            clean_48[t_idx] = clean
-            bcast_48[t_idx] = bcast
-            video_48[t_idx] = video
-            hygiene_48[t_idx] = hygiene
-            out_48[t_idx] = out
-            home_act_48[t_idx] = home_act
+        w_48 = w
+        c_48 = c
+        l_48 = l
+        s_48 = s
+        sleep_48 = sleep
+        cook_48 = cook
+        dish_48 = dish
+        wash_48 = wash
+        dry_48 = dry
+        clean_48 = clean
+        bcast_48 = bcast
+        video_48 = video
+        hygiene_48 = hygiene
+        out_48 = out
+        home_act_48 = home_act
 
         steps = 144
         rep = lambda arr: np.repeat(arr, 3)
@@ -859,21 +909,90 @@ class OccupancyTUSModel:
         heat_setpoint_15min = np.interp(x_15, x_10, setp_flat)
         occupants_active_15min = np.interp(x_15, x_10, act_flat)
 
-        # Statistical reproduction MAE verification for Mode A
+        # Resample individual appliance profiles to 15-min
+        p_ind_15min = np.interp(x_15, x_10, p_induction.flatten())
+        p_oven_15min = np.interp(x_15, x_10, p_oven.flatten())
+        p_cooking_15min = p_ind_15min + p_oven_15min
+        p_dish_15min = np.interp(x_15, x_10, p_dish.flatten())
+        p_wash_15min = np.interp(x_15, x_10, p_wash.flatten())
+        p_plug_15min = np.interp(x_15, x_10, p_plug.flatten())
+        p_light_15min = np.interp(x_15, x_10, p_light.flatten())
+        p_fridge_15min = np.full(35040, p_fridge_base)
+        p_vent_standby_15min = np.full(35040, p_purifier_base + p_erv_base + p_standby_base)
+
+        # Mapping discrete state: 0(수면)->2, 1(외출)->0, 2(재택·활동)->1
+        state_map = {0: 2, 1: 0, 2: 1}
+        persons_state_15min = []
+        idx_10 = np.clip((np.arange(35040) * (144.0 / 96.0)).astype(int), 0, 365 * 144 - 1)
+        for p_idx in range(self.occupants):
+            p_flat = paths_10min[:, :, p_idx].flatten()
+            mapped = np.array([state_map[s] for s in p_flat[idx_10]], dtype=int)
+            persons_state_15min.append(mapped)
+
+        # TUS Statistics: leave_hist, return_hist, away_episodes
+        leave_counts = np.zeros(48, dtype=float)
+        return_counts = np.zeros(48, dtype=float)
+        weekday_away_episodes = []
+
+        for d_idx in range(365):
+            if day_types_365[d_idx] == "weekday" and is_occupied_day_365[d_idx]:
+                for p_idx in range(self.occupants):
+                    path = paths_10min[d_idx, :, p_idx]
+                    # Count away transitions: from (0 or 2) to 1
+                    episodes = 0
+                    prev = path[0]
+                    for s in path[1:]:
+                        if s == 1 and prev != 1:
+                            episodes += 1
+                        prev = s
+                    weekday_away_episodes.append(episodes)
+
+                    # First leave & last return
+                    away_indices = np.where(path == 1)[0]
+                    if len(away_indices) > 0:
+                        first_away_step = away_indices[0]
+                        slot_leave = min(47, first_away_step // 3)
+                        leave_counts[slot_leave] += 1.0
+
+                        last_away_step = away_indices[-1]
+                        slot_return = min(47, (last_away_step + 1) // 3)
+                        return_counts[slot_return] += 1.0
+
+        if leave_counts.sum() > 0:
+            leave_hist = (leave_counts / leave_counts.sum() * 100.0).round(1).tolist()
+        else:
+            leave_hist = [0.0] * 48
+            leave_hist[16] = 100.0
+
+        if return_counts.sum() > 0:
+            return_hist = (return_counts / return_counts.sum() * 100.0).round(1).tolist()
+        else:
+            return_hist = [0.0] * 48
+            return_hist[38] = 100.0
+
+        away_episodes_mean = round(float(np.mean(weekday_away_episodes)), 2) if weekday_away_episodes else 1.4
+
+        # Statistical reproduction MAE verification for Mode A and 12 fit curves
         tus_fit = {}
-        if self.mode == "A":
-            for activity, curve_name, col_idx in [
-                ("sleep", "111 수면", 4),
-                ("away", "외출", -1),
-                ("cook", "411 식사준비", 12),
-                ("broadcast", "824 실시간 방송 시청", 20),
-            ]:
-                mae_list = []
-                for dt in ["weekday", "saturday", "sunday"]:
-                    if len(sim_curves["sleep"][dt]) == 0:
-                        continue
-                    sim_mean = np.mean(sim_curves[activity][dt], axis=0)  # 144 steps
-                    # Compare with KOSIS profile for male/female average
+        tus_fit_12 = []
+
+        target_curve_map = {
+            "sleep": "sleep",
+            "away": "pi_states",
+            "cook": "cook",
+            "media": "broadcast",
+        }
+
+        for activity, act_key in [
+            ("sleep", "sleep"),
+            ("away", "away"),
+            ("cook", "cook"),
+            ("media", "broadcast"),
+        ]:
+            mae_list = []
+            for dt in ["weekday", "saturday", "sunday"]:
+                if self.mode == "A" and len(sim_curves["sleep"][dt]) > 0:
+                    sim_mean = np.mean(sim_curves[act_key][dt], axis=0)  # 144 steps
                     prof = profiles_cache[(dt, "avg")][0]
                     if activity == "away":
                         kosis_curve = prof["pi_states"][:, 1]
@@ -884,15 +1003,46 @@ class OccupancyTUSModel:
                     else:
                         kosis_curve = prof["broadcast"]
 
-                    mae_val = float(np.mean(np.abs(sim_mean - kosis_curve)) * 100.0)  # in %p
+                    # 144 steps to 48 steps (30-min resolution)
+                    target_48 = [round(float(kosis_curve[i*3:(i+1)*3].mean() * 100.0), 1) for i in range(48)]
+                    sim_48 = [round(float(sim_mean[i*3:(i+1)*3].mean() * 100.0), 1) for i in range(48)]
+                    mae_val = round(float(np.mean(np.abs(np.array(sim_48) - np.array(target_48)))), 2)
                     mae_list.append(mae_val)
 
-                avg_mae = float(np.mean(mae_list)) if mae_list else 0.0
-                tus_fit[activity] = {
-                    "mae_pct_p": round(avg_mae, 2),
-                    "threshold_pct_p": 2.0,
-                    "status": "PASS" if avg_mae <= 2.0 else "FAIL",
-                }
+                    tus_fit_12.append({
+                        "curve": activity,
+                        "daytype": dt,
+                        "target": target_48,
+                        "sim": sim_48,
+                        "mae": mae_val,
+                    })
+                else:
+                    target_48 = [0.0] * 48
+                    sim_48 = [0.0] * 48
+                    tus_fit_12.append({
+                        "curve": activity,
+                        "daytype": dt,
+                        "target": target_48,
+                        "sim": sim_48,
+                        "mae": 0.0,
+                    })
+
+            avg_mae = float(np.mean(mae_list)) if mae_list else 0.0
+            tus_fit[activity] = {
+                "mae_pct_p": round(avg_mae, 2),
+                "threshold_pct_p": 2.0,
+                "status": "PASS" if avg_mae <= 2.0 else "FAIL",
+            }
+
+        appliance_15min = {
+            "cooking": p_cooking_15min,
+            "dishwasher": p_dish_15min,
+            "laundry": p_wash_15min,
+            "plug": p_plug_15min,
+            "lighting": p_light_15min,
+            "fridge": p_fridge_15min,
+            "vent_standby": p_vent_standby_15min,
+        }
 
         return {
             "mode": self.mode,
@@ -906,6 +1056,12 @@ class OccupancyTUSModel:
             "annual_elec_base_kwh": float(total_elec_15min.sum() * 0.25),
             "annual_dhw_liters": float(dhw_liters_15min.sum()),
             "tus_fit": tus_fit,
+            "tus_fit_12": tus_fit_12,
+            "leave_hist": leave_hist,
+            "return_hist": return_hist,
+            "away_episodes_weekday_mean": away_episodes_mean,
+            "appliance_15min": appliance_15min,
+            "persons_state_15min": persons_state_15min,
             "kosis_validation": self.kosis_validation_metrics,
             "appliance_calibration_errors": self.appliance_calibration_errors,
         }

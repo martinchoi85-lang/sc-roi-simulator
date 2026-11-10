@@ -172,7 +172,7 @@ def size_zero_energy(
                 soc_max=soc_max,
                 soh_eol=soh_eol,
                 rte=rte,
-                early_exit_unmet=True,
+                early_exit_unmet=False,
             )
             if unmet_kwh <= 0.001 and lol_h <= 0.001:
                 best_step = mid_step
@@ -194,6 +194,19 @@ def size_zero_energy(
                 rte=rte,
                 early_exit_unmet=False,
             )
+            while best_lol > 1e-4 and found_pv < max_pv_search:
+                found_pv += 0.5
+                p_pv_arr = p_pv1_kw * found_pv * pv_deg_factor
+                best_unmet, best_lol, best_soc = fast_simulate_offgrid(
+                    p_load_kw=p_load_kw,
+                    p_pv_kw=p_pv_arr,
+                    ess_kwh=ess_capacity_kwh,
+                    soc_min=soc_min,
+                    soc_max=soc_max,
+                    soh_eol=soh_eol,
+                    rte=rte,
+                    early_exit_unmet=False,
+                )
             capex_info = calculate_capex_breakdown(
                 pv_capacity_kw=found_pv,
                 ess_capacity_kwh=ess_capacity_kwh,

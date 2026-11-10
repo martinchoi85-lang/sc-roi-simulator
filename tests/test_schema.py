@@ -21,10 +21,9 @@ def test_load_korea_config():
 
     # Check scenario axes
     axes = config.values["country"]["scenario_axes"]
-    assert len(axes["house_models"]) == 3
+    assert len(axes["house_occupant_pairs"]) == 7
     assert len(axes["heating_packages"]) == 2
-    assert len(axes["ev_options"]) == 2
-    assert len(axes["occupancy_rates"]) == 6
+    assert len(axes["occupancy_rates"]) == 5
     assert len(axes["target_models"]) == 3
     assert len(axes["subsidy_options"]) == 2
 

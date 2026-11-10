@@ -30,6 +30,21 @@ def get_pv_turnkey_cost(pv_capacity_kw: float, capex_config: Dict[str, Any], tie
     return float(pv_capacity_kw * unit_rate)
 
 
+def calculate_pv_subsidy(
+    pv_capacity_kw: float,
+    with_subsidy: bool,
+    subsidy_config: Optional[Dict[str, Any]] = None,
+    is_off_grid: bool = False,
+) -> float:
+    """Calculates PV subsidy: applies ONLY when PV <= 3.0 kW and not off-grid, proportional if < 3kW."""
+    if not with_subsidy or is_off_grid or pv_capacity_kw <= 0:
+        return 0.0
+    if pv_capacity_kw > 3.0:
+        return 0.0
+    rate_under_3 = 2650000.0 / 3.0
+    return round(pv_capacity_kw * rate_under_3, 0)
+
+
 def calculate_capex_tier(
     tier: str,
     pv_capacity_kw: float,
@@ -107,17 +122,12 @@ def calculate_capex_tier(
     gross_capex = round(pv_turnkey_total + inverter_capex_amount + ess_cost + awhp_turnkey + total_grid_electrical_cost, 0)
 
     # 5. Subsidies
-    pv_sub = 0.0
+    pv_sub = calculate_pv_subsidy(pv_capacity_kw, with_subsidy, subsidy_config, is_off_grid)
     awhp_sub = 0.0
     awhp_sub_sensitivity = 0.0
     ess_sub = 0.0
 
     if with_subsidy:
-        max_pv_thresh = 3.0
-        if (not is_off_grid) and (0 < pv_capacity_kw <= max_pv_thresh):
-            rate_under_3 = 2650000.0 / 3.0
-            pv_sub = round(pv_capacity_kw * rate_under_3, 0)
-
         # AWHP Subsidy: Base 0 KRW, 70% sensitivity max 9,800,000 KRW
         if is_awhp and awhp_turnkey > 0:
             awhp_sub_sensitivity = min(9800000.0, awhp_turnkey * 0.70)
