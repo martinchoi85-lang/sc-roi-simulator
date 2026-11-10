@@ -485,11 +485,11 @@ def _build_sc_report_data(
 
                         # Net capex sum invariant: parts = net
                         c_dict = {
-                            "pv": int(c_bk["pv_turnkey_cost"]),
-                            "ess": int(c_bk["ess_cost"]),
-                            "awhp": int(c_bk["awhp_cost"]),
-                            "grid": int(c_bk["grid_connection_cost"]),
-                            "pv_subsidy": -int(c_bk["pv_subsidy_amount"]),
+                            "pv": int(round(c_bk["pv_turnkey_cost"])),
+                            "ess": int(round(c_bk["ess_cost"])),
+                            "awhp": int(round(c_bk["awhp_turnkey_cost"])),
+                            "grid": int(round(c_bk["grid_connection_cost"])),
+                            "pv_subsidy": -int(round(c_bk["pv_subsidy"])),
                             "awhp_subsidy": 0,
                         }
                         c_dict["net"] = sum(c_dict.values())
