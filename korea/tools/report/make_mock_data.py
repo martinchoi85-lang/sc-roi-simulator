@@ -182,7 +182,7 @@ data = {
 # ===== sc-report-2 확장 (MOCK) =====
 data["schema_version"] = "sc-report-2"
 C = data["constants"]
-C.update({"propane_mj_per_kg": 46.3, "boiler_avoided_cost_included": False, "ess_price_cases": [
+C.update({"replacement_rule": "MOCK: 교체 시점에는 현재 단가로 교체비가 발생하고 보조금은 다시 지급되지 않는다.", "propane_mj_per_kg": 46.3, "boiler_avoided_cost_included": False, "ess_price_cases": [
     {"id": "low", "label": "Low (NREL)", "usd_per_kwh": 283, "krw_per_kwh": 396200, "status": "UNVERIFIED", "source": "NREL 범위 하단, 환율 1,400원/USD"},
     {"id": "central", "label": "Central (NREL)", "usd_per_kwh": 1268, "krw_per_kwh": 1775200, "status": "UNVERIFIED", "source": "NREL Q1 2021, 환율 1,400원/USD"},
     {"id": "high", "label": "High (NREL)", "usd_per_kwh": 1337, "krw_per_kwh": 1871800, "status": "UNVERIFIED", "source": "NREL 범위 상단, 환율 1,400원/USD"},

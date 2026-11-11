@@ -10,8 +10,10 @@ Steps:
 
 import hashlib
 import json
+import os
 import pickle
 import time
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -20,7 +22,12 @@ import pandas as pd
 
 from engine.capex import calculate_capex_breakdown
 from engine.cashflow import calculate_100y_cashflow
-from engine.heat_pump import simulate_hvac_and_dhw
+from engine.heat_pump import (
+    simulate_hvac_and_dhw,
+    generate_event_based_dhw,
+    simulate_dhw_tank_reheat,
+    simulate_awhp_space_heating_with_capacity_bound,
+)
 from engine.occupancy_tus import OccupancyTUSModel
 from engine.pv import simulate_pv_generation_1kwp
 from engine.report import generate_v9_outputs
@@ -72,6 +79,93 @@ def load_step_cache(cache_dir: Path, step_name: str, hash_val: Optional[str] = N
         with open(latest_file, "rb") as f:
             return pickle.load(f)
     return None
+
+
+def _worker_size_case(args):
+    (
+        h_name, occ, heat_pkg, occ_rate,
+        p_load_kw, p_pv1_kw, dates,
+        capex_cfg, subsidy_cfg, tariff_cfg,
+        base_total_cost, base_gas_cost, alt_gas_cost, is_awhp,
+    ) = args
+
+    tariff_calc = KoreaTariffCalculator(tariff_cfg)
+
+    ze_res = size_zero_energy(
+        p_load_kw=p_load_kw,
+        p_pv1_kw=p_pv1_kw,
+        dates=dates,
+        capex_config=capex_cfg,
+        subsidy_config=subsidy_cfg,
+        heating_package=heat_pkg,
+        with_subsidy=False,
+        soc_min=0.00,
+        soc_max=1.00,
+        soh_eol=0.70,
+        rte=0.90,
+    )
+
+    ze_no_start = size_zero_energy_unconstrained(
+        p_load_kw=p_load_kw,
+        p_pv1_kw=p_pv1_kw,
+        dates=dates,
+        capex_config=capex_cfg,
+        subsidy_config=subsidy_cfg,
+        heating_package=heat_pkg,
+        with_subsidy=False,
+        soc_min=0.00,
+        soc_max=1.00,
+        soh_eol=0.70,
+        rte=0.90,
+    )
+
+    zb_res = size_zero_bill(
+        p_load_kw=p_load_kw,
+        p_pv1_kw=p_pv1_kw,
+        tariff_calc=tariff_calc,
+        capex_config=capex_cfg,
+        subsidy_config=subsidy_cfg,
+        heating_package=heat_pkg,
+        with_subsidy=False,
+        dates=dates,
+    )
+
+    nz_res = size_near_zero_bill(
+        p_load_kw=p_load_kw,
+        p_pv1_kw=p_pv1_kw,
+        baseline_energy_cost=base_total_cost,
+        baseline_propane_cost=base_gas_cost,
+        alt_propane_cost=alt_gas_cost,
+        tariff_calc=tariff_calc,
+        capex_config=capex_cfg,
+        subsidy_config=subsidy_cfg,
+        heating_package=heat_pkg,
+        with_subsidy=False,
+        is_awhp=is_awhp,
+        dates=dates,
+    )
+
+    return (h_name, occ, heat_pkg, occ_rate), ze_res, ze_no_start, zb_res, nz_res
+
+
+def _worker_simulate_seed_load(args):
+    (
+        h_name, occ, occ_rate, s,
+        kosis_dir_str, load_cfg, h_cfg, weather_df,
+    ) = args
+    from pathlib import Path
+    kosis_dir = Path(kosis_dir_str) if kosis_dir_str else None
+    tus_model = OccupancyTUSModel(
+        kosis_dir=kosis_dir,
+        load_config=load_cfg,
+        house_config=h_cfg,
+        weather_df=weather_df,
+        occupants=occ,
+        seed=s,
+    )
+    res_s = tus_model.simulate_year(occupancy_rate=occ_rate)
+    base_load_s = res_s["total_elec_base_load_kw_15min"]
+    return (h_name, occ, occ_rate, s), base_load_s
 
 
 # ---------------------------------------------------------
@@ -221,6 +315,7 @@ def run_step2_thermal(
 
     baseline_cache = {}
     awhp_load_cache = {}
+    awhp_stats_rows = []
 
     for pair in house_occupant_pairs:
         h_name = pair["house"]
@@ -229,10 +324,23 @@ def run_step2_thermal(
 
         for occ_rate in occupancy_rates:
             ld = load_cache[(h_name, occ, occ_rate)]
+            tus_res = ld["tus_res"]
 
-            # Gas boiler covers heating and DHW
+            # 1. Event-based DHW draw profile (50L shower, 15L & 10L basin/sink)
+            dhw_draw_liters = generate_event_based_dhw(
+                occupants=occ,
+                is_occupied_15min=tus_res["is_occupied_15min"],
+                occupants_active_15min=tus_res["occupants_active_15min"],
+                is_occupied_day_365=tus_res["is_occupied_day_365"],
+                seed=42,
+            )
+            q_dhw_kw = dhw_draw_liters * 4.186 * 40.0 / 3600.0 / dt_h
+            annual_dhw_liters = float(np.sum(dhw_draw_liters))
+            target_annual_liters = 75.0 * occ * int(tus_res["is_occupied_day_365"].sum())
+
+            # 2. Baseline Gas Boiler
             annual_heat_kwh = float(ld["q_heat_kw"].sum() * dt_h)
-            annual_dhw_kwh = float(ld["q_dhw_kw"].sum() * dt_h)
+            annual_dhw_kwh = float(q_dhw_kw.sum() * dt_h)
             annual_thermal_kwh = annual_heat_kwh + annual_dhw_kwh
             propane_kg = annual_thermal_kwh / (boiler_eff * propane_kwh_per_kg)
             gas_bill = propane_kg * propane_unit_cost
@@ -257,33 +365,98 @@ def run_step2_thermal(
                 "propane_kg": round(propane_kg, 1),
                 "gas_bill_krw": round(gas_bill, 0),
                 "total_energy_cost_krw": round(elec_bill + gas_bill, 0),
+                "dhw_draw_liters": dhw_draw_liters,
+                "q_dhw_kw": q_dhw_kw,
             }
 
-            # AWHP
-            hvac_res = simulate_hvac_and_dhw(
-                heating_package="AWHP",
-                q_heat_kw=ld["q_heat_kw"],
-                q_cool_kw=ld["q_cool_kw"],
-                q_dhw_kw=ld["q_dhw_kw"],
+            # 3. AWHP DHW Storage Tank Reheat (Tank volume: config or 200L PLACEHOLDER)
+            tank_vol_raw = equip_cfg["awhp_system"].get("dhw_tank_volume_liters", 200.0)
+            tank_vol = float(tank_vol_raw.get("value", 200.0) if isinstance(tank_vol_raw, dict) else tank_vol_raw)
+            p_dhw_awhp, q_dhw_th, annual_dhw_elec = simulate_dhw_tank_reheat(
+                dhw_draw_liters=dhw_draw_liters,
                 temp_air=weather_df["temp_air"].values,
-                equipment_config=equip_cfg,
-                tariff_config=tariff_cfg,
-                house_config=h_cfg,
-                t_indoor=ld["t_indoor"],
-                t_set_heat=ld["tus_res"]["heat_setpoint_15min"],
+                awhp_cfg=equip_cfg["awhp_system"],
+                tank_volume_liters=tank_vol,
+                supply_water_temp=55.0,
+                dt_hours=dt_h,
             )
-            p_awhp_elec = hvac_res["p_hvac_kw"]
+
+            # 4. AWHP Space Heating with Capacity Bounds & 3kW Backup Heater
+            q_occ_w = tus_res["occupants_active_15min"] * 80.0
+            sleeping_arr = (np.array(tus_res["persons_state_15min"]) == 2).sum(axis=0).astype(float)
+            awhp_heat_res = simulate_awhp_space_heating_with_capacity_bound(
+                house_config=h_cfg,
+                temp_air=weather_df["temp_air"].values,
+                ghi=weather_df["ghi"].values,
+                occupant_presence=tus_res["is_occupied_15min"].astype(float),
+                internal_heat_gain_w=q_occ_w,
+                is_occupied_day=tus_res["is_occupied_day_365"],
+                heat_setpoint_schedule=tus_res["heat_setpoint_15min"],
+                occupants_active=tus_res["occupants_active_15min"],
+                occupants_sleeping=sleeping_arr,
+                awhp_cfg=equip_cfg["awhp_system"],
+                dt_sec=900.0,
+            )
+
+            p_cool_kw = awhp_heat_res["p_cooling_kw"]
+            p_heat_kw = awhp_heat_res["p_heating_total_kw"]
+            standby_w_raw = equip_cfg["awhp_system"].get("standby_power_w", 10.0)
+            standby_w = float(standby_w_raw.get("value", 10.0) if isinstance(standby_w_raw, dict) else standby_w_raw)
+            p_standby_kw = standby_w / 1000.0
+
+            p_awhp_elec = p_cool_kw + p_heat_kw + p_dhw_awhp + p_standby_kw
             p_total_elec_awhp = ld["base_elec_kw"] + p_awhp_elec
+
+            stat_row = {
+                "house_model": h_name,
+                "occupants": occ,
+                "label": f"{h_name} ({occ}인)",
+                "occupancy_rate_pct": f"{int(occ_rate*100)}%",
+                "max_heating_power_kw": round(awhp_heat_res["max_heating_power_kw"], 2),
+                "peak_comp_share_kw": round(awhp_heat_res["peak_comp_share_kw"], 2),
+                "peak_backup_share_kw": round(awhp_heat_res["peak_backup_share_kw"], 2),
+                "unmet_hours": round(awhp_heat_res["unmet_hours"], 1),
+                "backup_heater_hours": round(awhp_heat_res["backup_heater_hours"], 1),
+                "backup_heater_kwh": round(awhp_heat_res["backup_heater_kwh"], 1),
+                "dhw_annual_liters": round(annual_dhw_liters, 1),
+                "dhw_target_liters": round(target_annual_liters, 1),
+                "dhw_error_pct": round(abs(annual_dhw_liters - target_annual_liters) / target_annual_liters * 100.0, 2) if target_annual_liters > 0 else 0.0,
+            }
+            awhp_stats_rows.append(stat_row)
 
             awhp_load_cache[(h_name, occ, occ_rate)] = {
                 "p_awhp_elec": p_awhp_elec,
                 "p_total_elec": p_total_elec_awhp,
-                "hvac_res": hvac_res,
+                "p_heating_kw": p_heat_kw,
+                "p_cooling_kw": p_cool_kw,
+                "p_dhw_elec_kw": p_dhw_awhp,
+                "p_comp_kw": awhp_heat_res["p_comp_kw"],
+                "p_backup_kw": awhp_heat_res["p_backup_kw"],
+                "t_indoor": awhp_heat_res["t_indoor"],
+                "t_set": awhp_heat_res["t_set"],
+                "q_heat_awhp_kw": awhp_heat_res["q_heat_awhp_kw"],
+                "q_heat_backup_kw": awhp_heat_res["q_heat_backup_kw"],
+                "q_heat_total_kw": awhp_heat_res["q_heat_total_kw"],
+                "dhw_draw_liters": dhw_draw_liters,
+                "hvac_res": {
+                    "p_hvac_kw": p_awhp_elec,
+                    "p_heating_kw": p_heat_kw,
+                    "p_cooling_kw": p_cool_kw,
+                    "p_dhw_kw": p_dhw_awhp,
+                    "propane_kwh": 0.0,
+                    "propane_kg": 0.0,
+                    "propane_cost": 0.0,
+                    "backup_heater_hours": awhp_heat_res["backup_heater_hours"],
+                    "backup_heater_kwh": awhp_heat_res["backup_heater_kwh"],
+                    "annual_awhp_actual_kwh": float(np.sum(p_awhp_elec) * dt_h),
+                },
+                "stats": stat_row,
             }
 
     data = {
         "baseline_cache": baseline_cache,
         "awhp_load_cache": awhp_load_cache,
+        "awhp_stats_rows": awhp_stats_rows,
         "cop_cool_std": cop_cool_std,
     }
     save_step_cache(cache_dir, "step2_thermal", h_val, data)
@@ -345,6 +518,7 @@ def run_step3_sizing(
     ze_sizing_rows = []
     ze_no_start_rows = []
 
+    sizing_args_list = []
     for pair in house_occupant_pairs:
         h_name = pair["house"]
         occ = pair["occupants"]
@@ -365,61 +539,56 @@ def run_step3_sizing(
                     alt_propane_kg = base_propane_kg
                     alt_gas_cost = base_gas_cost
 
-                # 1. Zero Energy Sizing
-                ze_res = size_zero_energy(
-                    p_load_kw=p_load_kw,
-                    p_pv1_kw=p_pv1_kw,
-                    dates=dates,
-                    capex_config=capex_cfg,
-                    subsidy_config=subsidy_cfg,
-                    heating_package=heat_pkg,
-                    with_subsidy=False,
-                    soc_min=0.00,
-                    soc_max=1.00,
-                    soh_eol=0.70,
-                    rte=0.90,
-                )
-                ze_sizing_cache[(h_name, occ, heat_pkg, occ_rate)] = ze_res
+                sizing_args_list.append((
+                    h_name, occ, heat_pkg, occ_rate,
+                    p_load_kw, p_pv1_kw, dates,
+                    capex_cfg, subsidy_cfg, tariff_cfg,
+                    base_total_cost, base_gas_cost, alt_gas_cost, is_awhp,
+                ))
 
-                # 1b. Unconstrained Zero Energy Sizing
-                ze_no_start = size_zero_energy_unconstrained(
-                    p_load_kw=p_load_kw,
-                    p_pv1_kw=p_pv1_kw,
-                    dates=dates,
-                    capex_config=capex_cfg,
-                    subsidy_config=subsidy_cfg,
-                    heating_package=heat_pkg,
-                    with_subsidy=False,
-                    soc_min=0.00,
-                    soc_max=1.00,
-                    soh_eol=0.70,
-                    rte=0.90,
-                )
-                ze_no_start_cache[(h_name, occ, heat_pkg, occ_rate)] = ze_no_start
+    n_workers = min(os.cpu_count() or 4, 16)
+    print(f"Executing 70 cases sizing in parallel using {n_workers} worker processes...")
+    with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        results = list(executor.map(_worker_size_case, sizing_args_list))
 
-                ze_no_start_rows.append({
-                    "house_model": h_name,
-                    "occupants": occ,
-                    "heating_package": heat_pkg,
-                    "occupancy_rate_pct": f"{int(occ_rate*100)}%",
-                    "max_daily_load_kwh": round(float(ze_res["max_daily_load_kwh"]), 1),
-                    "base_modules": ze_res["ess_modules"],
-                    "base_pv_kw": round(float(ze_res["pv_capacity_kw"]), 1),
-                    "base_capex_krw": int(round(ze_res["capex_info"]["net_capex"])),
-                    "no_start_modules": ze_no_start["ess_modules"],
-                    "no_start_pv_kw": round(float(ze_no_start["pv_capacity_kw"]), 1),
-                    "no_start_capex_krw": int(round(ze_no_start["capex_info"]["net_capex"])),
-                    "diff_modules": int(ze_res["ess_modules"] - ze_no_start["ess_modules"]),
-                    "diff_capex_krw": int(round(ze_res["capex_info"]["net_capex"] - ze_no_start["capex_info"]["net_capex"])),
-                })
+    for (h_name, occ, heat_pkg, occ_rate), ze_res, ze_no_start, zb_res, nz_res in results:
+        ze_sizing_cache[(h_name, occ, heat_pkg, occ_rate)] = ze_res
+        ze_no_start_cache[(h_name, occ, heat_pkg, occ_rate)] = ze_no_start
+        zb_sizing_cache[(h_name, occ, heat_pkg, occ_rate)] = zb_res
+        nz_sizing_cache[(h_name, occ, heat_pkg, occ_rate)] = nz_res
 
+        ze_no_start_rows.append({
+            "house_model": h_name,
+            "occupants": occ,
+            "heating_package": heat_pkg,
+            "occupancy_rate_pct": f"{int(occ_rate*100)}%",
+            "max_daily_load_kwh": round(float(ze_res["max_daily_load_kwh"]), 1),
+            "base_modules": ze_res["ess_modules"],
+            "base_pv_kw": round(float(ze_res["pv_capacity_kw"]), 1),
+            "base_capex_krw": int(round(ze_res["capex_info"]["net_capex"])),
+            "no_start_modules": ze_no_start["ess_modules"],
+            "no_start_pv_kw": round(float(ze_no_start["pv_capacity_kw"]), 1),
+            "no_start_capex_krw": int(round(ze_no_start["capex_info"]["net_capex"])),
+            "diff_modules": int(ze_res["ess_modules"] - ze_no_start["ess_modules"]),
+            "diff_capex_krw": int(round(ze_res["capex_info"]["net_capex"] - ze_no_start["capex_info"]["net_capex"])),
+        })
+
+    for pair in house_occupant_pairs:
+        h_name = pair["house"]
+        occ = pair["occupants"]
+        for heat_pkg in heating_packages:
+            for occ_rate in occupancy_rates:
+                ze_res = ze_sizing_cache[(h_name, occ, heat_pkg, occ_rate)]
                 ze_100_res = ze_sizing_cache.get((h_name, occ, heat_pkg, 1.00), ze_res)
+                if heat_pkg == "AWHP":
+                    p_load_kw = awhp_load_cache[(h_name, occ, occ_rate)]["p_total_elec"]
+                else:
+                    p_load_kw = baseline_cache[(h_name, occ, occ_rate)]["p_elec_total_kw"]
                 unmet_100_sys, lol_100_sys, _ = fast_simulate_offgrid(
                     p_load_kw=p_load_kw,
                     p_pv_kw=p_pv1_kw * ze_100_res["pv_capacity_kw"] * (0.995**24),
                     ess_kwh=ze_100_res["ess_capacity_kwh"],
                 )
-
                 ze_sizing_rows.append({
                     "house_model": h_name,
                     "occupants": occ,
@@ -439,43 +608,13 @@ def run_step3_sizing(
                     "lol_hours_using_100occ_sys": round(lol_100_sys, 2),
                 })
 
-                # 2. Zero Bill Sizing
-                zb_res = size_zero_bill(
-                    p_load_kw=p_load_kw,
-                    p_pv1_kw=p_pv1_kw,
-                    tariff_calc=tariff_calc,
-                    capex_config=capex_cfg,
-                    subsidy_config=subsidy_cfg,
-                    heating_package=heat_pkg,
-                    with_subsidy=False,
-                    dates=dates,
-                )
-                zb_sizing_cache[(h_name, occ, heat_pkg, occ_rate)] = zb_res
-
-                # 3. Near Zero Sizing
-                nz_res = size_near_zero_bill(
-                    p_load_kw=p_load_kw,
-                    p_pv1_kw=p_pv1_kw,
-                    baseline_energy_cost=base_total_cost,
-                    baseline_propane_cost=base_gas_cost,
-                    alt_propane_cost=alt_gas_cost,
-                    tariff_calc=tariff_calc,
-                    capex_config=capex_cfg,
-                    subsidy_config=subsidy_cfg,
-                    heating_package=heat_pkg,
-                    with_subsidy=False,
-                    is_awhp=is_awhp,
-                    dates=dates,
-                )
-                nz_sizing_cache[(h_name, occ, heat_pkg, occ_rate)] = nz_res
-
     # Save ze_no_start_constraint.csv
     df_ze_no_start = pd.DataFrame(ze_no_start_rows)
     out_dir.mkdir(parents=True, exist_ok=True)
     df_ze_no_start.to_csv(out_dir / "ze_no_start_constraint.csv", index=False, encoding="utf-8-sig")
 
     # 10 seeds minimality validation
-    print("Validating 70 Zero Energy cases across 10 seeds (42..51)...")
+    print(f"Validating 70 Zero Energy cases across 10 seeds (42..51) in parallel using {n_workers} workers...")
     ze_minimality_rows = []
     pv_deg_factor = 0.995**24
     soh_eol = 0.70
@@ -485,10 +624,29 @@ def run_step3_sizing(
 
     seed_list = list(range(42, 52))
     multi_seed_load_cache = {}
+    seed_args_list = []
+    kosis_dir_str = str(kosis_dir) if kosis_dir else None
     for pair in house_occupant_pairs:
         h_name = pair["house"]
         occ = pair["occupants"]
         h_cfg = config_values["houses"][h_name]
+        for occ_rate in occupancy_rates:
+            for s in seed_list[1:]:
+                seed_args_list.append((
+                    h_name, occ, occ_rate, s,
+                    kosis_dir_str, config_values["load"], h_cfg, weather_df,
+                ))
+
+    with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        seed_results = list(executor.map(_worker_simulate_seed_load, seed_args_list))
+
+    seed_load_map = {}
+    for (h_name, occ, occ_rate, s), base_load_s in seed_results:
+        seed_load_map[(h_name, occ, occ_rate, s)] = base_load_s
+
+    for pair in house_occupant_pairs:
+        h_name = pair["house"]
+        occ = pair["occupants"]
         for occ_rate in occupancy_rates:
             ld = load_cache[(h_name, occ, occ_rate)]
             p_cool_elec = np.where(ld["q_cool_kw"] > 0, ld["q_cool_kw"] / cop_cool_std, 0.0)
@@ -498,18 +656,9 @@ def run_step3_sizing(
             awhp_loads = [base_awhp]
 
             for s in seed_list[1:]:
-                m_s = OccupancyTUSModel(
-                    kosis_dir=kosis_dir,
-                    load_config=config_values["load"],
-                    house_config=h_cfg,
-                    weather_df=weather_df,
-                    occupants=occ,
-                    seed=s,
-                )
-                res_s = m_s.simulate_year(occupancy_rate=occ_rate)
-                p_gas_s = res_s["total_elec_base_load_kw_15min"] + p_cool_elec
-                gas_loads.append(p_gas_s)
-                p_awhp_s = awhp_load_cache[(h_name, occ, occ_rate)]["p_awhp_elec"] + res_s["total_elec_base_load_kw_15min"]
+                base_s = seed_load_map[(h_name, occ, occ_rate, s)]
+                gas_loads.append(base_s + p_cool_elec)
+                p_awhp_s = awhp_load_cache[(h_name, occ, occ_rate)]["p_awhp_elec"] + base_s
                 awhp_loads.append(p_awhp_s)
 
             multi_seed_load_cache[(h_name, occ, occ_rate, "가스보일러")] = gas_loads
@@ -1019,9 +1168,78 @@ def run_step4_cashflow(
                 "sens": sens_val_ns,
             })
 
+    # Verification 3: ESS Replacement at Current Installation Price (1,775,200 KRW/kWh)
+    # Target: Zero bill, Zero energy for 3 representative houses (2p, 100%), gas & AWHP (12 cases)
+    ess_current_cost_sensitivities = []
+    ess_rep_years = {11, 21, 31, 41, 51, 61, 71, 81, 91}
+    cur_ess_unit_krw = 1775200.0
+    base_ess_unit_krw = 396200.0
+
+    print("ESS 교체 시 현재 설치 단가 민감도(12건) 계산 및 차분 점검 수행 중...")
+    for hp_id, h_name, occ_cnt, hp_lbl in rep_hp_list:
+        for heat_id, heat_lbl, heat_pkg in [("gas", "가스보일러", "가스보일러"), ("awhp", "AWHP", "AWHP")]:
+            is_awhp_val = (heat_pkg == "AWHP")
+            for tgt_id, tgt_lbl, tgt_name in [("zb", "Zero bill", "zero_bill"), ("ze", "Zero energy", "zero_energy")]:
+                row = next(
+                    r for r in results_all_rows
+                    if r["house_model"] == h_name and r["occupants"] == occ_cnt
+                    and r["heating_package"] == heat_pkg and r["occupancy_rate"] == 1.00
+                    and r["target_model"] == tgt_name and r["with_subsidy"] is True
+                )
+                ess_kwh = float(row["ess_capacity_kwh"])
+                base_rep_cost = row["ess_replacement_cost"]
+                cur_rep_cost = cur_ess_unit_krw * ess_kwh
+                diff_rep_per_event = (cur_rep_cost - base_rep_cost)
+
+                cf_cur_ess = calculate_100y_cashflow(
+                    net_capex=row["net_capex_krw"],
+                    baseline_annual_cost=row["baseline_total_energy_cost_krw"],
+                    alternative_year1_cost=row["alt_total_energy_cost_krw"],
+                    baseline_propane_cost=row["baseline_gas_cost_krw"],
+                    alternative_propane_cost=row["alt_gas_bill_krw"],
+                    pv_capacity_kw=row["pv_capacity_kw"],
+                    ess_capacity_kwh=ess_kwh,
+                    is_awhp=is_awhp_val,
+                    pv_turnkey_cost=row["capex_pv_turnkey_krw"],
+                    inverter_replacement_cost=row["inverter_replacement_cost"],
+                    ess_replacement_cost=cur_rep_cost,
+                    awhp_replacement_cost=row["awhp_replacement_cost"],
+                )
+                base_cum_cf = np.array(row["cum_cf_100y"], dtype=float)
+                sens_cum_cf = np.array(cf_cur_ess["cumulative_cashflow_100y"], dtype=float)
+                diff_cf = sens_cum_cf - base_cum_cf
+
+                # Difference verification:
+                # Difference should occur ONLY in ESS replacement years (11, 21, 31, 41, 51, 61, 71, 81, 91)
+                k_count = 0
+                for y in range(101):
+                    if y in ess_rep_years:
+                        k_count += 1
+                    expected_diff = - k_count * diff_rep_per_event
+                    if abs(diff_cf[y] - expected_diff) > 1.0:
+                        raise ValueError(
+                            f"[민감도 차분 점검 실패] ESS 교체 현재단가 '{hp_lbl} · {heat_lbl} · {tgt_lbl} · 100%' "
+                            f"연도 {y}차 누적 현금흐름 차이: {diff_cf[y]:,.1f}원 != 기대값 {expected_diff:,.1f}원 "
+                            f"(오차 {abs(diff_cf[y] - expected_diff):,.1f}원 > 1원)"
+                        )
+
+                pb_sens = cf_cur_ess["payback_years"]
+                sens_val = round(float(pb_sens), 1) if pb_sens is not None and 0 <= pb_sens <= 100 else None
+                base_pb = round(float(row["payback_years"]), 1) if row["payback_years"] is not None and 0 <= row["payback_years"] <= 100 else None
+
+                ess_current_cost_sensitivities.append({
+                    "group": "ESS 교체 시 현재 설치 단가",
+                    "case": f"{hp_lbl} · {heat_lbl} · {tgt_lbl} · 100%",
+                    "base": base_pb,
+                    "sens": sens_val,
+                })
+
+    print(" -> [확인 통과] ESS 교체 시 현재 설치 단가 12건 차분 점검: 교체 연도 외 차이 0원 완벽 일치 (전 연도 오차 <= 1원)")
+
     sensitivities_rows = []
     sensitivities_rows.extend(boiler_sensitivities)
     sensitivities_rows.extend(ze_ns_sensitivities)
+    sensitivities_rows.extend(ess_current_cost_sensitivities)
     sensitivities_rows.extend([
         {"group": "외피 법정기준", "case": "MONO Core 72 · 3인 · AWHP · Zero bill · 100%", "base": 60.1, "sens": 52.3},
         {"group": "AWHP 보조금 70%", "case": "MONO Core 72 · 3인 · AWHP · Near zero · 100%", "base": round(float(row_awhp70_base["payback_years"]), 1), "sens": awhp70_sens_val},
@@ -1048,6 +1266,7 @@ def run_step4_cashflow(
         "p_pv1_kw": p_pv1_kw,
         "ze_minimality_rows": ze_minimality_rows,
         "sensitivities_rows": sensitivities_rows,
+        "awhp_stats_rows": step2_data.get("awhp_stats_rows", []),
     }
 
     data = {

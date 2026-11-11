@@ -1,4 +1,4 @@
-run_id: 20261111T234758_4f9862e_928540a2
+run_id: 20261111T235036_955180a_928540a2
 
 # LG Smart Cottage 한국 검증 보고서 (validation.md)
 
@@ -278,5 +278,6 @@ run_id: 20261111T234758_4f9862e_928540a2
 | 1 | 부하·재실 (Load & Occupancy TUS) | 0.06s | 캐시 로드 |
 | 2 | 열 계산 (Thermal / HVAC / DHW) | 0.02s | 캐시 로드 |
 | 3 | 디스패치·사이징 (Dispatch & Sizing) | 0.01s | 캐시 로드 |
-| 4 | 현금흐름·민감도 (Cashflow & Sensitivities) | 0.56s | 계산 완료 |
-| **총합** | **전체 파이프라인** | **0.65s** | - |
+| 4 | 현금흐름·민감도 (Cashflow & Sensitivities) | 0.51s | 계산 완료 |
+| 5 | report_data·빌드 (Report Data & Build) | 94.79s | 계산 완료 |
+| **총합** | **전체 파이프라인** | **95.39s** | - |

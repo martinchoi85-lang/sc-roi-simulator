@@ -145,6 +145,12 @@ awhp_system:
     source: "Domestic Hot Water Supply Temp / User Requirement"
     grade: "A"
     status: "VERIFIED"
+  dhw_tank_volume_liters:
+    value: 200.0
+    unit: "L"
+    source: "Integrated DHW Tank Volume Standard"
+    grade: "C"
+    status: "PLACEHOLDER"
   cop_cool_nominal:
     value: 4.40
     unit: "fraction"

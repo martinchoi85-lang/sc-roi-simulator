@@ -60,6 +60,7 @@ def check(d):
             err(f"ess_price_cases 항목 형식 오류: {p_.get('id')}")
     for k in ("ess_module_kwh", "propane_mj_per_kg", "horizon_years"):
         if not num(C.get(k)): err(f"constants.{k} 누락")
+    if not isinstance(C.get("replacement_rule"), str) or not C["replacement_rule"]: err("constants.replacement_rule(교체비 산정 규칙 문장) 누락")
     if "boiler_avoided_cost_included" not in C: err("constants.boiler_avoided_cost_included 누락(true/false)")
     # scenarios
     exp = len(hps) * len(heats) * len(occ) * len(tg) * len(subs)

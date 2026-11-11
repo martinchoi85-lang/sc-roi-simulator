@@ -205,7 +205,7 @@ footer{color:var(--ink-3);font-size:12px;padding:20px 0 40px}
 
 <section class="card" id="sec-life">
   <h2><span class="no">8</span>설비 수명과 교체 주기 <span class="tip" data-t="life">!</span></h2>
-  <p class="lead">교체 시점에는 현재 단가로 교체비가 발생하고 보조금은 다시 지급되지 않는다고 가정했다.</p>
+  <p class="lead" id="life-lead"></p>
   <div id="c-life" class="chart" style="height:250px"></div>
   <div class="tbl-wrap"><table id="t-life"></table></div>
 </section>
@@ -600,12 +600,13 @@ function renderLife(){
     series:[{type:'scatter',symbol:'diamond',symbolSize:11,data:pts}],tooltip:{trigger:'item',formatter:p=>p.value[0]===0?`${esc(L[p.value[1]].label)}: 최초 설치`:`${esc(L[p.value[1]].label)}: ${p.value[0]}년 차 교체`}});
   $('t-life').innerHTML='<tr><th>설비</th><th class="n">수명</th><th>근거 수준</th><th>상태</th><th>근거·비고</th></tr>'+L.map(l=>`<tr><td>${esc(l.label)}</td><td class="n">${l.years}년</td><td>${esc(l.basis)}</td><td><span class="badge b-${l.status}">${l.status}</span></td><td style="white-space:normal">${esc(l.note||'')}</td></tr>`).join('');
 }
+function renderLifeLead(){ $('life-lead').textContent=D.constants.replacement_rule||''; }
 function renderLimits(){ $('limits').innerHTML=D.limits.map(x=>`<li>${esc(x)}</li>`).join(''); }
 
 /* ---------- 부록 A ---------- */
 function prof(){return (D.profiles||{})[S.hp+'|'+S.heat];}
 function groupKW(kw,n){return ENDUSE.map(g=>Array.from({length:n},(_,i)=>g.keys.reduce((a,k)=>a+((kw[k]||[])[i]||0),0)));}
-const TEMP=[['t_out','실외 온도',COL.ink3],['t_in','실내 온도',COL.ink],['t_set','설정온도',COL.brand]];
+const TEMP=[['t_out','실외 온도',COL.ink3],['t_in','실내 온도',COL.brand],['t_set','설정온도',COL.ink2]];
 const DTL={weekday:'평일',saturday:'토요일',sunday:'일요일·공휴일',weekend:'주말'};
 const dot=c=>`<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${c};margin-right:5px"></span>`;
 const tempSeries=(src,xi,yi)=>TEMP.filter(([k])=>src[k]).map(([k,nm,c])=>({name:nm,type:'line',xAxisIndex:xi,yAxisIndex:yi,showSymbol:false,step:k==='t_set'?'end':false,data:src[k],lineStyle:{width:k==='t_set'?1.2:1.8,type:k==='t_set'?'dashed':'solid',color:c},itemStyle:{color:c}}));
@@ -771,7 +772,7 @@ function renderD(){
 
 /* ---------- 실행 ---------- */
 function renderAll(){renderControls();renderEnergy();renderEnergyUse();renderHeatmap();renderDetail();renderNZ();renderZB();renderZE();renderA();renderB();}
-renderHeader();initTips();renderSummary();renderDefs();renderLife();renderLimits();renderC();renderD();renderRaster();renderAll();
+renderHeader();initTips();renderSummary();renderDefs();renderLife();renderLifeLead();renderLimits();renderC();renderD();renderRaster();renderAll();
 let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>Object.values(CH).forEach(c=>c.resize()),120);});
 window.__REPORT_READY__=true;
 </script>

@@ -154,6 +154,9 @@ def generate_v9_outputs(
             metadata["step_timings"]["step5"] = (round(time.perf_counter() - t0, 2), "계산 완료")
     _write_validation_tables(report_data, country_dir, output_dir / "validation.md", metadata=metadata)
 
+    # 9. Generate winter weekday 24h chart (MONO Core 72 · 3 occupants · AWHP)
+    _generate_winter_weekday_chart(metadata, weather_df, output_dir)
+
 
 def _compute_all_seed_ranges(
     config_values: Dict[str, Any],
@@ -326,6 +329,7 @@ def _build_sc_report_data(
         "ess_rte": 0.90,
         "pv_degradation_per_year": 0.005,
         "horizon_years": 100,
+        "replacement_rule": "ESS는 배터리 팩만 교체(NREL ATB 2030, 396,200원/kWh), 인버터·AWHP·PV는 현재 단가, 보조금 재지급 없음",
         "pv_subsidy_krw_3kw": int(subsidy_cfg.get("pv_residential_subsidy_krw_3kw", {}).get("value", 2650000) if isinstance(subsidy_cfg.get("pv_residential_subsidy_krw_3kw"), dict) else subsidy_cfg.get("pv_residential_subsidy_krw_3kw", 2650000)),
         "pv_subsidy_max_kw": float(subsidy_cfg.get("pv_subsidy_max_kw", {}).get("value", 3.0) if isinstance(subsidy_cfg.get("pv_subsidy_max_kw"), dict) else subsidy_cfg.get("pv_subsidy_max_kw", 3.0)),
         "boiler_avoided_cost_included": False,
@@ -1444,9 +1448,9 @@ def _write_validation_tables(report_data: Dict[str, Any], country_dir: Path, fil
     lines.extend([
         "",
         "## 5. 냉난방 및 급탕 부하 검증",
-        "### AWHP 연간 보조히터 작동 시간 및 전력 소비량",
-        "| 주택·인원 | 이용률 | 보조히터 작동 시간(h) | 보조히터 연간 소비량(kWh) |",
-        "|---|---|---|---|",
+        "### AWHP 난방 출력 상한·보조히터 및 설정온도 미달 검증",
+        "| 주택·인원 | 이용률 | 15분 최대 난방 전력(kW) | 압축기 몫(kW) | 보조히터 몫(kW) | 설정온도 미달 시간(h) | 보조히터 가동(h) | 보조히터 전력(kWh) |",
+        "|---|---|---|---|---|---|---|---|",
     ])
     awhp_cache = metadata.get("awhp_load_cache", {}) if metadata else {}
     for hp in report_data["dims"]["house_persons"]:
@@ -1455,10 +1459,16 @@ def _write_validation_tables(report_data: Dict[str, Any], country_dir: Path, fil
         occ_cnt = hp["persons"]
         for o_pct in [100, 70, 50, 30, 15]:
             o_rate = o_pct / 100.0
-            hvac_data = awhp_cache.get((h_name, occ_cnt, o_rate), {}).get("hvac_res", {})
+            c_entry = awhp_cache.get((h_name, occ_cnt, o_rate), {})
+            st = c_entry.get("stats", {})
+            hvac_data = c_entry.get("hvac_res", {})
+            max_p = st.get("max_heating_power_kw", 0.0)
+            c_share = st.get("peak_comp_share_kw", 0.0)
+            b_share = st.get("peak_backup_share_kw", 0.0)
+            unmet = st.get("unmet_hours", 0.0)
             bh_h = hvac_data.get("backup_heater_hours", 0.0)
             bh_kwh = hvac_data.get("backup_heater_kwh", 0.0)
-            lines.append(f"| {hp_id} | {o_pct}% | {bh_h:.1f} | {bh_kwh:.1f} |")
+            lines.append(f"| {hp_id} | {o_pct}% | {max_p:.2f} | {c_share:.2f} | {b_share:.2f} | {unmet:.1f} | {bh_h:.1f} | {bh_kwh:.1f} |")
 
     lines.extend([
         "",
@@ -1521,3 +1531,79 @@ def _write_validation_tables(report_data: Dict[str, Any], country_dir: Path, fil
         lines.append(f"| **총합** | **전체 파이프라인** | **{total_time:.2f}s** | - |")
 
     filepath.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _generate_winter_weekday_chart(metadata: Dict[str, Any], weather_df: pd.DataFrame, output_dir: Path):
+    """Generates 15-minute time-series chart for coldest winter weekday (MONO Core 72 · 3 occupants · AWHP)."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
+
+    plt.rcParams['font.sans-serif'] = ['Malgun Gothic', 'NanumGothic', 'DejaVu Sans', 'Arial']
+    plt.rcParams['axes.unicode_minus'] = False
+
+    awhp_cache = metadata.get("awhp_load_cache", {}) if metadata else {}
+    entry = awhp_cache.get(("MONO Core 72", 3, 1.00))
+    if not entry:
+        print("[WARN] MONO Core 72 · 3인 · AWHP 데이터가 없어 겨울 평일 차트 생성을 건너뜁니다.")
+        return
+
+    dates = pd.DatetimeIndex(weather_df["timestamp"])
+    temp_air = weather_df["temp_air"].values
+
+    # Find the coldest weekday in January (month == 1, dayofweek < 5)
+    jan_weekday_mask = (dates.month == 1) & (dates.dayofweek < 5)
+    days_in_jan = np.unique(dates[jan_weekday_mask].strftime("%Y-%m-%d"))
+
+    daily_mean_temps = {}
+    for d_str in days_in_jan:
+        d_mask = (dates.strftime("%Y-%m-%d") == d_str)
+        daily_mean_temps[d_str] = temp_air[d_mask].mean()
+
+    coldest_day_str = min(daily_mean_temps, key=daily_mean_temps.get)
+    day_mask = (dates.strftime("%Y-%m-%d") == coldest_day_str)
+
+    day_dates = dates[day_mask]
+    day_t_amb = temp_air[day_mask]
+    day_t_indoor = entry["t_indoor"][day_mask]
+    day_t_set = entry["t_set"][day_mask]
+    day_p_comp = entry["p_comp_kw"][day_mask]
+    day_p_backup = entry["p_backup_kw"][day_mask]
+    day_p_dhw = entry["p_dhw_elec_kw"][day_mask]
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(13, 8), sharex=True, gridspec_kw={"height_ratios": [1.2, 1.0]})
+
+    # Top panel: Temperatures
+    ax1.plot(day_dates, day_t_amb, label="실외온도 (Ambient)", color="#1f77b4", linestyle="--", linewidth=1.8)
+    ax1.plot(day_dates, day_t_set, label="설정온도 (Heating Setpoint)", color="#ff7f0e", linestyle=":", linewidth=2.0)
+    ax1.plot(day_dates, day_t_indoor, label="실내온도 (Indoor Temp)", color="#d62728", linewidth=2.2)
+    ax1.axhline(0, color="gray", linestyle="-", linewidth=0.5, alpha=0.7)
+    ax1.set_ylabel("온도 (°C)", fontsize=11, fontweight="bold")
+    ax1.set_title(f"[가장 추운 겨울 평일 24시간] MONO Core 72 · 3인 · AWHP 실내외 온도 거동 ({coldest_day_str})", fontsize=13, fontweight="bold")
+    ax1.grid(True, linestyle="--", alpha=0.5)
+    ax1.legend(loc="upper right", framealpha=0.9)
+
+    # Bottom panel: Power consumption
+    ax2.plot(day_dates, day_p_comp, label="AWHP 압축기 난방 (Compressor)", color="#2ca02c", linewidth=2.0)
+    ax2.plot(day_dates, day_p_backup, label="보조히터 난방 (Backup Heater <=3kW)", color="#e377c2", linewidth=2.0)
+    ax2.plot(day_dates, day_p_dhw, label="급탕 저탕조 재가열 (DHW Reheat)", color="#9467bd", linewidth=1.8, linestyle="-.")
+    total_power = day_p_comp + day_p_backup + day_p_dhw
+    ax2.plot(day_dates, total_power, label="합계 HVAC+DHW 전력", color="#333333", linestyle="--", linewidth=1.5, alpha=0.8)
+    ax2.set_ylabel("소비전력 (kW)", fontsize=11, fontweight="bold")
+    ax2.set_xlabel("시간 (Time of Day)", fontsize=11, fontweight="bold")
+    ax2.set_title("15분 단위 전력 소비 구성 (압축기 vs 보조히터 vs 급탕 저탕조 재가열)", fontsize=12, fontweight="bold")
+    ax2.grid(True, linestyle="--", alpha=0.5)
+    ax2.legend(loc="upper right", framealpha=0.9)
+
+    # X-axis time formatting
+    ax2.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+    ax2.xaxis.set_major_locator(mdates.HourLocator(interval=2))
+    fig.autofmt_xdate(rotation=0, ha="center")
+
+    plt.tight_layout()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    chart_path = output_dir / "winter_weekday_chart_c72_3p_awhp.png"
+    plt.savefig(chart_path, dpi=200)
+    plt.close(fig)
+    print(f"[Chart] Saved winter weekday chart: {chart_path} ({coldest_day_str})")

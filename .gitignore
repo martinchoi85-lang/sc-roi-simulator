@@ -225,4 +225,5 @@ __marimo__/
 # Step cache
 korea/cache/
 */cache/
+*.zip
 

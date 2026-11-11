@@ -13,6 +13,7 @@ dims (순서 고정)
 
 constants
 - ess_module_kwh, pv_unit_krw_per_kw, awhp_capex_krw, propane_krw_per_kg, propane_mj_per_kg, tariff_300kwh_krw, ess_soh_eol, ess_soc_window, ess_rte, pv_degradation_per_year, horizon_years, pv_subsidy_krw_3kw, pv_subsidy_max_kw
+- replacement_rule: 교체비 산정 규칙 문장(설비별 교체 단가 기준·보조금 재지급 여부). 예: "ESS는 배터리 팩만 교체(NREL ATB 2030 396,200원/kWh), 인버터·AWHP·PV는 현재 단가, 보조금 재지급 없음"
 - boiler_avoided_cost_included: true/false (AWHP 케이스에서 기존 보일러 구입·교체비 절감을 반영했는지)
 - ess_price_cases: `[{"id":"low"|"central"|"high"|"specific", "label", "krw_per_kwh", "usd_per_kwh"(없으면 null), "status", "source"}]` low·central·high 필수, specific은 확인된 실제 사례가 있을 때 추가
 
