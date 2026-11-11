@@ -1,6 +1,6 @@
 {
   "schema_version": "sc-report-2",
-  "run_id": "20261111T175959_1eecf81_928540a2",
+  "run_id": "20261111T213308_ed7afce_928540a2",
   "meta": {
     "country": "korea",
     "location": "춘천",
@@ -583678,7 +583678,8 @@
           "soh": 0.7,
           "rule": "수명 말기 조건(25년 차) 연중 최저 SoC 시점을 포함한 연속 7일"
         }
-      }
+      },
+      "minimality": "start_constraint"
     },
     "C54_1|awhp": {
       "search": [
@@ -586496,7 +586497,8 @@
           "soh": 0.7,
           "rule": "수명 말기 조건(25년 차) 연중 최저 SoC 시점을 포함한 연속 7일"
         }
-      }
+      },
+      "minimality": "start_constraint"
     },
     "C54_2|gas": {
       "search": [
@@ -589314,7 +589316,8 @@
           "soh": 0.7,
           "rule": "수명 말기 조건(25년 차) 연중 최저 SoC 시점을 포함한 연속 7일"
         }
-      }
+      },
+      "minimality": "start_constraint"
     },
     "C54_2|awhp": {
       "search": [
@@ -592132,7 +592135,8 @@
           "soh": 0.7,
           "rule": "수명 말기 조건(25년 차) 연중 최저 SoC 시점을 포함한 연속 7일"
         }
-      }
+      },
+      "minimality": "start_constraint"
     },
     "C72_1|gas": {
       "search": [
@@ -594950,7 +594954,8 @@
           "soh": 0.7,
           "rule": "수명 말기 조건(25년 차) 연중 최저 SoC 시점을 포함한 연속 7일"
         }
-      }
+      },
+      "minimality": "start_constraint"
     },
     "C72_1|awhp": {
       "search": [
@@ -597768,7 +597773,8 @@
           "soh": 0.7,
           "rule": "수명 말기 조건(25년 차) 연중 최저 SoC 시점을 포함한 연속 7일"
         }
-      }
+      },
+      "minimality": "start_constraint"
     },
     "C72_2|gas": {
       "search": [
@@ -600586,7 +600592,8 @@
           "soh": 0.7,
           "rule": "수명 말기 조건(25년 차) 연중 최저 SoC 시점을 포함한 연속 7일"
         }
-      }
+      },
+      "minimality": "start_constraint"
     },
     "C72_2|awhp": {
       "search": [
@@ -603404,7 +603411,8 @@
           "soh": 0.7,
           "rule": "수명 말기 조건(25년 차) 연중 최저 SoC 시점을 포함한 연속 7일"
         }
-      }
+      },
+      "minimality": "start_constraint"
     },
     "C72_3|gas": {
       "search": [
@@ -606222,7 +606230,8 @@
           "soh": 0.7,
           "rule": "수명 말기 조건(25년 차) 연중 최저 SoC 시점을 포함한 연속 7일"
         }
-      }
+      },
+      "minimality": "start_constraint"
     },
     "C72_3|awhp": {
       "search": [
@@ -609040,7 +609049,8 @@
           "soh": 0.7,
           "rule": "수명 말기 조건(25년 차) 연중 최저 SoC 시점을 포함한 연속 7일"
         }
-      }
+      },
+      "minimality": "start_constraint"
     },
     "D45_1|gas": {
       "search": [
@@ -611858,7 +611868,8 @@
           "soh": 0.7,
           "rule": "수명 말기 조건(25년 차) 연중 최저 SoC 시점을 포함한 연속 7일"
         }
-      }
+      },
+      "minimality": "start_constraint"
     },
     "D45_1|awhp": {
       "search": [
@@ -614676,7 +614687,8 @@
           "soh": 0.7,
           "rule": "수명 말기 조건(25년 차) 연중 최저 SoC 시점을 포함한 연속 7일"
         }
-      }
+      },
+      "minimality": "start_constraint"
     },
     "D45_2|gas": {
       "search": [
@@ -617494,7 +617506,8 @@
           "soh": 0.7,
           "rule": "수명 말기 조건(25년 차) 연중 최저 SoC 시점을 포함한 연속 7일"
         }
-      }
+      },
+      "minimality": "start_constraint"
     },
     "D45_2|awhp": {
       "search": [
@@ -620312,7 +620325,8 @@
           "soh": 0.7,
           "rule": "수명 말기 조건(25년 차) 연중 최저 SoC 시점을 포함한 연속 7일"
         }
-      }
+      },
+      "minimality": "start_constraint"
     }
   },
   "sensitivities": [
@@ -620320,7 +620334,7 @@
       "group": "보일러 회피비용 반영",
       "case": "MONO Core 54 · 2인 · AWHP · Near zero · 100%",
       "base": 33.9,
-      "sens": 19.8
+      "sens": 31.1
     },
     {
       "group": "보일러 회피비용 반영",
@@ -620338,13 +620352,13 @@
       "group": "보일러 회피비용 반영",
       "case": "MONO Core 72 · 2인 · AWHP · Near zero · 100%",
       "base": 19.0,
-      "sens": 17.4
+      "sens": 17.5
     },
     {
       "group": "보일러 회피비용 반영",
       "case": "MONO Core 72 · 2인 · AWHP · Zero bill · 100%",
       "base": 97.1,
-      "sens": null
+      "sens": 81.4
     },
     {
       "group": "보일러 회피비용 반영",
@@ -620356,16 +620370,52 @@
       "group": "보일러 회피비용 반영",
       "case": "DUO Max 45 · 2인 · AWHP · Near zero · 100%",
       "base": 33.0,
-      "sens": 19.1
+      "sens": 19.2
     },
     {
       "group": "보일러 회피비용 반영",
       "case": "DUO Max 45 · 2인 · AWHP · Zero bill · 100%",
       "base": null,
-      "sens": null
+      "sens": 99.5
     },
     {
       "group": "보일러 회피비용 반영",
+      "case": "DUO Max 45 · 2인 · AWHP · Zero energy · 100%",
+      "base": null,
+      "sens": null
+    },
+    {
+      "group": "ZE 시작 조건 해제",
+      "case": "MONO Core 54 · 2인 · 가스보일러 · Zero energy · 100%",
+      "base": null,
+      "sens": null
+    },
+    {
+      "group": "ZE 시작 조건 해제",
+      "case": "MONO Core 54 · 2인 · AWHP · Zero energy · 100%",
+      "base": null,
+      "sens": null
+    },
+    {
+      "group": "ZE 시작 조건 해제",
+      "case": "MONO Core 72 · 2인 · 가스보일러 · Zero energy · 100%",
+      "base": null,
+      "sens": null
+    },
+    {
+      "group": "ZE 시작 조건 해제",
+      "case": "MONO Core 72 · 2인 · AWHP · Zero energy · 100%",
+      "base": null,
+      "sens": null
+    },
+    {
+      "group": "ZE 시작 조건 해제",
+      "case": "DUO Max 45 · 2인 · 가스보일러 · Zero energy · 100%",
+      "base": null,
+      "sens": null
+    },
+    {
+      "group": "ZE 시작 조건 해제",
       "case": "DUO Max 45 · 2인 · AWHP · Zero energy · 100%",
       "base": null,
       "sens": null
