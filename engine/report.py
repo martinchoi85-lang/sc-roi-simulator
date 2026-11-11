@@ -1061,7 +1061,7 @@ def _build_sc_report_data(
     # ZE Start Condition Removal Sensitivities (3 representative houses, 2 persons, 100% occ, gas & AWHP)
     ze_no_start_cache = metadata.get("ze_no_start_cache", {}) if metadata else {}
     for hp_id, hp_lbl in rep_hp_list:
-        house_name = next(h["house"] for h in house_persons_data if h["id"] == hp_id)
+        house_name = next(h[1] for h in HP_MAP if h[0] == hp_id)
         occ_cnt = 2
         for heat_id, heat_lbl, heat_pkg in [("gas", "가스보일러", "가스보일러"), ("awhp", "AWHP", "AWHP")]:
             s_match = next(s for s in scenarios_rows if s["hp"] == hp_id and s["heat"] == heat_id and s["occ"] == 100 and s["target"] == "ze" and s["sub"] == "pv2026")
