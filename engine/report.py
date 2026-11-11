@@ -64,6 +64,7 @@ def generate_v9_outputs(
     run_id: Optional[str] = None,
 ):
     """Executes full generation of v9.1 outputs, report_data.json, HTML report, and validation."""
+    t0 = time.perf_counter()
     output_dir.mkdir(parents=True, exist_ok=True)
     report_dir.mkdir(parents=True, exist_ok=True)
 
@@ -146,6 +147,10 @@ def generate_v9_outputs(
 
     # 8. Write validation.md (strictly numerical tables, no subjective prose)
     print("Generating validation.md...")
+    if metadata and "step_timings" in metadata:
+        if "step5" not in metadata["step_timings"]:
+            # Approximate step5 time up to validation write
+            metadata["step_timings"]["step5"] = (round(time.perf_counter() - t0, 2), "계산 완료")
     _write_validation_tables(report_data, country_dir, output_dir / "validation.md", metadata=metadata)
 
 
