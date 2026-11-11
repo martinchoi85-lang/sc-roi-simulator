@@ -184,7 +184,7 @@ def _compute_all_seed_ranges(
         )
         tus_res = tus.simulate_year(occupancy_rate=1.00)
         q_occ_w = tus_res["occupants_active_15min"] * 80.0
-        _, q_heat, q_cool = simulate_thermal_5r1c(
+        t_in, q_heat, q_cool, _ = simulate_thermal_5r1c(
             house_config=bench_h_cfg,
             temp_air=weather_df["temp_air"].values,
             ghi=weather_df["ghi"].values,
@@ -192,6 +192,8 @@ def _compute_all_seed_ranges(
             internal_heat_gain_w=q_occ_w,
             is_occupied_day=tus_res["is_occupied_day_365"],
             heat_setpoint_schedule=tus_res["heat_setpoint_15min"],
+            occupants_active=tus_res["occupants_active_15min"],
+            occupants_sleeping=(np.array(tus_res["persons_state_15min"]) == 2).sum(axis=0).astype(float),
         )
         q_dhw = tus_res["dhw_liters_15min"] * 4.186 * 40.0 / 3600.0 / dt_h
         hvac_res = simulate_hvac_and_dhw(
@@ -203,6 +205,8 @@ def _compute_all_seed_ranges(
             equipment_config=equip_cfg,
             tariff_config=tariff_cfg,
             house_config=bench_h_cfg,
+            t_indoor=t_in,
+            t_set_heat=tus_res["heat_setpoint_15min"],
         )
         p_load = tus_res["total_elec_base_load_kw_15min"] + hvac_res["p_hvac_kw"]
         ze_res = size_zero_energy(
