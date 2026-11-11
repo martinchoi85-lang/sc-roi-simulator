@@ -1485,6 +1485,9 @@ class OccupancyTUSModel:
             "vent_standby": p_vent_standby_15min,
         }
 
+        fit_12 = rep_val.get("fit_12", [])
+        tus_fit = {c["curve"]: {"mae_pct_p": c["mae"], "threshold_pct_p": 2.0, "status": "PASS" if c["mae"] <= 2.0 else "FAIL"} for c in fit_12 if c.get("daytype") == "weekday"}
+
         return {
             "mode": self.mode,
             "mode_detail": self.mode_detail,
@@ -1496,14 +1499,14 @@ class OccupancyTUSModel:
             "dhw_liters_15min": dhw_liters_15min,
             "annual_elec_base_kwh": float(total_elec_15min.sum() * 0.25),
             "annual_dhw_liters": float(dhw_liters_15min.sum()),
-            "tus_fit": {c["curve"]: {"mae_pct_p": c["mae"], "threshold_pct_p": 2.0, "status": "PASS" if c["mae"] <= 2.0 else "FAIL"} for c in rep_val["fit_12"] if c["daytype"] == "weekday"},
-            "tus_fit_12": rep_val["fit_12"],
-            "leave_hist": rep_val["leave_hist"],
-            "return_hist": rep_val["return_hist"],
-            "realism": rep_val["realism"],
-            "sample_person_days": rep_val["sample_person_days"],
-            "sleep_dur_hist": rep_val["sleep_dur_hist"],
-            "away_episodes_weekday_mean": rep_val["away_episodes_weekday_mean"],
+            "tus_fit": tus_fit,
+            "tus_fit_12": fit_12,
+            "leave_hist": rep_val.get("leave_hist", {}),
+            "return_hist": rep_val.get("return_hist", {}),
+            "realism": rep_val.get("realism", []),
+            "sample_person_days": rep_val.get("sample_person_days", []),
+            "sleep_dur_hist": rep_val.get("sleep_dur_hist", {}),
+            "away_episodes_weekday_mean": rep_val.get("away_episodes_weekday_mean", 0.0),
             "rule_1b_violations": rep_val.get("rule_1b_violations", 0),
             "top_5_away_diff": rep_val.get("top_5_away_diff", []),
             "appliance_15min": appliance_15min,
