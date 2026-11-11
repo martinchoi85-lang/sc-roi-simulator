@@ -752,10 +752,11 @@ def _build_sc_report_data(
         close = [d for d in cand_days if 0.90 * med_val <= daily_kwh_arr[d] <= 1.10 * med_val]
         if not close:
             close = sorted(cand_days, key=lambda d: abs(daily_kwh_arr[d] - med_val))[:5]
+        p_arr = np.asarray(pers_state)
         best_d = min(
             close,
             key=lambda d: sum(
-                np.sum(np.abs(pers_state[:, d * 96 : (d + 1) * 96] - pers_state[:, d2 * 96 : (d2 + 1) * 96]))
+                np.sum(np.abs(p_arr[:, d * 96 : (d + 1) * 96] - p_arr[:, d2 * 96 : (d2 + 1) * 96]))
                 for d2 in close
             )
         )
