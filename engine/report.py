@@ -1301,7 +1301,7 @@ def _write_validation_tables(report_data: Dict[str, Any], country_dir: Path, fil
     ])
     ze_rows = metadata.get("ze_minimality_rows", []) if metadata else []
     if ze_rows:
-        pass_count = sum(1 for r in ze_rows if r["is_passed"])
+        pass_count = sum(1 for r in ze_rows if r.get("is_passed", r.get("status") == "PASS"))
         fail_count = len(ze_rows) - pass_count
         lines.append(f"- 총 70건 중 계통 수전 0 및 최소성 검증 통과: **{pass_count}건**, 불통과: **{fail_count}건**")
         lines.append("")
@@ -1312,7 +1312,7 @@ def _write_validation_tables(report_data: Dict[str, Any], country_dir: Path, fil
             occ_pct = f"{int(round(r['occupancy_rate'] * 100))}%"
             zg_str = "PASS" if r["is_zero_grid"] else "FAIL"
             min_str = "PASS" if r["is_minimal"] else "FAIL"
-            res_str = "PASS" if r["is_passed"] else "FAIL"
+            res_str = r.get("status", "PASS" if r.get("is_passed") else "FAIL")
             lines.append(
                 f"| {h_lbl} | {r['heat_pkg']} | {occ_pct} | {r['pv_kw']} | {r['ess_modules']} | {r['ess_kwh']} | "
                 f"{r['unmet_base_kwh']} | {r['lol_base_hours']} | {r['lol_pv_minus_hours']} | {r['lol_ess_minus_hours']} | "

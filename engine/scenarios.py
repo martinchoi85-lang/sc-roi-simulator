@@ -616,6 +616,7 @@ def run_all_scenarios(
                     "lol_ess_minus_hours": round(lol_ess_minus, 2),
                     "is_zero_grid": is_zero_grid,
                     "is_minimal": is_minimal,
+                    "is_passed": is_passed,
                     "status": "PASS" if is_passed else "FAIL",
                 })
 
