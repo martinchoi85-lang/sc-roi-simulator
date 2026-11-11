@@ -33,33 +33,37 @@ ess_battery:
   lifetime_years:
     value: 10
     unit: "years"
-    source: "ESS 10년·SOH 70%·SoC 창 90%·RTE 90%"
-    evidence_level: "추정"
-    status: "PLACEHOLDER"
+    source: "https://www.lghomebattery.com.au/_files/ugd/865f88_6079c63be83d4bbc937e340c165ee97e.pdf"
+    evidence_level: "제조사 보증"
+    note: "LG RESU10H Prime 보증 10년·잔존용량 70%(누적 처리량 32MWh 중 먼저 도달 시점)"
+    status: "UNVERIFIED"
   soh_at_replacement:
     value: 0.70
     unit: "fraction"
-    source: "ESS SOH 70% (PLACEHOLDER)"
-    evidence_level: "추정"
-    status: "PLACEHOLDER"
+    source: "https://www.lghomebattery.com.au/_files/ugd/865f88_6079c63be83d4bbc937e340c165ee97e.pdf"
+    evidence_level: "제조사 보증"
+    note: "10년 차 잔존용량 70%"
+    status: "UNVERIFIED"
   soc_window:
-    value: 0.90
+    value: 1.00
     unit: "fraction"
-    source: "ESS SoC 창 90% (PLACEHOLDER)"
-    evidence_level: "추정"
-    status: "PLACEHOLDER"
+    source: "https://www.lghomebattery.com.au/_files/ugd/865f88_6079c63be83d4bbc937e340c165ee97e.pdf"
+    evidence_level: "제조사 보증"
+    note: "데이터시트 DoD 100%"
+    status: "UNVERIFIED"
   round_trip_efficiency:
     value: 0.90
     unit: "fraction"
-    source: "ESS RTE 90% (PLACEHOLDER)"
-    evidence_level: "추정"
-    status: "PLACEHOLDER"
+    source: "https://www.lghomebattery.com.au/_files/ugd/865f88_6079c63be83d4bbc937e340c165ee97e.pdf"
+    evidence_level: "제조사 보증"
+    note: "데이터시트 >90.3%"
+    status: "UNVERIFIED"
   replacement_year_cycle:
     value: 10
     unit: "years"
     source: "10년 주기 교체 (11, 21, 31, 41, 51, 61, 71, 81, 91년 차)"
-    evidence_level: "추정"
-    status: "PLACEHOLDER"
+    evidence_level: "제조사 보증"
+    status: "UNVERIFIED"
 
 awhp:
   lifetime_years:
@@ -79,7 +83,19 @@ baseline_boiler_avoided_cost:
   enabled:
     value: false
     unit: "boolean"
-    source: "프로판 보일러 교체비 미반영 가정 (보수적 평가 기준)"
-    evidence_level: "추정"
-    status: "PLACEHOLDER"
+    source: "본문 기본값 off (boiler_avoided_cost_included=false)"
+    evidence_level: "업계 통상"
+    status: "UNVERIFIED"
+  cost_krw:
+    value: 1012000
+    unit: "KRW"
+    source: "https://m.kituramimall.com/goods/goods_view.php?goodsNo=1000000301"
+    note: "귀뚜라미 L20-22H 설치비 포함 판매가"
+    status: "UNVERIFIED"
+  replacement_cycle_years:
+    value: 10
+    unit: "years"
+    source: "https://www.todayenergy.kr/news/articleView.html?idxno=123718"
+    note: "KGS 권장사용기간 10년 (1, 11, 21, 31, 41, 51, 61, 71, 81, 91년 차 반영)"
+    status: "UNVERIFIED"
 

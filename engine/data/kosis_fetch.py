@@ -35,6 +35,7 @@ TARGET_TABLES = {
     "V": "자원봉사 및 무급연수-행동비율(10세 이상)",
     "MV": "이동-행동 비율(10세 이상)",
     "M": "시간대별 행동비율(10세 이상)",
+    "AT": "취업여부별 평균시간(15세이상)",
 }
 
 KNOWN_TBL_IDS = {
@@ -48,6 +49,7 @@ KNOWN_TBL_IDS = {
     "V": "DT_2019_172_1TM2097XX",
     "MV": "DT_2019_183_1TM2121XX",
     "M": "DT_2019_191_1TM2129XX",
+    "AT": "DT_2019_022_1TM1054X",
 }
 
 # 7 aggregated time intervals in table M
@@ -619,6 +621,30 @@ def run_section_4_4_check(metrics: Dict[str, Any], kosis_dir: Path) -> Dict[str,
         "table_slot_status": table_slot_status,
         "consistency": consistency_results,
     }
+
+
+def get_kosis_average_time_realism(kosis_dir: Path) -> List[Dict[str, Any]]:
+    """Returns KOSIS average time benchmarks for employed persons (sleep, work, commute/travel)."""
+    csv_path = kosis_dir / "AT_2024.csv"
+    if not csv_path.exists():
+        return []
+    import pandas as pd
+    df = pd.read_csv(csv_path)
+    res = []
+    day_map = {"평일": "weekday", "토요일": "saturday", "일요일": "sunday"}
+    act_map = {"111": "수면", "2": "일", "9": "이동"}
+    for day_korean, dt in day_map.items():
+        for act_code, metric_name in act_map.items():
+            sub = df[(df["day_name"] == day_korean) & (df["act_code"].astype(str) == act_code)]
+            if len(sub) > 0:
+                mins = int(sub.iloc[0]["value_min"])
+                res.append({
+                    "metric": metric_name,
+                    "daytype": dt,
+                    "kosis": mins,
+                    "unit": "min",
+                })
+    return res
 
 
 if __name__ == "__main__":

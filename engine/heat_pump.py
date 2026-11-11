@@ -95,19 +95,14 @@ def simulate_hvac_and_dhw(
     tariff_config: Dict[str, Any],
     dt_hours: float = 0.25,
     house_config: Optional[Dict[str, Any]] = None,
+    t_indoor: Optional[np.ndarray] = None,
+    t_set_heat: Optional[np.ndarray] = None,
 ) -> Dict[str, Any]:
     """Calculates 15-minute electrical demand, backup heater usage, and fuel consumption.
 
-    Args:
-        heating_package: 'PV+ESS+가스보일러' or 'PV+ESS+AWHP'
-        q_heat_kw: 15-min space heating load (kW thermal)
-        q_cool_kw: 15-min space cooling load (kW thermal)
-        q_dhw_kw: 15-min DHW load (kW thermal)
-        temp_air: 15-min outdoor ambient temperature (C)
-        equipment_config: Equipment configuration parameters
-        tariff_config: Tariff configuration parameters
-        dt_hours: Timestep in hours (0.25)
-        house_config: House model configuration (to check uses_awhp_cooling)
+    Rules (SPEC v9.1 & update):
+    - Standard system air conditioner with identical efficiency (COP 4.40) across baseline and all alternatives.
+    - AWHP electric backup heater operates ONLY when indoor temperature is below (t_set_heat - 1.5°C).
 
     Returns:
         Dict with electrical profiles, backup heater metrics, and propane usage.
@@ -115,27 +110,9 @@ def simulate_hvac_and_dhw(
     n = len(temp_air)
     awhp_cfg = equipment_config["awhp_system"]
 
-    # Cooling efficiency & capacity logic
-    # DUO Max AWHP case uses Therma V (A35/W7 EER 2.6, 5.5kW cap)
-    # Core 54, 72 and DUO Max gas boiler maintain standard system air conditioner (COP 4.40)
-    uses_awhp_cooling = False
-    if house_config:
-        inc_cool = house_config.get("uses_awhp_cooling", False)
-        if isinstance(inc_cool, dict):
-            uses_awhp_cooling = bool(inc_cool.get("value", False))
-        else:
-            uses_awhp_cooling = bool(inc_cool)
-
-    is_awhp = "AWHP" in heating_package
-
-    if uses_awhp_cooling and is_awhp:
-        eer_cool = float(awhp_cfg.get("therma_v_cooling_eer", 2.6))
-        cap_cool_kw = float(awhp_cfg.get("therma_v_cooling_capacity_kw", 5.5))
-        q_cool_served = np.minimum(q_cool_kw, cap_cool_kw)
-        p_cool_kw = np.where(q_cool_served > 0, q_cool_served / eer_cool, 0.0)
-    else:
-        cop_cool = float(awhp_cfg.get("cop_cool_nominal", 4.40))
-        p_cool_kw = np.where(q_cool_kw > 0, q_cool_kw / cop_cool, 0.0)
+    # All alternatives and baseline use the same standard system air conditioner (COP 4.40)
+    cop_cool = float(awhp_cfg.get("cop_cool_nominal", 4.40))
+    p_cool_kw = np.where(q_cool_kw > 0, q_cool_kw / cop_cool, 0.0)
 
     if "가스보일러" in heating_package:
         boiler_eff = float(equipment_config["gas_boiler"]["thermal_efficiency"])
@@ -173,10 +150,17 @@ def simulate_hvac_and_dhw(
         cop_heat = calculate_hm091hf_cop(temp_air, t_water_heat, awhp_cfg)
         max_cap_heat = calculate_hm091hf_max_capacity(temp_air, t_water_heat, cop_heat, awhp_cfg)
 
-        # Space heating split between AWHP and backup heater (max 3kW)
+        # Space heating split between AWHP and backup heater
         q_heat_awhp = np.minimum(q_heat_kw, max_cap_heat)
         q_heat_rem = np.maximum(0.0, q_heat_kw - max_cap_heat)
-        q_heat_backup = np.minimum(q_heat_rem, max_backup_cap)
+
+        # Backup heater constraint: operates ONLY when indoor temp < t_set_heat - 1.5°C
+        if t_indoor is not None and t_set_heat is not None:
+            allow_backup = (t_indoor < (t_set_heat - 1.5))
+        else:
+            allow_backup = np.ones(n, dtype=bool)
+
+        q_heat_backup = np.where(allow_backup, np.minimum(q_heat_rem, max_backup_cap), 0.0)
         p_heat_awhp = np.where(q_heat_awhp > 0, q_heat_awhp / cop_heat, 0.0)
         p_heat_backup = q_heat_backup / 1.0  # Electric backup COP = 1.0
 

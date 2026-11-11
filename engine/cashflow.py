@@ -33,8 +33,14 @@ def calculate_100y_cashflow(
     ess_replacement_cost: float = 0.0,
     awhp_replacement_cost: float = 0.0,
     pv_degradation_annual: float = 0.005,
+    include_boiler_avoided_cost: bool = False,
+    boiler_avoided_cost_krw: float = 1012000.0,
 ) -> Dict[str, Any]:
-    """Calculates 100-year cash flow, replacements, and payback period."""
+    """Calculates 100-year cash flow, replacements, and payback period.
+
+    If include_boiler_avoided_cost is True and is_awhp is True:
+        Adds 1,012,000 KRW boiler avoided cost every 10 years (years 1, 11, 21, 31, 41, 51, 61, 71, 81, 91).
+    """
     total_savings_y1 = max(0.0, baseline_annual_cost - alternative_year1_cost)
     propane_savings = max(0.0, baseline_propane_cost - alternative_propane_cost)
     electricity_savings_y1 = max(0.0, total_savings_y1 - propane_savings)
@@ -59,7 +65,13 @@ def calculate_100y_cashflow(
         # Annual energy bill savings in year y
         s_elec = electricity_savings_y1 * pv_deg_factor if pv_capacity_kw > 0 else electricity_savings_y1
         s_prop = propane_savings
-        annual_savings[y] = s_elec + s_prop
+        
+        # Boiler avoided cost benefit (10-year cycle for AWHP: years 1, 11, 21, 31, 41, 51, 61, 71, 81, 91)
+        s_boiler = 0.0
+        if include_boiler_avoided_cost and is_awhp and (y in (1, 11, 21, 31, 41, 51, 61, 71, 81, 91)):
+            s_boiler = boiler_avoided_cost_krw
+
+        annual_savings[y] = s_elec + s_prop + s_boiler
 
         # 2. Replacement costs incurred in year y
         rep_cost = 0.0

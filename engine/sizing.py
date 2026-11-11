@@ -148,13 +148,14 @@ def size_zero_energy(
     min_net_capex = float("inf")
 
     # Evaluate candidate module counts: min_modules to min_modules + 8
+    max_pv_search = 60.0
     for m in range(min_modules, min_modules + 9):
         ess_capacity_kwh = m * ess_module_kwh
         usable_ess_kwh = single_module_usable_kwh * m
 
         # Binary search for minimum PV with 0.5kW steps (0.5kW to 60.0kW)
         low_step = 1
-        high_step = 120
+        high_step = int(max_pv_search / 0.5)
         best_step = None
         best_soc = None
         best_unmet = 0.0
@@ -218,12 +219,9 @@ def size_zero_energy(
             )
             net_cap = capex_info["net_capex"]
             search_curve.append({
-                "modules": m,
-                "ess_kwh": ess_capacity_kwh,
-                "usable_ess_kwh": round(usable_ess_kwh, 2),
-                "pv_kw": found_pv,
-                "net_capex": net_cap,
-                "gross_capex": capex_info["gross_capex"],
+                "modules": int(m),
+                "min_pv_kw": float(found_pv),
+                "capex_krw": int(net_cap),
             })
 
             if net_cap < min_net_capex:
@@ -238,6 +236,12 @@ def size_zero_energy(
                     "unmet_kwh": best_unmet,
                     "lol_hours": best_lol,
                 }
+        else:
+            search_curve.append({
+                "modules": int(m),
+                "min_pv_kw": None,
+                "capex_krw": None,
+            })
 
     # If search didn't find within 60kW, fallback to largest tested
     if best_candidate is None:
@@ -262,12 +266,45 @@ def size_zero_energy(
             "lol_hours": 0.0,
         }
 
-    # Find lowest solar 7-day window for SoC trajectory sample in appendix
-    daily_pv1 = p_pv1_kw.reshape(365, 96).sum(axis=1) * dt_h
-    # 7-day rolling sum
-    pv7 = np.convolve(daily_pv1, np.ones(7), mode="valid")
-    min_7d_start_day = int(np.argmin(pv7))
-    sample_soc_7d = best_candidate["soc_trajectory"][min_7d_start_day * 96 : (min_7d_start_day + 7) * 96].tolist()
+    # Run EoL simulation to get exact SoC trajectory across 35,040 steps
+    p_pv_arr_eol = p_pv1_kw * best_candidate["pv_capacity_kw"] * pv_deg_factor
+    _, _, full_soc = fast_simulate_offgrid(
+        p_load_kw=p_load_kw,
+        p_pv_kw=p_pv_arr_eol,
+        ess_kwh=best_candidate["ess_capacity_kwh"],
+        soc_min=soc_min,
+        soc_max=soc_max,
+        soh_eol=soh_eol,
+        rte=rte,
+        early_exit_unmet=False,
+    )
+    # Find minimum SoC step
+    min_soc_idx = int(np.argmin(full_soc))
+    min_soc_day = min_soc_idx // 96
+    start_day = max(0, min(365 - 7, min_soc_day - 3))
+    start_step = start_day * 96
+    end_step = start_step + 672
+    start_date = (pd.Timestamp("2026-01-01") + pd.Timedelta(days=start_day)).strftime("%Y-%m-%d")
+
+    soc7 = {
+        "start_date": start_date,
+        "soc_pct": [round(float(s * 100.0), 1) for s in full_soc[start_step:end_step]],
+        "pv_kw": [round(float(p), 2) for p in p_pv_arr_eol[start_step:end_step]],
+        "load_kw": [round(float(l), 2) for l in p_load_kw[start_step:end_step]],
+        "soc_floor_pct": round(float(soc_min * 100.0), 1),
+        "basis": {
+            "seed": 42,
+            "pv_factor": round(float(pv_deg_factor), 4),
+            "soh": round(float(soh_eol), 2),
+            "rule": "수명 말기 조건(25년 차) 연중 최저 SoC 시점을 포함한 연속 7일",
+        },
+    }
+
+    daily = {
+        "load_kwh": [round(float(x), 1) for x in p_load_kw.reshape(365, 96).sum(axis=1) * dt_h],
+        "pv_kwh": [round(float(x), 1) for x in p_pv_arr_eol.reshape(365, 96).sum(axis=1) * dt_h],
+        "ess_usable_kwh": round(float(best_candidate["usable_ess_kwh"]), 2),
+    }
 
     return {
         "pv_capacity_kw": best_candidate["pv_capacity_kw"],
@@ -277,8 +314,8 @@ def size_zero_energy(
         "max_daily_load_kwh": round(max_daily_load_kwh, 2),
         "min_modules_constraint": min_modules,
         "search_curve": search_curve,
-        "sample_soc_7d": sample_soc_7d,
-        "min_7d_start_day": min_7d_start_day,
+        "soc7": soc7,
+        "daily": daily,
         "capex_info": best_candidate["capex_info"],
         "unmet_kwh": best_candidate["unmet_kwh"],
         "lol_hours": best_candidate["lol_hours"],

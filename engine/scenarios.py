@@ -143,7 +143,8 @@ def run_all_scenarios(
 
             # Thermal 5R1C simulation
             q_occ_w = tus_res["occupants_active_15min"] * 80.0
-            t_indoor, q_heat_kw, q_cool_kw = simulate_thermal_5r1c(
+            sleeping_arr = (np.array(tus_res["persons_state_15min"]) == 2).sum(axis=0).astype(float)
+            t_indoor, q_heat_kw, q_cool_kw, t_set = simulate_thermal_5r1c(
                 house_config=h_cfg,
                 temp_air=weather_df["temp_air"].values,
                 ghi=weather_df["ghi"].values,
@@ -151,6 +152,8 @@ def run_all_scenarios(
                 internal_heat_gain_w=q_occ_w,
                 is_occupied_day=tus_res["is_occupied_day_365"],
                 heat_setpoint_schedule=tus_res["heat_setpoint_15min"],
+                occupants_active=tus_res["occupants_active_15min"],
+                occupants_sleeping=sleeping_arr,
             )
 
             # DHW heat requirement (kWh/15min)
@@ -165,12 +168,14 @@ def run_all_scenarios(
                 "q_heat_kw": q_heat_kw,
                 "q_cool_kw": q_cool_kw,
                 "q_dhw_kw": q_dhw_kw,
+                "t_set": t_set,
                 "base_elec_kw": tus_res["total_elec_base_load_kw_15min"],
             }
 
     # Pre-calculate Baseline for each of the 35 (h_name, occ, occ_rate) combinations
     # Baseline = Gas boiler (propane) + KEPCO grid electricity, 0 PV, 0 ESS, 0 Subsidy
     baseline_cache = {}
+    cop_cool_std = float(equip_cfg["awhp_system"].get("cop_cool_nominal", 4.40))
     for pair in house_occupant_pairs:
         h_name = pair["house"]
         occ = pair["occupants"]
@@ -184,8 +189,8 @@ def run_all_scenarios(
             propane_kg = annual_thermal_kwh / (boiler_eff * propane_kwh_per_kg)
             gas_bill = propane_kg * propane_unit_cost
 
-            # Grid electricity covers appliances, lighting, and air conditioning cooling (COP 3.0)
-            p_cool_elec = ld["q_cool_kw"] / 3.0
+            # Grid electricity covers appliances, lighting, and air conditioning cooling (COP 4.40 identical)
+            p_cool_elec = np.where(ld["q_cool_kw"] > 0, ld["q_cool_kw"] / cop_cool_std, 0.0)
             p_elec_total = ld["base_elec_kw"] + p_cool_elec
             elec_bill_res = tariff_calc.calculate_annual_bill(
                 p_grid_import_kw=p_elec_total,
@@ -212,6 +217,7 @@ def run_all_scenarios(
     for pair in house_occupant_pairs:
         h_name = pair["house"]
         occ = pair["occupants"]
+        h_cfg = houses_cfg[h_name]
         for occ_rate in occupancy_rates:
             ld = load_cache[(h_name, occ, occ_rate)]
             hvac_res = simulate_hvac_and_dhw(
@@ -223,6 +229,8 @@ def run_all_scenarios(
                 equipment_config=equip_cfg,
                 tariff_config=tariff_cfg,
                 house_config=h_cfg,
+                t_indoor=ld["t_indoor"],
+                t_set_heat=ld["tus_res"]["heat_setpoint_15min"],
             )
             p_awhp_elec = hvac_res["p_hvac_kw"]
             p_total_elec_awhp = ld["base_elec_kw"] + p_awhp_elec
@@ -230,6 +238,7 @@ def run_all_scenarios(
             awhp_load_cache[(h_name, occ, occ_rate)] = {
                 "p_awhp_elec": p_awhp_elec,
                 "p_total_elec": p_total_elec_awhp,
+                "hvac_res": hvac_res,
             }
 
     # Size all 3 targets for the 70 unique cases (7 pairs x 2 heating x 5 occupancies)
@@ -531,6 +540,84 @@ def run_all_scenarios(
 
                         scenario_id += 1
 
+    # 70 cases zero energy minimality validation
+    print("Validating 70 Zero Energy cases for zero grid import and minimality...")
+    ze_minimality_rows = []
+    pv_deg_factor = 0.995 ** 24
+    soh_eol = 0.70
+    rte = 0.90
+    for pair in house_occupant_pairs:
+        h_name = pair["house"]
+        occ = pair["occupants"]
+        for heat_pkg in heating_packages:
+            for occ_rate in occupancy_rates:
+                ze_res = ze_sizing_cache[(h_name, occ, heat_pkg, occ_rate)]
+                pv_kw = ze_res["pv_capacity_kw"]
+                ess_mod = ze_res["ess_modules"]
+                ess_kwh = ze_res["ess_capacity_kwh"]
+                is_awhp = (heat_pkg == "AWHP")
+                p_load = awhp_load_cache[(h_name, occ, occ_rate)]["p_total_elec"] if is_awhp else baseline_cache[(h_name, occ, occ_rate)]["p_elec_total_kw"]
+
+                # Base run
+                unmet_base, lol_base, _ = fast_simulate_offgrid(
+                    p_load_kw=p_load,
+                    p_pv_kw=p_pv1_kw * pv_kw * pv_deg_factor,
+                    ess_kwh=ess_kwh,
+                    soc_min=0.0,
+                    soc_max=1.0,
+                    soh_eol=soh_eol,
+                    rte=rte,
+                )
+                is_zero_grid = (unmet_base <= 1e-4 and lol_base <= 1e-4)
+
+                # PV - 0.5 kW
+                if pv_kw > 0.5:
+                    _, lol_pv_minus, _ = fast_simulate_offgrid(
+                        p_load_kw=p_load,
+                        p_pv_kw=p_pv1_kw * (pv_kw - 0.5) * pv_deg_factor,
+                        ess_kwh=ess_kwh,
+                        soc_min=0.0,
+                        soc_max=1.0,
+                        soh_eol=soh_eol,
+                        rte=rte,
+                    )
+                else:
+                    lol_pv_minus = 10.0
+
+                # ESS - 1 module
+                if ess_mod > 1:
+                    _, lol_ess_minus, _ = fast_simulate_offgrid(
+                        p_load_kw=p_load,
+                        p_pv_kw=p_pv1_kw * pv_kw * pv_deg_factor,
+                        ess_kwh=(ess_mod - 1) * 9.6,
+                        soc_min=0.0,
+                        soc_max=1.0,
+                        soh_eol=soh_eol,
+                        rte=rte,
+                    )
+                else:
+                    lol_ess_minus = 10.0
+
+                is_minimal = (lol_pv_minus > 0.0) or (lol_ess_minus > 0.0)
+                is_passed = is_zero_grid and is_minimal
+
+                ze_minimality_rows.append({
+                    "house_name": h_name,
+                    "occupants": occ,
+                    "heat_pkg": heat_pkg,
+                    "occupancy_rate": occ_rate,
+                    "pv_kw": pv_kw,
+                    "ess_modules": ess_mod,
+                    "ess_kwh": ess_kwh,
+                    "unmet_base_kwh": round(unmet_base, 2),
+                    "lol_base_hours": round(lol_base, 2),
+                    "lol_pv_minus_hours": round(lol_pv_minus, 2),
+                    "lol_ess_minus_hours": round(lol_ess_minus, 2),
+                    "is_zero_grid": is_zero_grid,
+                    "is_minimal": is_minimal,
+                    "status": "PASS" if is_passed else "FAIL",
+                })
+
     df_results = pd.DataFrame(results_all_rows)
     df_energy_comp = pd.DataFrame(energy_comp_rows)
 
@@ -552,6 +639,7 @@ def run_all_scenarios(
         "baseline_cache": baseline_cache,
         "dates": dates,
         "p_pv1_kw": p_pv1_kw,
+        "ze_minimality_rows": ze_minimality_rows,
     }
 
     return df_results, df_energy_comp, df_ze_sizing, metadata

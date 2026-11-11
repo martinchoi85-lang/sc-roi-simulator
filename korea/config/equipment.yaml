@@ -34,27 +34,29 @@ ess_system:
   round_trip_efficiency:
     value: 0.90
     unit: "fraction"
-    source: "LG Energy Solution Residential ESS Specification"
+    source: "https://www.lghomebattery.com.au/_files/ugd/865f88_6079c63be83d4bbc937e340c165ee97e.pdf"
     grade: "A"
-    status: "VERIFIED"
+    note: "데이터시트 >90.3%"
+    status: "UNVERIFIED"
   usable_dod:
-    value: 0.70
+    value: 1.00
     unit: "fraction"
-    source: "Project Requirement: Usable capacity 70%"
+    source: "https://www.lghomebattery.com.au/_files/ugd/865f88_6079c63be83d4bbc937e340c165ee97e.pdf"
     grade: "A"
-    status: "VERIFIED"
+    note: "데이터시트 DoD 100%"
+    status: "UNVERIFIED"
   soc_min:
-    value: 0.15
+    value: 0.00
     unit: "fraction"
-    source: "BMS Operational Minimum (Usable range 15%~85%)"
+    source: "https://www.lghomebattery.com.au/_files/ugd/865f88_6079c63be83d4bbc937e340c165ee97e.pdf"
     grade: "A"
-    status: "VERIFIED"
+    status: "UNVERIFIED"
   soc_max:
-    value: 0.85
+    value: 1.00
     unit: "fraction"
-    source: "BMS Operational Maximum (Usable range 15%~85%)"
+    source: "https://www.lghomebattery.com.au/_files/ugd/865f88_6079c63be83d4bbc937e340c165ee97e.pdf"
     grade: "A"
-    status: "VERIFIED"
+    status: "UNVERIFIED"
   c_rate_max:
     value: 0.50
     unit: "1/h"
