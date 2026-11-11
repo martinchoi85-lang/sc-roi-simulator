@@ -25,8 +25,8 @@ def fast_simulate_offgrid(
     p_load_kw: np.ndarray,
     p_pv_kw: np.ndarray,
     ess_kwh: float,
-    soc_min: float = 0.05,
-    soc_max: float = 0.95,
+    soc_min: float = 0.00,
+    soc_max: float = 1.00,
     soh_eol: float = 0.70,
     rte: float = 0.90,
     c_rate: float = 0.5,
@@ -114,8 +114,8 @@ def size_zero_energy(
     with_subsidy: bool = False,
     ess_module_kwh: float = 9.6,
     soh_eol: float = 0.70,
-    soc_min: float = 0.05,
-    soc_max: float = 0.95,
+    soc_min: float = 0.00,
+    soc_max: float = 1.00,
     rte: float = 0.90,
 ) -> Dict[str, Any]:
     """Sizes PV and ESS for zero_energy satisfying 0 external/grid energy.

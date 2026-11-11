@@ -278,6 +278,10 @@ def run_all_scenarios(
                     subsidy_config=subsidy_cfg,
                     heating_package=heat_pkg,
                     with_subsidy=False,
+                    soc_min=0.00,
+                    soc_max=1.00,
+                    soh_eol=0.70,
+                    rte=0.90,
                 )
                 ze_sizing_cache[(h_name, occ, heat_pkg, occ_rate)] = ze_res
 
