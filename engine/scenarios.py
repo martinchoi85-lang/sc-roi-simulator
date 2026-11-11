@@ -582,7 +582,7 @@ def run_all_scenarios(
                 p_gas_s = res_s["total_elec_base_load_kw_15min"] + p_cool_elec
                 gas_loads.append(p_gas_s)
                 # AWHP electricity: seed base load + AWHP HVAC load
-                p_awhp_s = awhp_load_cache[(h_name, occ, occ_rate)]["p_hvac_elec"] + res_s["total_elec_base_load_kw_15min"]
+                p_awhp_s = awhp_load_cache[(h_name, occ, occ_rate)]["p_awhp_elec"] + res_s["total_elec_base_load_kw_15min"]
                 awhp_loads.append(p_awhp_s)
                 
             multi_seed_load_cache[(h_name, occ, occ_rate, "가스보일러")] = gas_loads
