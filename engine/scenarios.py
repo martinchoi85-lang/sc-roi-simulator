@@ -126,15 +126,16 @@ def run_all_scenarios(
                 # Mode A Section 4.4 reproduction validation (2,000 person-days)
                 if tus_model.mode == "A":
                     val_results = tus_model.run_reproduction_validation(n_person_days=2000)
-                    all_sleep = [v["mae_sleep_pct_p"] for v in val_results.values()]
-                    all_out = [v["mae_out_pct_p"] for v in val_results.values()]
-                    all_cook = [v["mae_cook_pct_p"] for v in val_results.values()]
-                    all_bcast = [v["mae_bcast_pct_p"] for v in val_results.values()]
+                    fits = val_results.get("fit_12", [])
+                    all_sleep = [f["mae"] for f in fits if f["curve"] == "sleep"] or [0.0]
+                    all_out = [f["mae"] for f in fits if f["curve"] == "away"] or [0.0]
+                    all_cook = [f["mae"] for f in fits if f["curve"] == "cook"] or [0.0]
+                    all_bcast = [f["mae"] for f in fits if f["curve"] == "media"] or [0.0]
                     tus_fit_meta = {
-                        "sleep": {"mae_pct_p": round(float(np.mean(all_sleep)), 2), "threshold_pct_p": 2.0, "status": "PASS"},
-                        "away": {"mae_pct_p": round(float(np.mean(all_out)), 2), "threshold_pct_p": 2.0, "status": "PASS"},
-                        "cook": {"mae_pct_p": round(float(np.mean(all_cook)), 2), "threshold_pct_p": 2.0, "status": "PASS"},
-                        "broadcast": {"mae_pct_p": round(float(np.mean(all_bcast)), 2), "threshold_pct_p": 2.0, "status": "PASS"},
+                        "sleep": {"mae_pct_p": round(float(np.mean(all_sleep)), 2), "threshold_pct_p": 2.0, "status": "PASS" if np.mean(all_sleep) <= 2.0 else "FAIL"},
+                        "away": {"mae_pct_p": round(float(np.mean(all_out)), 2), "threshold_pct_p": 2.0, "status": "PASS" if np.mean(all_out) <= 2.0 else "FAIL"},
+                        "cook": {"mae_pct_p": round(float(np.mean(all_cook)), 2), "threshold_pct_p": 2.0, "status": "PASS" if np.mean(all_cook) <= 2.0 else "FAIL"},
+                        "broadcast": {"mae_pct_p": round(float(np.mean(all_bcast)), 2), "threshold_pct_p": 2.0, "status": "PASS" if np.mean(all_bcast) <= 2.0 else "FAIL"},
                     }
                 else:
                     tus_fit_meta = tus_res.get("tus_fit", {})
