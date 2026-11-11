@@ -1167,7 +1167,7 @@ class OccupancyTUSModel:
             path[t + 1] = rng.choice(3, p=T_matrices[t, path[t]])
         return path
 
-    def simulate_year(self, occupancy_rate: float) -> Dict[str, Any]:
+    def simulate_year(self, occupancy_rate: float, run_validation: bool = False) -> Dict[str, Any]:
         """Runs the 365-day occupant, appliance, and DHW simulation."""
         rng = np.random.default_rng(self.seed)
 
@@ -1473,7 +1473,7 @@ class OccupancyTUSModel:
             persons_state_15min.append(mapped)
 
         # Reproduction validation results
-        rep_val = self.run_reproduction_validation()
+        rep_val = self.run_reproduction_validation() if run_validation else {}
 
         appliance_15min = {
             "cooking": p_cooking_15min,
