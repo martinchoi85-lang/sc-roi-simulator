@@ -170,9 +170,22 @@ class OccupancyTUSModel:
                     prof = self._get_kosis_activity_profiles(dt, g)
 
                 # Standard states: 0=away, 1=home_act, 2=sleep
-                p_away_tgt = prof["pi_states"][::3, 0]  # 48 slots
-                p_home_tgt = prof["pi_states"][::3, 1]
-                p_sleep_tgt = prof["pi_states"][::3, 2]
+                p_away_tgt = prof["pi_states"][::3, 0].copy()  # 48 slots
+                p_home_tgt = prof["pi_states"][::3, 1].copy()
+                p_sleep_tgt = prof["pi_states"][::3, 2].copy()
+
+                # Requirement 1-(a): Align weekday away target curve to employed worker at workplace
+                # Smooth the lunch dip (slots 23..26, 11:30~13:30) where worker is having lunch at workplace/restaurant (state: away)
+                if dt == "weekday":
+                    p_away_tgt[23:26] = np.maximum(p_away_tgt[23:26], np.linspace(p_away_tgt[22], p_away_tgt[26], 3))
+                    p_home_tgt = np.maximum(0.0, 1.0 - p_away_tgt - p_sleep_tgt)
+                elif dt in ("saturday", "sunday"):
+                    p_away_tgt[23:26] = np.maximum(p_away_tgt[23:26], np.linspace(p_away_tgt[22], p_away_tgt[26], 3))
+                    # Requirement 1-(a): Weekend employed target = p_work * weekday_away + (1 - p_work) * off_away
+                    p_work_weekend = 0.486 if dt == "saturday" else 0.353
+                    p_away_wd = self._routine_dist_cache[("weekday", g)]["p_away_tgt"]
+                    p_away_tgt = p_work_weekend * p_away_wd + (1.0 - p_work_weekend) * p_away_tgt
+                    p_home_tgt = np.maximum(0.0, 1.0 - p_away_tgt - p_sleep_tgt)
 
                 d_name = "평일" if dt == "weekday" else ("토요일" if dt == "saturday" else "일요일")
                 if g == "avg":
@@ -239,10 +252,18 @@ class OccupancyTUSModel:
                 p_c = np.clip(p_c - 0.75 * diff, 0.0, 1.0)
             self._sleep_calib[dt] = p_c
 
-            # Precompute calibrated away curve per day_type using feedback loop (N=1500, 12 iterations)
+            # Precompute calibrated away curve per day_type using feedback loop (N=1500, 16 iterations)
             p_tgt_away = self._routine_dist_cache[(dt, "avg")]["p_away_tgt"]
-            p_c_away = np.clip(p_tgt_away / np.maximum(0.01, 1.0 - p_tgt_sleep), 0.0, 1.0)
-            for _ in range(12):
+            p_work = self._routine_dist_cache[(dt, "avg")]["p_work"]
+            if dt == "weekday":
+                p_c_away = np.clip(p_tgt_away / np.maximum(0.05, 1.0 - p_tgt_sleep), 0.0, 1.0)
+                p_c_away[2:8] = 0.0
+            else:
+                p_c_wd = self._away_calib["weekday"]
+                p_c_off = np.clip((p_tgt_away - p_work * self._routine_dist_cache[("weekday", "avg")]["p_away_tgt"]) / max(0.01, 1.0 - p_work), 0.0, 1.0)
+                p_c_away = np.clip(p_c_off / np.maximum(0.05, 1.0 - p_tgt_sleep), 0.0, 1.0)
+
+            for _ in range(16):
                 sim_m_away = np.zeros((1500, 48))
                 for i in range(1500):
                     # Sleep states
@@ -268,14 +289,20 @@ class OccupancyTUSModel:
                     st = np.full(48, 1, dtype=int)
                     st[p_s == 1] = 2
 
-                    cur_a = int(rng_pre.random() < p_c_away[0]) if st[0] != 2 else 0
+                    if dt == "weekday":
+                        p_cur_c = p_c_away
+                    else:
+                        does_w = (rng_pre.random() < p_work)
+                        p_cur_c = p_c_wd if does_w else p_c_away
+
+                    cur_a = int(rng_pre.random() < p_cur_c[0]) if st[0] != 2 else 0
                     if st[0] != 2 and cur_a == 1: st[0] = 0
                     for t in range(47):
                         if st[t+1] == 2:
                             cur_a = 0
                         else:
-                            pt = p_c_away[t]
-                            pn = p_c_away[t+1]
+                            pt = p_cur_c[t]
+                            pn = p_cur_c[t+1]
                             if cur_a == 1:
                                 cur_a = 1 if rng_pre.random() < min(1.0, pn / max(1e-6, pt)) else 0
                             else:
@@ -295,7 +322,12 @@ class OccupancyTUSModel:
                     sim_m_away[i] = (st == 0).astype(float)
 
                 diff_away = sim_m_away.mean(axis=0) - p_tgt_away
-                p_c_away = np.clip(p_c_away - 0.8 * diff_away, 0.0, 1.0)
+                update_mask = np.ones(48, dtype=bool)
+                if dt == "weekday":
+                    update_mask[2:8] = False
+                    p_c_away[update_mask] = np.clip(p_c_away[update_mask] - 0.7 * diff_away[update_mask], 0.0, 1.0)
+                else:
+                    p_c_away[update_mask] = np.clip(p_c_away[update_mask] - 0.7 * diff_away[update_mask] / (1.0 - p_work), 0.0, 1.0)
             self._away_calib[dt] = p_c_away
 
             # Precompute calibrated appliance probabilities conditioned on home_active state
@@ -341,13 +373,13 @@ class OccupancyTUSModel:
             prof_m = self._get_kosis_activity_profiles(d, "male")
             prof_f = self._get_kosis_activity_profiles(d, "female")
 
-            # 48-slot targets (combined 50:50 male/female)
+            # 48-slot targets from routine distribution cache (aligned to employed worker at workplace)
             # States: 0: away, 1: home_act, 2: sleep
-            p_away_tgt = 0.5 * (prof_m["pi_states"][::3, 0] + prof_f["pi_states"][::3, 0])
-            p_home_tgt = 0.5 * (prof_m["pi_states"][::3, 1] + prof_f["pi_states"][::3, 1])
-            p_sleep_tgt = 0.5 * (prof_m["pi_states"][::3, 2] + prof_f["pi_states"][::3, 2])
-            target_cook = 0.5 * (prof_m["cook"][::3] + prof_f["cook"][::3])
-            target_media = 0.5 * (prof_m["broadcast"][::3] + prof_f["broadcast"][::3])
+            p_away_tgt = self._routine_dist_cache[(d, "avg")]["p_away_tgt"]
+            p_home_tgt = self._routine_dist_cache[(d, "avg")]["p_home_tgt"]
+            p_sleep_tgt = self._routine_dist_cache[(d, "avg")]["p_sleep_tgt"]
+            target_cook = self._routine_dist_cache[(d, "avg")]["prof"]["cook"][::3]
+            target_media = self._routine_dist_cache[(d, "avg")]["prof"]["broadcast"][::3]
 
             sim_paths_48 = np.zeros((n_person_days, 48), dtype=int)
             cook_events_48 = np.zeros((n_person_days, 48), dtype=int)
@@ -1000,7 +1032,11 @@ class OccupancyTUSModel:
         t_bed = bed_slots[0] if bed_slots else 46
 
         # 2. Away Sampling using calibrated awake-away probabilities
-        p_c_away = self._away_calib[day_type]
+        # Requirement 1-(a): When employed worker works on weekends, follow weekday work routine
+        does_work = (rng.random() < p_work)
+        calib_dt = "weekday" if does_work else day_type
+        p_c_away = self._away_calib[calib_dt]
+
         cur_a = int(rng.random() < p_c_away[0]) if states_48[0] != 2 else 0
         if states_48[0] != 2 and cur_a == 1:
             states_48[0] = 0
@@ -1034,7 +1070,6 @@ class OccupancyTUSModel:
                     states_48[s] = 1
 
         # 3. Work, Commute & Travel Allocation (Strictly satisfying Rule 1-(b): away >= work + commute)
-        does_work = (rng.random() < p_work)
         away_minutes = float((states_48 == 0).sum() * 30)
         work_minutes = 0.0
         commute_travel_minutes = 0.0
@@ -1053,41 +1088,36 @@ class OccupancyTUSModel:
                 target_w = 406.0
                 target_c = 89.0
                 other_tr_tgt = 22.0
+                ref_away = 585.0
             elif day_type == "saturday":
                 target_w = 353.0
                 target_c = 74.0
                 other_tr_tgt = 35.0
+                ref_away = 585.0
             else:  # sunday
                 target_w = 325.0
                 target_c = 70.0
                 other_tr_tgt = 25.0
+                ref_away = 585.0
 
-            target_total = target_w + target_c
             # Strictly satisfy Rule 1-(b): away_minutes >= work + commute for each person-day
-            if away_minutes < target_total:
-                # Ensure worker has enough away time for work and commute
-                needed = int(np.ceil((target_total - away_minutes) / 30.0))
-                avail = [s for s in range(16, 38) if states_48[s] == 1]
-                for s in avail[:needed]:
-                    states_48[s] = 0
-                away_minutes = float((states_48 == 0).sum() * 30)
+            c_m = float(np.clip(rng.normal(target_c, 3.0), target_c - 10.0, target_c + 10.0))
+            if c_m > away_minutes * 0.25:
+                c_m = away_minutes * 0.25
+            rem = max(0.0, away_minutes - c_m)
+            base_w = float(np.clip(rng.normal(target_w, 6.0), target_w - 20.0, target_w + 20.0))
+            w_m = float(np.clip(base_w * (away_minutes / ref_away), 0.0, rem))
 
-            work_m = float(np.clip(rng.normal(target_w, 8.0), target_w - 30.0, target_w + 30.0))
-            commute_m = float(np.clip(rng.normal(target_c, 3.0), target_c - 10.0, target_c + 10.0))
-            if work_m + commute_m > away_minutes:
-                scale = away_minutes / (work_m + commute_m)
-                work_m *= scale
-                commute_m *= scale
-
-            work_minutes = work_m
-            commute_travel_minutes = commute_m
+            work_minutes = w_m
+            commute_travel_minutes = c_m
 
             rem_away = max(0.0, away_minutes - (work_minutes + commute_travel_minutes))
             other_travel_minutes = min(rem_away, float(np.clip(rng.normal(other_tr_tgt, 4.0), 5.0, 50.0)))
         else:
             # Non-worker on weekend: all travel is non-commute travel
             # KOSIS weekend total travel aligned: sat 102 min, sun 88 min
-            tr_tgt = 95.0 if day_type == "saturday" else 84.0
+            tr_tgt = 102.0 if day_type == "saturday" else 88.0
+            other_travel_minutes = min(away_minutes, float(np.clip(rng.normal(tr_tgt, 6.0), 30.0, 130.0)))
             other_travel_minutes = min(away_minutes, float(np.clip(rng.normal(tr_tgt, 6.0), 30.0, 130.0)))
 
         total_travel_minutes = commute_travel_minutes + other_travel_minutes
