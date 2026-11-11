@@ -394,14 +394,14 @@ def size_zero_energy_unconstrained(
                 rte=rte,
             )
 
-            capex_info = calculate_capex(
+            capex_info = calculate_capex_breakdown(
                 pv_capacity_kw=final_pv_kw,
                 ess_capacity_kwh=ess_capacity_kwh,
                 heating_package=heating_package,
+                with_subsidy=with_subsidy,
+                is_off_grid=True,
                 capex_config=capex_config,
                 subsidy_config=subsidy_config,
-                with_subsidy=with_subsidy,
-                target="zero_energy",
             )
 
             cand = {
