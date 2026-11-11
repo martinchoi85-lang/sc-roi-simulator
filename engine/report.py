@@ -1259,12 +1259,15 @@ def _write_validation_tables(report_data: Dict[str, Any], country_dir: Path, fil
     lines.extend([
         "",
         "### TUS 현실성(Realism) 점검 표 (취업자 하루 평균시간 vs KOSIS 통계)",
-        "| 행동 분류 | 요일 유형 | 시뮬레이션 평균(분) | KOSIS 통계 평균(분) | 단위 | 오차(분) |",
-        "|---|---|---|---|---|---|",
+        "| 행동 분류 | 요일 유형 | 시뮬레이션 평균(분) | KOSIS 통계 평균(분) | 단위 | 오차(분) | 출처(KOSIS 통계표) |",
+        "|---|---|---|---|---|---|---|",
     ])
     for r in tus_data.get("realism", []):
-        diff_m = r["sim"] - r["kosis"]
-        lines.append(f"| {r['metric']} | {r['daytype']} | {r['sim']} | {r['kosis']} | {r['unit']} | {diff_m:+d} |")
+        k_val = r.get("kosis")
+        diff_str = f"{r['sim'] - k_val:+d}" if k_val is not None else "-"
+        k_str = str(k_val) if k_val is not None else "-"
+        source_str = r.get("source", "-")
+        lines.append(f"| {r['metric']} | {r['daytype']} | {r['sim']} | {k_str} | {r['unit']} | {diff_str} | {source_str} |")
 
     lines.extend([
         "",

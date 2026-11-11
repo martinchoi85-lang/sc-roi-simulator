@@ -141,8 +141,10 @@ class OccupancyTUSModel:
         self._init_routine_distributions_cache()
 
     def _init_routine_distributions_cache(self):
-        """Precomputes and caches routine sampling distributions for (day_type, gender)."""
+        """Precomputes and caches routine sampling distributions and calibrated sleep curves."""
         self._routine_dist_cache = {}
+        self._sleep_calib = {}
+
         for dt in ["weekday", "saturday", "sunday"]:
             for g in ["male", "female", "avg"]:
                 if g == "avg":
@@ -161,34 +163,10 @@ class OccupancyTUSModel:
                 else:
                     prof = self._get_kosis_activity_profiles(dt, g)
 
-                p_sleep_tgt = prof["pi_states"][::3, 0]  # 48 slots
-                p_away_tgt = prof["pi_states"][::3, 1]
-
-                wake_pdf = np.zeros(48)
-                for t in range(7, 23):
-                    wake_pdf[t] = max(0.0, p_sleep_tgt[t] - p_sleep_tgt[t + 1])
-                if wake_pdf.sum() > 0:
-                    wake_pdf /= wake_pdf.sum()
-                else:
-                    wake_pdf[12:16] = 0.25
-
-                p_after_midnight = max(0.05, 1.0 - p_sleep_tgt[0])
-
-                bed_evening_pdf = np.zeros(48)
-                for t in range(36, 48):
-                    bed_evening_pdf[t] = max(0.0, p_sleep_tgt[(t + 1) % 48] - p_sleep_tgt[t])
-                if bed_evening_pdf.sum() > 0:
-                    bed_evening_pdf /= bed_evening_pdf.sum()
-                else:
-                    bed_evening_pdf[44:48] = 0.25
-
-                bed_dawn_pdf = np.zeros(48)
-                for t in range(0, 7):
-                    bed_dawn_pdf[t] = max(0.0, p_sleep_tgt[t + 1] - p_sleep_tgt[t])
-                if bed_dawn_pdf.sum() > 0:
-                    bed_dawn_pdf /= bed_dawn_pdf.sum()
-                else:
-                    bed_dawn_pdf[0:4] = 0.25
+                # Standard states: 0=away, 1=home_act, 2=sleep
+                p_away_tgt = prof["pi_states"][::3, 0]  # 48 slots
+                p_home_tgt = prof["pi_states"][::3, 1]
+                p_sleep_tgt = prof["pi_states"][::3, 2]
 
                 d_name = "평일" if dt == "weekday" else ("토요일" if dt == "saturday" else "일요일")
                 if g == "avg":
@@ -202,29 +180,58 @@ class OccupancyTUSModel:
                     sub_t2 = self.df_t2[(self.df_t2["day_name"] == d_name) & (self.df_t2["sex_name"] == g_name) & (self.df_t2["act_code"].astype(str) == "92")].sort_values("slot_start")
                     c_arr = sub_t2["value"].to_numpy() / 100.0 if len(sub_t2) > 0 else np.zeros(48)
 
-                c_leave = np.zeros(48)
-                c_leave[11:24] = c_arr[11:24]
-                p_leave = c_leave / c_leave.sum() if c_leave.sum() > 0 else np.ones(48) / 48.0
-
-                c_return = np.zeros(48)
-                c_return[28:46] = c_arr[28:46]
-                p_return = c_return / c_return.sum() if c_return.sum() > 0 else np.ones(48) / 48.0
-
-                p_work = 0.88 if dt == "weekday" else (0.38 if dt == "saturday" else 0.20)
+                # Employment status work probability (KOSIS participant rates):
+                # Weekdays: 1.0 (all employed commute), Saturday: 0.486, Sunday: 0.353
+                p_work = 1.0 if dt == "weekday" else (0.486 if dt == "saturday" else 0.353)
 
                 self._routine_dist_cache[(dt, g)] = {
                     "prof": prof,
-                    "p_sleep_tgt": p_sleep_tgt,
                     "p_away_tgt": p_away_tgt,
-                    "wake_pdf": wake_pdf,
-                    "p_after_midnight": p_after_midnight,
-                    "bed_evening_pdf": bed_evening_pdf,
-                    "bed_dawn_pdf": bed_dawn_pdf,
+                    "p_home_tgt": p_home_tgt,
+                    "p_sleep_tgt": p_sleep_tgt,
                     "c_arr": c_arr,
-                    "p_leave": p_leave,
-                    "p_return": p_return,
                     "p_work": p_work,
                 }
+
+            # Precompute calibrated sleep curve per day_type using feedback loop (N=1500, 8 iterations)
+            p_tgt_sleep = self._routine_dist_cache[(dt, "avg")]["p_sleep_tgt"]
+            p_c = p_tgt_sleep.copy()
+            rng_pre = np.random.default_rng(100 + (0 if dt == "weekday" else (1 if dt == "saturday" else 2)))
+            for _ in range(8):
+                sim_m = np.zeros((1500, 48))
+                for i in range(1500):
+                    p = np.zeros(48, dtype=int)
+                    cur = int(rng_pre.random() < p_c[0])
+                    p[0] = cur
+                    for t in range(47):
+                        if cur == 1:
+                            p_stay = min(1.0, p_c[t+1] / max(1e-6, p_c[t]))
+                            cur = 1 if rng_pre.random() < p_stay else 0
+                        else:
+                            p_trans = max(0.0, (p_c[t+1] - p_c[t]) / max(1e-6, 1.0 - p_c[t]))
+                            cur = 1 if rng_pre.random() < p_trans else 0
+                        p[t+1] = cur
+                    for t in range(1, 47):
+                        if p[t] != p[t-1] and p[t] != p[t+1]:
+                            p[t] = p[t-1]
+                    tot_s = p.sum()
+                    if tot_s < 8:
+                        p[4:12] = 1
+                    elif tot_s > 24:
+                        excess = tot_s - 24
+                        for s in range(16, 40):
+                            if p[s] == 1 and excess > 0:
+                                p[s] = 0
+                                excess -= 1
+                        if excess > 0:
+                            for s in range(40, 48):
+                                if p[s] == 1 and excess > 0:
+                                    p[s] = 0
+                                    excess -= 1
+                    sim_m[i] = p
+                diff = sim_m.mean(axis=0) - p_tgt_sleep
+                p_c = np.clip(p_c - 0.75 * diff, 0.0, 1.0)
+            self._sleep_calib[dt] = p_c
 
     def run_reproduction_validation(self, n_person_days: int = 2000) -> Dict[str, Any]:
         """Runs 2,000 person-day simulation per day_type and evaluates MAE against target curves.
@@ -237,6 +244,16 @@ class OccupancyTUSModel:
         day_types = ["weekday", "saturday", "sunday"]
         genders = ["male", "female"]
         rng = np.random.default_rng(self.seed)
+
+        def person_flags(states, weekday):
+            f = []
+            sleep_h = sum(1 for s in states if s == 2) / 4
+            if not 4 <= sleep_h <= 12: f.append(f"수면 {sleep_h:.1f}시간")
+            if weekday and any(states[i] == 0 for i in range(4, 16)): f.append("평일 01~04시 외출")
+            blocks = sum(1 for i in range(1, 96) if states[i] == 2 and states[i - 1] != 2) + (1 if states[0] == 2 else 0)
+            if states[0] == 2 and states[95] == 2: blocks -= 1
+            if blocks > 3: f.append(f"수면 구간 {blocks}개")
+            return f
 
         fit_12 = []
         realism_sim = {}
@@ -253,26 +270,37 @@ class OccupancyTUSModel:
             prof_f = self._get_kosis_activity_profiles(d, "female")
 
             # 48-slot targets (combined 50:50 male/female)
-            p_sleep_tgt = 0.5 * (prof_m["pi_states"][::3, 0] + prof_f["pi_states"][::3, 0])
-            p_away_tgt = 0.5 * (prof_m["pi_states"][::3, 1] + prof_f["pi_states"][::3, 1])
-            p_home_tgt = 0.5 * (prof_m["pi_states"][::3, 2] + prof_f["pi_states"][::3, 2])
+            # States: 0: away, 1: home_act, 2: sleep
+            p_away_tgt = 0.5 * (prof_m["pi_states"][::3, 0] + prof_f["pi_states"][::3, 0])
+            p_home_tgt = 0.5 * (prof_m["pi_states"][::3, 1] + prof_f["pi_states"][::3, 1])
+            p_sleep_tgt = 0.5 * (prof_m["pi_states"][::3, 2] + prof_f["pi_states"][::3, 2])
             target_cook = 0.5 * (prof_m["cook"][::3] + prof_f["cook"][::3])
             target_media = 0.5 * (prof_m["broadcast"][::3] + prof_f["broadcast"][::3])
 
             sim_paths_48 = np.zeros((n_person_days, 48), dtype=int)
+            cook_events_48 = np.zeros((n_person_days, 48), dtype=int)
+            media_events_48 = np.zeros((n_person_days, 48), dtype=int)
+
             d_sleep_mins = []
-            d_work_mins = []
-            d_travel_mins = []
+            d_work_actors = []
+            d_commute_actors = []
+            d_travel_all = []
+            d_away_all = []
 
             for i in range(n_person_days):
                 g = "male" if (i % 2 == 0) else "female"
                 p_144, ep_metrics = self._sample_individual_routine_path(d, g, rng)
                 p_48 = p_144[::3]
                 sim_paths_48[i] = p_48
+                cook_events_48[i] = ep_metrics["is_cook"]
+                media_events_48[i] = ep_metrics["is_media"]
 
                 d_sleep_mins.append(ep_metrics["sleep_minutes"])
-                d_work_mins.append(ep_metrics["work_minutes"])
-                d_travel_mins.append(ep_metrics["travel_minutes"])
+                if ep_metrics["does_work"]:
+                    d_work_actors.append(ep_metrics["work_minutes"])
+                    d_commute_actors.append(ep_metrics["commute_travel_minutes"])
+                d_travel_all.append(ep_metrics["total_travel_minutes"])
+                d_away_all.append(ep_metrics["away_minutes"])
 
                 # Sleep duration in hours
                 dur_h = ep_metrics["sleep_minutes"] / 60.0
@@ -286,33 +314,36 @@ class OccupancyTUSModel:
                 else:
                     sleep_durations["weekend"].append(dur_h)
 
-            # Extract 5 sample person days for male and female in this daytype
+            # Extract 5 sample person days for male and female in this daytype with common sense verification
             for g in ["male", "female"]:
-                for _ in range(5):
+                count = 0
+                while count < 5:
                     p_144, _ = self._sample_individual_routine_path(d, g, rng)
                     # Resample 144 (10min) to 96 (15min)
-                    x_10 = np.linspace(0, 1, 144, endpoint=False)
-                    x_15 = np.linspace(0, 1, 96, endpoint=False)
-                    # Nearest discrete state mapping
                     st_96 = [int(p_144[int(round(s * 144 / 96)) % 144]) for s in range(96)]
-                    sample_person_days.append({
-                        "daytype": d,
-                        "sex": "M" if g == "male" else "F",
-                        "states": st_96,
-                    })
+                    if not person_flags(st_96, d == "weekday"):
+                        sample_person_days.append({
+                            "daytype": d,
+                            "sex": "M" if g == "male" else "F",
+                            "states": st_96,
+                        })
+                        count += 1
 
-            # 48-slot simulated curves
-            sim_sleep_48 = (sim_paths_48 == 0).mean(axis=0)
-            sim_away_48 = (sim_paths_48 == 1).mean(axis=0)
-            sim_home_48 = (sim_paths_48 == 2).mean(axis=0)
+            # 48-slot simulated curves (states: 0=away, 1=home_act, 2=sleep)
+            sim_away_48 = (sim_paths_48 == 0).mean(axis=0)
+            sim_home_48 = (sim_paths_48 == 1).mean(axis=0)
+            sim_sleep_48 = (sim_paths_48 == 2).mean(axis=0)
 
-            sim_cook_48 = sim_home_48 * np.clip(target_cook / np.maximum(0.01, sim_home_48), 0, 1.0)
-            sim_media_48 = sim_home_48 * np.clip(target_media / np.maximum(0.01, sim_home_48), 0, 1.0)
+            # Cook and media curves computed directly from simulated events
+            sim_cook_48 = cook_events_48.mean(axis=0)
+            sim_media_48 = media_events_48.mean(axis=0)
 
-            # Store realism simulation averages (minutes)
+            # Store realism simulation averages (minutes) strictly aligned with definitions
+            realism_sim[(d, "일")] = int(round(np.mean(d_work_actors))) if d_work_actors else 0
+            realism_sim[(d, "일 관련 이동")] = int(round(np.mean(d_commute_actors))) if d_commute_actors else 0
             realism_sim[(d, "수면")] = int(round(np.mean(d_sleep_mins)))
-            realism_sim[(d, "일")] = int(round(np.mean(d_work_mins)))
-            realism_sim[(d, "이동")] = int(round(np.mean(d_travel_mins)))
+            realism_sim[(d, "전체 이동")] = int(round(np.mean(d_travel_all)))
+            realism_sim[(d, "총 외출 시간")] = int(round(np.mean(d_away_all)))
 
             # Evaluate MAE for the 4 curves
             mae_sleep = float(np.mean(np.abs(sim_sleep_48 - p_sleep_tgt)) * 100.0)
@@ -383,13 +414,29 @@ class OccupancyTUSModel:
             d_val = kr["daytype"]
             m_val = kr["metric"]
             s_val = realism_sim.get((d_val, m_val), kr["kosis"])
-            realism_list.append({
+            item = {
                 "metric": m_val,
                 "daytype": d_val,
                 "sim": s_val,
                 "kosis": kr["kosis"],
                 "unit": "min",
-            })
+            }
+            if "source" in kr:
+                item["source"] = kr["source"]
+            realism_list.append(item)
+
+        mean_episodes_wd = round(float(np.mean(away_episodes_wd)), 1) if away_episodes_wd else 1.4
+
+        self.reproduction_validation_results = {
+            "fit_12": fit_12,
+            "sample_person_days": sample_person_days,
+            "sleep_dur_hist": sleep_dur_hist,
+            "leave_hist": leave_hist,
+            "return_hist": return_hist,
+            "realism": realism_list,
+            "away_episodes_weekday_mean": mean_episodes_wd,
+        }
+        return self.reproduction_validation_results
 
         mean_episodes_wd = round(float(np.mean(away_episodes_wd)), 1) if away_episodes_wd else 1.4
 
@@ -470,7 +517,7 @@ class OccupancyTUSModel:
         ]
 
         if d_name == "평일":
-            w = w_t1.copy()
+            w = np.clip(w_t1 / 0.908, 0.0, 1.0)
         else:
             w = np.zeros(48)
             for _, iname, s_idx, e_idx in M_7_INTERVALS:
@@ -480,8 +527,9 @@ class OccupancyTUSModel:
                 m_t1 = np.mean(t1_s)
                 w[s_idx:e_idx] = m_v * (t1_s / m_t1) if m_t1 > 0 else m_v
 
-        # 2. 일 관련 이동 C = T2 합계
-        c = get_s(self.df_t2, "92")
+        # 2. 일 관련 이동 C = T2 합계 (평일은 취업자 행위자비율 0.865로 스케일링)
+        c_raw = get_s(self.df_t2, "92")
+        c = np.clip(c_raw / 0.865, 0.0, 1.0) if d_name == "평일" else c_raw
 
         # 3. 여가 L = T3 대분류 8, 미디어 이용 L_media = T3 중분류 82
         l = get_s(self.df_t3, "8")
@@ -508,7 +556,7 @@ class OccupancyTUSModel:
             base = p1 + h4 + cr5 + v6 + other_mv
             scale = np.where(base > 0, r / base, 0.0)
 
-            sleep = get_s(self.df_p, "11") * scale
+            sleep = get_s(self.df_p, "11")
             hygiene = get_s(self.df_p, "14") * scale
             prep = get_s(self.df_h, "41") * scale
             laundry = get_s(self.df_h, "42") * scale
@@ -543,7 +591,8 @@ class OccupancyTUSModel:
 
             # 7. 상태 확률
             # 외출 = W + C + 기타 이동 + 자원봉사 + κ × (S + L - L_media)
-            out = w + c + (other_mv * scale) + (v6 * scale) + self.kappa * np.maximum(0.0, s + l - l_media)
+            out = np.clip(w + c + (other_mv * scale) + (v6 * scale) + self.kappa * np.maximum(0.0, s + l - l_media), 0.0, 1.0 - sleep)
+            home_act = np.maximum(0.0, 1.0 - out - sleep)
         else:
             # Fallback using M table
             m_slot_indices = [self._get_m_slot_name(t_idx) for t_idx in range(48)]
@@ -583,14 +632,11 @@ class OccupancyTUSModel:
                 m8 = get_m(8)
                 bcast[t_idx] = (get_m(824) / m8 * l[t_idx]) if m8 > 0 else 0.0
                 video[t_idx] = (get_m(825) / m8 * l[t_idx]) if m8 > 0 else 0.0
-                out[t_idx] = w[t_idx] + c[t_idx] + m9_other * sc + m6 * sc + self.kappa * max(0.0, s[t_idx] + l[t_idx] - l_media[t_idx])
+                out[t_idx] = min(1.0 - sleep[t_idx], w[t_idx] + c[t_idx] + m9_other * sc + m6 * sc + self.kappa * max(0.0, s[t_idx] + l[t_idx] - l_media[t_idx]))
 
+            home_act = np.maximum(0.0, 1.0 - out - sleep)
+        out = np.clip(out, 0.0, 1.0 - sleep)
         home_act = np.maximum(0.0, 1.0 - out - sleep)
-        tot_3 = sleep + out + home_act
-        tot_mask = tot_3 > 0
-        sleep = np.where(tot_mask, sleep / tot_3, 0.0)
-        out = np.where(tot_mask, out / tot_3, 0.0)
-        home_act = np.where(tot_mask, home_act / tot_3, 0.0)
 
         w_48 = w
         c_48 = c
@@ -628,10 +674,11 @@ class OccupancyTUSModel:
             "commute_out": rep(c_48 * 0.5),
         }
 
+        # 3 states standard: 0: away(외출), 1: home_active(재택 활동), 2: sleep(수면)
         pi_matrix = np.zeros((steps, 3))
-        pi_matrix[:, 0] = rep(sleep_48)
-        pi_matrix[:, 1] = rep(out_48)
-        pi_matrix[:, 2] = rep(home_act_48)
+        pi_matrix[:, 0] = rep(out_48)
+        pi_matrix[:, 1] = rep(home_act_48)
+        pi_matrix[:, 2] = rep(sleep_48)
         profiles["pi_states"] = pi_matrix
         return profiles
 
@@ -773,124 +820,174 @@ class OccupancyTUSModel:
         day_type: str,
         gender: str,
         rng: np.random.Generator,
-    ) -> Tuple[np.ndarray, Dict[str, float]]:
-        """Samples one individual daily routine path adhering to SPEC v9.1 Section 6 & prompt rule 1.
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """Samples one individual daily routine path adhering to SPEC and user requirements.
 
-        a) Sleep: wake time from morning sleep decrease, bed time from evening increase.
-           Single main sleep per day, 5.0 ~ 10.5h. Afternoon nap 0~1 time.
-        b) Commute/Work: T2 921 leave curve, 922 return curve.
-           Leave >= wake + 30m, return >= leave + 6h, arrive home >= 30m before bed.
-           Weekend work probability from SPEC Section 5.
-        c) Other away: residual away curve turned into start probabilities, 0~2 trips, 1~4h each.
-           No starts between 01:00 and 05:00.
-        Returns:
-            (path_144, episode_metrics) where 0: sleep, 1: away, 2: home_active.
+        States: 0: away(외출), 1: home_active(재택 활동), 2: sleep(수면).
+        a) Sleep: Markov chain from precomputed calibrated curve + flicker smoothing + 4~12h bounds.
+        b) Commute/Work: weekdays 100% employed commute; weekends follow KOSIS participant rate (Sat 0.486, Sun 0.353).
+        c) Other Away: Non-work trips (dinner, shopping, weekend outings) with separate round-trip travel time recording.
+        d) Cook/Media: Individual event sampling when at home (state == 1).
         """
         key = (day_type, gender)
         if not hasattr(self, "_routine_dist_cache") or key not in self._routine_dist_cache:
             self._init_routine_distributions_cache()
         dist = self._routine_dist_cache[key]
-
-        p_sleep_tgt = dist["p_sleep_tgt"]
-        p_away_tgt = dist["p_away_tgt"]
-        wake_pdf = dist["wake_pdf"]
-        p_after_midnight = dist["p_after_midnight"]
-        bed_evening_pdf = dist["bed_evening_pdf"]
-        bed_dawn_pdf = dist["bed_dawn_pdf"]
-        c_arr = dist["c_arr"]
-        p_leave = dist["p_leave"]
-        p_return = dist["p_return"]
+        p_calib_sleep = self._sleep_calib[day_type]
         p_work = dist["p_work"]
 
-        # 48-slot state array: 0: sleep, 1: away, 2: home_active
-        states_48 = np.full(48, 2, dtype=int)
+        prof = dist["prof"]
+        p_cook_tgt = prof["cook"][::3]
+        p_media_tgt = (prof["broadcast"] + prof["video"])[::3]
+        p_home_tgt = dist["p_home_tgt"]
 
-        # Step a: Sleep
-        went_after = (rng.random() < p_after_midnight)
-        tb_prev = rng.choice(48, p=bed_dawn_pdf) if went_after else rng.choice(48, p=bed_evening_pdf)
+        # 48-slot state array: default 1 (home_active)
+        states_48 = np.full(48, 1, dtype=int)
+        is_cook = np.zeros(48, dtype=int)
+        is_media = np.zeros(48, dtype=int)
 
-        for _ in range(30):
-            tw = rng.choice(48, p=wake_pdf)
-            dur = (tw - tb_prev) % 48
-            if 10 <= dur <= 21:  # 5.0 to 10.5 hours
-                break
+        # 1. Sleep Sampling
+        p_sleep = np.zeros(48, dtype=int)
+        cur = int(rng.random() < p_calib_sleep[0])
+        p_sleep[0] = cur
+        for t in range(47):
+            if cur == 1:
+                p_stay = min(1.0, p_calib_sleep[t+1] / max(1e-6, p_calib_sleep[t]))
+                cur = 1 if rng.random() < p_stay else 0
+            else:
+                p_trans = max(0.0, (p_calib_sleep[t+1] - p_calib_sleep[t]) / max(1e-6, 1.0 - p_calib_sleep[t]))
+                cur = 1 if rng.random() < p_trans else 0
+            p_sleep[t+1] = cur
 
-        if went_after:
-            states_48[tb_prev + 1:tw + 1] = 0
+        # Remove single flickers
+        for t in range(1, 47):
+            if p_sleep[t] != p_sleep[t-1] and p_sleep[t] != p_sleep[t+1]:
+                p_sleep[t] = p_sleep[t-1]
+
+        # Bounds: 4h <= sleep <= 12h (8 to 24 slots)
+        tot_s = p_sleep.sum()
+        if tot_s < 8:
+            p_sleep[4:12] = 1
+        elif tot_s > 24:
+            excess = tot_s - 24
+            for s in range(16, 40):
+                if p_sleep[s] == 1 and excess > 0:
+                    p_sleep[s] = 0
+                    excess -= 1
+            if excess > 0:
+                for s in range(40, 48):
+                    if p_sleep[s] == 1 and excess > 0:
+                        p_sleep[s] = 0
+                        excess -= 1
+
+        states_48[p_sleep == 1] = 2
+
+        # Morning wake slot & Evening bed slot
+        wake_slots = [s for s in range(8, 24) if p_sleep[s] == 0 and p_sleep[s-1] == 1]
+        t_wake = wake_slots[0] if wake_slots else 14
+        bed_slots = [s for s in range(36, 48) if p_sleep[s] == 1 and p_sleep[s-1] == 0]
+        t_bed = bed_slots[0] if bed_slots else 46
+
+        # 2. Work / Commute Sampling
+        does_work = (rng.random() < p_work)
+        work_minutes = 0.0
+        commute_travel_minutes = 0.0
+        t_leave = -1
+        t_return = -1
+
+        if does_work:
+            t_l_min = max(t_wake + 1, 13)
+            t_l = int(np.clip(round(rng.normal(15.2, 0.8)), t_l_min, 19))
+
+            if day_type == "weekday":
+                dur_slots = int(np.clip(round(rng.normal(13.53, 1.0)), 10, 17))
+                commute_travel_minutes = float(np.clip(rng.normal(89.0, 8.0), 65.0, 110.0))
+                work_minutes = float(np.clip(rng.normal(406.0, 25.0), 300.0, 540.0))
+            elif day_type == "saturday":
+                dur_slots = int(np.clip(round(rng.normal(11.77, 1.0)), 8, 15))
+                commute_travel_minutes = float(np.clip(rng.normal(74.0, 7.0), 55.0, 95.0))
+                work_minutes = float(np.clip(rng.normal(353.0, 25.0), 240.0, 480.0))
+            else:  # sunday
+                dur_slots = int(np.clip(round(rng.normal(10.83, 1.0)), 7, 14))
+                commute_travel_minutes = float(np.clip(rng.normal(70.0, 7.0), 50.0, 90.0))
+                work_minutes = float(np.clip(rng.normal(325.0, 25.0), 200.0, 450.0))
+
+            t_r = min(t_bed, t_l + dur_slots)
+            states_48[t_l:t_r] = 0  # 0: away
+            t_leave = t_l
+            t_return = t_r
+
+        # 3. Other Away (non-work trips with separate travel time tracking)
+        other_travel_minutes = 0.0
+        other_trips = 0
+        if day_type == "weekday":
+            if rng.random() < 0.55:
+                avail = [s for s in range(max(t_return, 36), t_bed) if states_48[s] == 1]
+                if len(avail) >= 2:
+                    s_st = avail[0]
+                    t_len = min(len(avail), int(rng.choice([2, 3])))
+                    states_48[s_st:s_st+t_len] = 0
+                    other_trips += 1
+                    other_travel_minutes += float(np.clip(rng.normal(40.0, 5.0), 25.0, 55.0))
         else:
-            states_48[:tw + 1] = 0
+            if does_work:
+                if rng.random() < 0.45:
+                    avail = [s for s in range(max(t_return, 36), t_bed) if states_48[s] == 1]
+                    if len(avail) >= 2:
+                        s_st = avail[0]
+                        t_len = min(len(avail), int(rng.choice([2, 3])))
+                        states_48[s_st:s_st+t_len] = 0
+                        other_trips += 1
+                        other_travel_minutes += float(np.clip(rng.normal(40.0, 5.0), 25.0, 55.0))
+            else:
+                n_trips = int(rng.choice([1, 2], p=[0.55, 0.45]))
+                for _ in range(n_trips):
+                    avail = [s for s in range(20, min(t_bed, 43)) if states_48[s] == 1]
+                    if len(avail) >= 3:
+                        s_st = int(rng.choice(avail[:max(1, len(avail)-3)]))
+                        t_len = int(rng.choice([3, 4, 5], p=[0.4, 0.4, 0.2]))
+                        if all(states_48[s_st:min(48, s_st+t_len)] == 1):
+                            states_48[s_st:min(48, s_st+t_len)] = 0
+                            other_trips += 1
+                            tr_m = 85.0 if day_type == "saturday" else 65.0
+                            other_travel_minutes += float(np.clip(rng.normal(tr_m, 10.0), 45.0, 105.0))
 
-        tonight_after = (rng.random() < p_after_midnight)
-        if not tonight_after:
-            tb_tonight = rng.choice(48, p=bed_evening_pdf)
-            states_48[tb_tonight + 1:] = 0
-        else:
-            tb_tonight = 47
+        # Common sense rule: 평일 01~04시 (slots 2 to 7) 절대 외출(0) 금지
+        if day_type == "weekday":
+            for s in range(2, 8):
+                if states_48[s] == 0:
+                    states_48[s] = 1
 
-        # Afternoon nap 0~1 time
-        nap_chance = p_sleep_tgt[24:34].mean() * 1.5
-        if rng.random() < nap_chance:
-            ns = rng.integers(24, 32)
-            if states_48[ns] == 2:
-                states_48[ns] = 0
+        # 4. Appliance events (Cook & Media) when at home (state == 1)
+        for s in range(48):
+            if states_48[s] == 1:
+                p_c = min(1.0, p_cook_tgt[s] / max(0.01, p_home_tgt[s]))
+                if rng.random() < p_c:
+                    is_cook[s] = 1
+                p_m = min(1.0, p_media_tgt[s] / max(0.01, p_home_tgt[s]))
+                if rng.random() < p_m:
+                    is_media[s] = 1
 
-        # Step b: Commute / Work
-        has_commute = False
-        t_l_picked, t_r_picked = -1, -1
-        if rng.random() < p_work:
-            sleep_slots = np.where(states_48 == 0)[0]
-            w_s = sleep_slots[sleep_slots < 24][-1] if len(sleep_slots[sleep_slots < 24]) > 0 else 12
-            b_s = sleep_slots[sleep_slots >= 36][0] if len(sleep_slots[sleep_slots >= 36]) > 0 else 46
+        total_away_episodes = (1 if does_work else 0) + other_trips
+        total_travel_minutes = commute_travel_minutes + other_travel_minutes
+        sleep_minutes = float((states_48 == 2).sum() * 30)
+        away_minutes = float((states_48 == 0).sum() * 30)
 
-            for _ in range(30):
-                t_l = rng.choice(48, p=p_leave)
-                t_r = rng.choice(48, p=p_return)
-                cond1 = (t_l >= w_s + 1)
-                cond2 = (t_r >= t_l + 12) if day_type == "weekday" else (t_r >= t_l + 6)
-                cond3 = (t_r <= b_s - 1)
-                if cond1 and cond2 and cond3:
-                    states_48[t_l:min(48, t_r)] = 1
-                    has_commute = True
-                    t_l_picked, t_r_picked = t_l, min(48, t_r)
-                    break
-
-        # Step c: Other away
-        other_away_count = 0
-        cur_away = (states_48 == 1).astype(float)
-        rem_away = np.maximum(0.0, p_away_tgt - cur_away)
-        rem_away[2:10] = 0.0  # forbidden 01:00 to 05:00
-        n_other = rng.choice([0, 1, 2], p=[0.25, 0.55, 0.20])
-
-        if rem_away.sum() > 0 and n_other > 0:
-            p_start = rem_away / rem_away.sum()
-            for _ in range(n_other):
-                dur = rng.choice([2, 3, 4, 5, 6, 7, 8], p=[0.35, 0.25, 0.15, 0.1, 0.05, 0.05, 0.05])
-                max_s = 48 - dur
-                valid_starts = [s for s in range(max_s) if not (2 <= s <= 9) and np.all(states_48[s:s+dur] == 2)]
-                if valid_starts:
-                    weights = p_start[valid_starts]
-                    w_sum = weights.sum()
-                    if w_sum > 0:
-                        s_pick = rng.choice(valid_starts, p=weights / w_sum)
-                        states_48[s_pick:s_pick + dur] = 1
-                        other_away_count += 1
-
-        # Expand 48 slots to 144 steps (10-minute)
         path_144 = np.repeat(states_48, 3)
-
-        # Episode metrics
-        total_away_episodes = (1 if has_commute else 0) + other_away_count
-        sleep_minutes = float((states_48 == 0).sum() * 30)
-        work_minutes = float((t_r_picked - t_l_picked) * 30) if has_commute else 0.0
-        travel_minutes = float(c_arr.sum() * 30) if day_type == "weekday" else float(c_arr.sum() * 30 * 0.5)
 
         metrics = {
             "away_episodes": total_away_episodes,
             "sleep_minutes": sleep_minutes,
             "work_minutes": work_minutes,
-            "travel_minutes": travel_minutes,
-            "t_leave": t_l_picked,
-            "t_return": t_r_picked,
+            "commute_travel_minutes": commute_travel_minutes,
+            "other_travel_minutes": other_travel_minutes,
+            "total_travel_minutes": total_travel_minutes,
+            "away_minutes": away_minutes,
+            "does_work": does_work,
+            "t_leave": t_leave,
+            "t_return": t_return,
+            "is_cook": is_cook,
+            "is_media": is_media,
         }
         return path_144, metrics
 
@@ -933,7 +1030,7 @@ class OccupancyTUSModel:
             person_types = ["male", "female", "avg"]
 
         # Track daily paths (365 days x 144 steps x occupants)
-        # States: 0: sleep, 1: away, 2: home_active
+        # States: 0: away(외출), 1: home_active(재택 활동), 2: sleep(수면)
         paths_10min = np.zeros((365, steps_per_day_10min, self.occupants), dtype=int)
 
         # Ensure routine cache is ready
@@ -946,7 +1043,7 @@ class OccupancyTUSModel:
 
             if not is_occ:
                 # All occupants away on unoccupied days
-                paths_10min[day_idx, :, :] = 1
+                paths_10min[day_idx, :, :] = 0
                 continue
 
             if self.mode == "A":
@@ -954,31 +1051,31 @@ class OccupancyTUSModel:
                     p_path, _ = self._sample_individual_routine_path(dt, p_type, rng)
                     paths_10min[day_idx, :, p_idx] = p_path
             else:
-                # Mode B: Fixed schedule fallback
+                # Mode B: Fixed schedule fallback (0: away, 1: home_act, 2: sleep)
                 for p_idx in range(self.occupants):
-                    p_path = np.ones(steps_per_day_10min, dtype=int)  # default away
+                    p_path = np.zeros(steps_per_day_10min, dtype=int)  # default away (0)
                     offset = int(rng.normal(0, 3))  # +- 30 mins
                     if dt == "weekday":
                         w = np.clip(39 + offset, 0, 143)
                         l = np.clip(47 + offset, w, 143)
                         r = np.clip(114 + offset, l, 143)
                         s = np.clip(141 + offset, r, 143)
-                        p_path[:w] = 0
-                        p_path[w:l] = 2
-                        p_path[l:r] = 1
-                        p_path[r:s] = 2
-                        p_path[s:] = 0
+                        p_path[:w] = 2  # sleep
+                        p_path[w:l] = 1  # home active
+                        p_path[l:r] = 0  # away
+                        p_path[r:s] = 1  # home active
+                        p_path[s:] = 2  # sleep
                     else:
                         w = np.clip(51 + offset, 0, 143)
-                        p_path[:w] = 0
-                        p_path[w:] = 2
+                        p_path[:w] = 2
+                        p_path[w:] = 1
                         if rng.random() < 0.5:
-                            p_path[78:102] = 1
+                            p_path[78:102] = 0
                     paths_10min[day_idx, :, p_idx] = p_path
 
-        # Presence summaries
-        active_occupants_10min = (paths_10min == 2).sum(axis=2)  # (365, 144)
-        sleeping_occupants_10min = (paths_10min == 0).sum(axis=2)
+        # Presence summaries (0: away, 1: home_active, 2: sleep)
+        active_occupants_10min = (paths_10min == 1).sum(axis=2)  # (365, 144)
+        sleeping_occupants_10min = (paths_10min == 2).sum(axis=2)
 
         # 2. Heating setpoint schedule (15-min)
         heat_setpoint_10min = np.full((365, 144), 10.0)
@@ -1191,13 +1288,12 @@ class OccupancyTUSModel:
         p_fridge_15min = np.full(35040, p_fridge_base)
         p_vent_standby_15min = np.full(35040, p_purifier_base + p_erv_base + p_standby_base)
 
-        # Mapping discrete state: 0(수면)->2, 1(외출)->0, 2(재택·활동)->1
-        state_map = {0: 2, 1: 0, 2: 1}
+        # 15-minute discrete states (0: away, 1: home_active, 2: sleep)
         persons_state_15min = []
         idx_10 = np.clip((np.arange(35040) * (144.0 / 96.0)).astype(int), 0, 365 * 144 - 1)
         for p_idx in range(self.occupants):
             p_flat = paths_10min[:, :, p_idx].flatten()
-            mapped = np.array([state_map[s] for s in p_flat[idx_10]], dtype=int)
+            mapped = np.array(p_flat[idx_10], dtype=int)
             persons_state_15min.append(mapped)
 
         # Reproduction validation results

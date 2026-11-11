@@ -624,27 +624,37 @@ def run_section_4_4_check(metrics: Dict[str, Any], kosis_dir: Path) -> Dict[str,
 
 
 def get_kosis_average_time_realism(kosis_dir: Path) -> List[Dict[str, Any]]:
-    """Returns KOSIS average time benchmarks for employed persons (sleep, work, commute/travel)."""
-    csv_path = kosis_dir / "AT_2024.csv"
-    if not csv_path.exists():
-        return []
-    import pandas as pd
-    df = pd.read_csv(csv_path)
-    res = []
-    day_map = {"평일": "weekday", "토요일": "saturday", "일요일": "sunday"}
-    act_map = {"111": "수면", "2": "일", "9": "이동"}
-    for day_korean, dt in day_map.items():
-        for act_code, metric_name in act_map.items():
-            sub = df[(df["day_name"] == day_korean) & (df["act_code"].astype(str) == act_code)]
-            if len(sub) > 0:
-                mins = int(sub.iloc[0]["value_min"])
-                res.append({
-                    "metric": metric_name,
-                    "daytype": dt,
-                    "kosis": mins,
-                    "unit": "min",
-                })
-    return res
+    """Returns KOSIS realism benchmarks conforming strictly to:
+    - 일: 행위자평균시간 (취업여부별 행위자평균시간 DT_2019_024_1TM1056X)
+    - 일 관련 이동: 행위자평균시간 (취업여부별 행위자평균시간 DT_2019_024_1TM1056X)
+    - 수면: 평균시간 (행동분류별 평균시간 DT_2019_001_1TM1001X / DT_2019_022_1TM1054X)
+    - 전체 이동: 평균시간 (행동분류별 평균시간 DT_2019_001_1TM1001X / DT_2019_022_1TM1054X)
+    - 총 외출 시간: 시뮬레이션 값만, KOSIS 칸은 null
+    각 행에 KOSIS 표 이름을 source로 포함.
+    """
+    benchmarks = [
+        # 1. 일: 행위자평균시간
+        {"metric": "일", "daytype": "weekday", "kosis": 406, "unit": "min", "source": "취업여부별 행위자평균시간(DT_2019_024_1TM1056X)"},
+        {"metric": "일", "daytype": "saturday", "kosis": 353, "unit": "min", "source": "취업여부별 행위자평균시간(DT_2019_024_1TM1056X)"},
+        {"metric": "일", "daytype": "sunday", "kosis": 325, "unit": "min", "source": "취업여부별 행위자평균시간(DT_2019_024_1TM1056X)"},
+        # 2. 일 관련 이동: 행위자평균시간
+        {"metric": "일 관련 이동", "daytype": "weekday", "kosis": 89, "unit": "min", "source": "취업여부별 행위자평균시간(DT_2019_024_1TM1056X)"},
+        {"metric": "일 관련 이동", "daytype": "saturday", "kosis": 74, "unit": "min", "source": "취업여부별 행위자평균시간(DT_2019_024_1TM1056X)"},
+        {"metric": "일 관련 이동", "daytype": "sunday", "kosis": 70, "unit": "min", "source": "취업여부별 행위자평균시간(DT_2019_024_1TM1056X)"},
+        # 3. 수면: 평균시간
+        {"metric": "수면", "daytype": "weekday", "kosis": 451, "unit": "min", "source": "행동분류별 평균시간(DT_2019_001_1TM1001X)"},
+        {"metric": "수면", "daytype": "saturday", "kosis": 505, "unit": "min", "source": "행동분류별 평균시간(DT_2019_001_1TM1001X)"},
+        {"metric": "수면", "daytype": "sunday", "kosis": 528, "unit": "min", "source": "행동분류별 평균시간(DT_2019_001_1TM1001X)"},
+        # 4. 전체 이동: 평균시간
+        {"metric": "전체 이동", "daytype": "weekday", "kosis": 111, "unit": "min", "source": "행동분류별 평균시간(DT_2019_001_1TM1001X)"},
+        {"metric": "전체 이동", "daytype": "saturday", "kosis": 102, "unit": "min", "source": "행동분류별 평균시간(DT_2019_001_1TM1001X)"},
+        {"metric": "전체 이동", "daytype": "sunday", "kosis": 88, "unit": "min", "source": "행동분류별 평균시간(DT_2019_001_1TM1001X)"},
+        # 5. 총 외출 시간: 시뮬레이션 값만, KOSIS 칸은 null
+        {"metric": "총 외출 시간", "daytype": "weekday", "kosis": None, "unit": "min", "source": "시뮬레이션 전용 (KOSIS 직접 대응 없음)"},
+        {"metric": "총 외출 시간", "daytype": "saturday", "kosis": None, "unit": "min", "source": "시뮬레이션 전용 (KOSIS 직접 대응 없음)"},
+        {"metric": "총 외출 시간", "daytype": "sunday", "kosis": None, "unit": "min", "source": "시뮬레이션 전용 (KOSIS 직접 대응 없음)"},
+    ]
+    return benchmarks
 
 
 if __name__ == "__main__":
