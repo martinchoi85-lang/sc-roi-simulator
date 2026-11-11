@@ -322,6 +322,108 @@ def size_zero_energy(
     }
 
 
+def size_zero_energy_unconstrained(
+    p_load_kw: np.ndarray,
+    p_pv1_kw: np.ndarray,
+    dates: pd.DatetimeIndex,
+    capex_config: Dict[str, Any],
+    subsidy_config: Dict[str, Any],
+    heating_package: str,
+    with_subsidy: bool = False,
+    ess_module_kwh: float = 9.6,
+    soh_eol: float = 0.70,
+    soc_min: float = 0.00,
+    soc_max: float = 1.00,
+    rte: float = 0.90,
+    max_search_modules: int = 15,
+) -> Dict[str, Any]:
+    """Sizes PV and ESS for zero_energy WITHOUT start condition (explores modules starting from 1).
+
+    Finds the lowest net CAPEX combination achieving LOL = 0 under EoL conditions.
+    """
+    dt_h = 0.25
+    eff_d = np.sqrt(rte)
+    soc_window = soc_max - soc_min
+    single_module_usable_kwh = ess_module_kwh * soh_eol * soc_window * eff_d
+    pv_deg_factor = 0.995**24
+
+    best_candidate = None
+    min_net_capex = float("inf")
+    max_pv_search = 60.0
+
+    for m in range(1, max_search_modules + 1):
+        ess_capacity_kwh = m * ess_module_kwh
+        usable_ess_kwh = single_module_usable_kwh * m
+
+        low_step = 1
+        high_step = int(max_pv_search / 0.5)
+        best_step = None
+
+        while low_step <= high_step:
+            mid_step = (low_step + high_step) // 2
+            test_pv_kw = mid_step * 0.5
+            p_pv_eol = p_pv1_kw * test_pv_kw * pv_deg_factor
+
+            unmet, lol, _ = fast_simulate_offgrid(
+                p_load_kw=p_load_kw,
+                p_pv_kw=p_pv_eol,
+                ess_kwh=ess_capacity_kwh,
+                soc_min=soc_min,
+                soc_max=soc_max,
+                soh_eol=soh_eol,
+                rte=rte,
+                early_exit_unmet=True,
+            )
+
+            if unmet <= 1e-4 and lol <= 1e-4:
+                best_step = mid_step
+                high_step = mid_step - 1
+            else:
+                low_step = mid_step + 1
+
+        if best_step is not None:
+            final_pv_kw = best_step * 0.5
+            p_pv_eol = p_pv1_kw * final_pv_kw * pv_deg_factor
+            final_unmet, final_lol, _ = fast_simulate_offgrid(
+                p_load_kw=p_load_kw,
+                p_pv_kw=p_pv_eol,
+                ess_kwh=ess_capacity_kwh,
+                soc_min=soc_min,
+                soc_max=soc_max,
+                soh_eol=soh_eol,
+                rte=rte,
+            )
+
+            capex_info = calculate_capex(
+                pv_capacity_kw=final_pv_kw,
+                ess_capacity_kwh=ess_capacity_kwh,
+                heating_package=heating_package,
+                capex_config=capex_config,
+                subsidy_config=subsidy_config,
+                with_subsidy=with_subsidy,
+                target="zero_energy",
+            )
+
+            cand = {
+                "pv_capacity_kw": final_pv_kw,
+                "ess_capacity_kwh": ess_capacity_kwh,
+                "ess_modules": m,
+                "usable_ess_kwh": usable_ess_kwh,
+                "capex_info": capex_info,
+                "unmet_kwh": final_unmet,
+                "lol_hours": final_lol,
+            }
+
+            if capex_info["net_capex"] < min_net_capex:
+                min_net_capex = capex_info["net_capex"]
+                best_candidate = cand
+
+    if best_candidate is None:
+        raise RuntimeError("No feasible zero energy sizing found even with 60kW PV and 15 ESS modules.")
+
+    return best_candidate
+
+
 def size_zero_bill(
     p_load_kw: np.ndarray,
     p_pv1_kw: np.ndarray,

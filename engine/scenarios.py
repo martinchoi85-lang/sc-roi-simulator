@@ -28,7 +28,7 @@ from engine.tariffs.korea import KoreaTariffCalculator
 from engine.capex import calculate_capex_breakdown
 from engine.cashflow import calculate_100y_cashflow
 from engine.occupancy_tus import OccupancyTUSModel
-from engine.sizing import size_zero_energy, size_zero_bill, size_near_zero_bill, fast_simulate_offgrid
+from engine.sizing import size_zero_energy, size_zero_bill, size_near_zero_bill, fast_simulate_offgrid, size_zero_energy_unconstrained
 
 
 def run_all_scenarios(
@@ -245,9 +245,11 @@ def run_all_scenarios(
     # Size all 3 targets for the 70 unique cases (7 pairs x 2 heating x 5 occupancies)
     print("Sizing systems (Zero Energy, Zero Bill, Near Zero) for 70 unique cases...")
     ze_sizing_cache = {}
+    ze_no_start_cache = {}
     zb_sizing_cache = {}
     nz_sizing_cache = {}
     ze_sizing_rows = []
+    ze_no_start_rows = []
 
     for pair in house_occupant_pairs:
         h_name = pair["house"]
@@ -284,6 +286,38 @@ def run_all_scenarios(
                     rte=0.90,
                 )
                 ze_sizing_cache[(h_name, occ, heat_pkg, occ_rate)] = ze_res
+
+                # 1b. Zero Energy Sizing without Start Condition (Unconstrained)
+                ze_no_start = size_zero_energy_unconstrained(
+                    p_load_kw=p_load_kw,
+                    p_pv1_kw=p_pv1_kw,
+                    dates=dates,
+                    capex_config=capex_cfg,
+                    subsidy_config=subsidy_cfg,
+                    heating_package=heat_pkg,
+                    with_subsidy=False,
+                    soc_min=0.00,
+                    soc_max=1.00,
+                    soh_eol=0.70,
+                    rte=0.90,
+                )
+                ze_no_start_cache[(h_name, occ, heat_pkg, occ_rate)] = ze_no_start
+
+                ze_no_start_rows.append({
+                    "house_model": h_name,
+                    "occupants": occ,
+                    "heating_package": heat_pkg,
+                    "occupancy_rate_pct": f"{int(occ_rate*100)}%",
+                    "max_daily_load_kwh": round(float(ze_res["max_daily_load_kwh"]), 1),
+                    "base_modules": ze_res["ess_modules"],
+                    "base_pv_kw": round(float(ze_res["pv_capacity_kw"]), 1),
+                    "base_capex_krw": int(round(ze_res["capex_info"]["net_capex"])),
+                    "no_start_modules": ze_no_start["ess_modules"],
+                    "no_start_pv_kw": round(float(ze_no_start["pv_capacity_kw"]), 1),
+                    "no_start_capex_krw": int(round(ze_no_start["capex_info"]["net_capex"])),
+                    "diff_modules": int(ze_res["ess_modules"] - ze_no_start["ess_modules"]),
+                    "diff_capex_krw": int(round(ze_res["capex_info"]["net_capex"] - ze_no_start["capex_info"]["net_capex"])),
+                })
 
                 # Evaluate LOL if 100% occupancy system applied to this occupancy rate
                 ze_100_res = ze_sizing_cache.get((h_name, occ, heat_pkg, 1.00), ze_res)
@@ -699,6 +733,11 @@ def run_all_scenarios(
     df_results = pd.DataFrame(results_all_rows)
     df_energy_comp = pd.DataFrame(energy_comp_rows)
 
+    df_ze_no_start = pd.DataFrame(ze_no_start_rows)
+    out_dir = Path("korea/output")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    df_ze_no_start.to_csv(out_dir / "ze_no_start_constraint.csv", index=False, encoding="utf-8-sig")
+
     rep_key = ("MONO Core 54", 2, 1.00)
     rep_load_data = load_cache.get(rep_key, {})
 
@@ -710,6 +749,8 @@ def run_all_scenarios(
         "appliance_calibration_errors": appliance_err_meta,
         "lifetimes": lifetimes_cfg,
         "ze_sizing_cache": ze_sizing_cache,
+        "ze_no_start_cache": ze_no_start_cache,
+        "ze_no_start_rows": ze_no_start_rows,
         "zb_sizing_cache": zb_sizing_cache,
         "nz_sizing_cache": nz_sizing_cache,
         "load_cache": load_cache,
