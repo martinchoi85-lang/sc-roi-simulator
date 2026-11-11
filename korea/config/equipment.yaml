@@ -37,26 +37,26 @@ ess_system:
     source: "https://www.lghomebattery.com.au/_files/ugd/865f88_6079c63be83d4bbc937e340c165ee97e.pdf"
     grade: "A"
     note: "데이터시트 >90.3%"
-    status: "UNVERIFIED"
+    status: "VERIFIED"
   usable_dod:
     value: 1.00
     unit: "fraction"
     source: "https://www.lghomebattery.com.au/_files/ugd/865f88_6079c63be83d4bbc937e340c165ee97e.pdf"
     grade: "A"
     note: "데이터시트 DoD 100%"
-    status: "UNVERIFIED"
+    status: "VERIFIED"
   soc_min:
     value: 0.00
     unit: "fraction"
     source: "https://www.lghomebattery.com.au/_files/ugd/865f88_6079c63be83d4bbc937e340c165ee97e.pdf"
     grade: "A"
-    status: "UNVERIFIED"
+    status: "VERIFIED"
   soc_max:
     value: 1.00
     unit: "fraction"
     source: "https://www.lghomebattery.com.au/_files/ugd/865f88_6079c63be83d4bbc937e340c165ee97e.pdf"
     grade: "A"
-    status: "UNVERIFIED"
+    status: "VERIFIED"
   c_rate_max:
     value: 0.50
     unit: "1/h"
