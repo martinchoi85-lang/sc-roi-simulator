@@ -1016,95 +1016,98 @@ def _build_sc_report_data(
     ]
 
     # 10. sensitivities
-    sensitivities_rows = []
-    # Boiler avoided cost sensitivities: AWHP x 3 targets x 3 representative house-persons (C54_2, C72_2, D45_2, occ=100%, pv2026 subsidy)
-    rep_hp_list = [("C54_2", "MONO Core 54 · 2인"), ("C72_2", "MONO Core 72 · 2인"), ("D45_2", "DUO Max 45 · 2인")]
-    inv_cost_per_kw = float(capex_cfg.get("pv_system", {}).get("inverter_replacement_cost_per_kw", {}).get("central", {}).get("value", 200000.0) if isinstance(capex_cfg.get("pv_system", {}).get("inverter_replacement_cost_per_kw"), dict) else 200000.0)
+    if metadata and "sensitivities_rows" in metadata and metadata["sensitivities_rows"]:
+        sensitivities_rows = metadata["sensitivities_rows"]
+    else:
+        sensitivities_rows = []
+        # Boiler avoided cost sensitivities: AWHP x 3 targets x 3 representative house-persons (C54_2, C72_2, D45_2, occ=100%, pv2026 subsidy)
+        rep_hp_list = [("C54_2", "MONO Core 54 · 2인"), ("C72_2", "MONO Core 72 · 2인"), ("D45_2", "DUO Max 45 · 2인")]
+        inv_cost_per_kw = float(capex_cfg.get("pv_system", {}).get("inverter_replacement_cost_per_kw", {}).get("central", {}).get("value", 200000.0) if isinstance(capex_cfg.get("pv_system", {}).get("inverter_replacement_cost_per_kw"), dict) else 200000.0)
 
-    for hp_id, hp_lbl in rep_hp_list:
-        for tgt_id, tgt_lbl in [("nz", "Near zero"), ("zb", "Zero bill"), ("ze", "Zero energy")]:
-            s_match = next(s for s in scenarios_rows if s["hp"] == hp_id and s["heat"] == "awhp" and s["occ"] == 100 and s["target"] == tgt_id and s["sub"] == "pv2026")
-            e_base = next(e for e in energy_rows if e["hp"] == hp_id and e["occ"] == 100 and e["sub"] == "pv2026" and e["case"] == "baseline")
-            e_alt = next(e for e in energy_rows if e["hp"] == hp_id and e["occ"] == 100 and e["sub"] == "pv2026" and e["case"] == f"awhp_{tgt_id}")
-            tot_b = e_base["elec_fixed_krw"] + e_base["elec_variable_krw"] + e_base["gas_krw"]
-            tot_a = e_alt["elec_fixed_krw"] + e_alt["elec_variable_krw"] + e_alt["gas_krw"]
-            rep_map = {r["item"]: r["krw"] for r in s_match["replacements"]}
+        for hp_id, hp_lbl in rep_hp_list:
+            for tgt_id, tgt_lbl in [("nz", "Near zero"), ("zb", "Zero bill"), ("ze", "Zero energy")]:
+                s_match = next(s for s in scenarios_rows if s["hp"] == hp_id and s["heat"] == "awhp" and s["occ"] == 100 and s["target"] == tgt_id and s["sub"] == "pv2026")
+                e_base = next(e for e in energy_rows if e["hp"] == hp_id and e["occ"] == 100 and e["sub"] == "pv2026" and e["case"] == "baseline")
+                e_alt = next(e for e in energy_rows if e["hp"] == hp_id and e["occ"] == 100 and e["sub"] == "pv2026" and e["case"] == f"awhp_{tgt_id}")
+                tot_b = e_base["elec_fixed_krw"] + e_base["elec_variable_krw"] + e_base["gas_krw"]
+                tot_a = e_alt["elec_fixed_krw"] + e_alt["elec_variable_krw"] + e_alt["gas_krw"]
+                rep_map = {r["item"]: r["krw"] for r in s_match["replacements"]}
 
-            cf_boiler = calculate_100y_cashflow(
-                net_capex=s_match["capex"]["net"],
-                baseline_annual_cost=tot_b,
-                alternative_year1_cost=tot_a,
-                baseline_propane_cost=e_base["gas_krw"],
-                alternative_propane_cost=e_alt["gas_krw"],
-                pv_capacity_kw=s_match["pv_kw"],
-                ess_capacity_kwh=s_match["ess_kwh"],
-                is_awhp=True,
-                pv_turnkey_cost=rep_map.get("pv", s_match["capex"]["pv"]),
-                inverter_replacement_cost=rep_map.get("inverter", 0.0),
-                ess_replacement_cost=rep_map.get("ess", 0.0),
-                awhp_replacement_cost=rep_map.get("awhp", 0.0),
-                include_boiler_avoided_cost=True,
-                boiler_avoided_cost_krw=1012000.0,
-            )
-            pb_sens = cf_boiler["payback_years"]
-            sens_val = round(float(pb_sens), 1) if pb_sens is not None and 0 <= pb_sens <= 100 else None
-            base_pb = s_match["payback_years"]
-            if base_pb is not None and (sens_val is None or sens_val > base_pb):
-                sens_val = base_pb
-            sensitivities_rows.append({
-                "group": "보일러 회피비용 반영",
-                "case": f"{hp_lbl} · AWHP · {tgt_lbl} · 100%",
-                "base": base_pb,
-                "sens": sens_val,
-            })
-
-    # ZE Start Condition Removal Sensitivities (3 representative houses, 2 persons, 100% occ, gas & AWHP)
-    ze_no_start_cache = metadata.get("ze_no_start_cache", {}) if metadata else {}
-    for hp_id, hp_lbl in rep_hp_list:
-        house_name = next(h[1] for h in HP_MAP if h[0] == hp_id)
-        occ_cnt = 2
-        for heat_id, heat_lbl, heat_pkg in [("gas", "가스보일러", "가스보일러"), ("awhp", "AWHP", "AWHP")]:
-            s_match = next(s for s in scenarios_rows if s["hp"] == hp_id and s["heat"] == heat_id and s["occ"] == 100 and s["target"] == "ze" and s["sub"] == "pv2026")
-            e_base = next(e for e in energy_rows if e["hp"] == hp_id and e["occ"] == 100 and e["sub"] == "pv2026" and e["case"] == "baseline")
-            e_alt = next(e for e in energy_rows if e["hp"] == hp_id and e["occ"] == 100 and e["sub"] == "pv2026" and e["case"] == f"{heat_id}_ze")
-            tot_b = e_base["elec_fixed_krw"] + e_base["elec_variable_krw"] + e_base["gas_krw"]
-            tot_a = e_alt["elec_fixed_krw"] + e_alt["elec_variable_krw"] + e_alt["gas_krw"]
-
-            ze_ns = ze_no_start_cache.get((house_name, occ_cnt, heat_pkg, 1.00))
-            if ze_ns:
-                ns_c_bk = ze_ns["capex_info"]
-                cf_ns = calculate_100y_cashflow(
-                    net_capex=ns_c_bk["net_capex"],
+                cf_boiler = calculate_100y_cashflow(
+                    net_capex=s_match["capex"]["net"],
                     baseline_annual_cost=tot_b,
                     alternative_year1_cost=tot_a,
                     baseline_propane_cost=e_base["gas_krw"],
                     alternative_propane_cost=e_alt["gas_krw"],
-                    pv_capacity_kw=ze_ns["pv_capacity_kw"],
-                    ess_capacity_kwh=ze_ns["ess_capacity_kwh"],
-                    is_awhp=(heat_id == "awhp"),
-                    pv_turnkey_cost=ns_c_bk.get("pv_capex", 0.0),
-                    inverter_replacement_cost=ns_c_bk.get("inverter_replacement_cost", 0.0),
-                    ess_replacement_cost=ns_c_bk.get("ess_replacement_cost", 0.0),
-                    awhp_replacement_cost=ns_c_bk.get("awhp_replacement_cost", 0.0),
+                    pv_capacity_kw=s_match["pv_kw"],
+                    ess_capacity_kwh=s_match["ess_kwh"],
+                    is_awhp=True,
+                    pv_turnkey_cost=rep_map.get("pv", s_match["capex"]["pv"]),
+                    inverter_replacement_cost=rep_map.get("inverter", 0.0),
+                    ess_replacement_cost=rep_map.get("ess", 0.0),
+                    awhp_replacement_cost=rep_map.get("awhp", 0.0),
+                    include_boiler_avoided_cost=True,
+                    boiler_avoided_cost_krw=1012000.0,
                 )
-                pb_ns = cf_ns["payback_years"]
-                sens_val_ns = round(float(pb_ns), 1) if pb_ns is not None and 0 <= pb_ns <= 100 else None
-            else:
-                sens_val_ns = None
+                pb_sens = cf_boiler["payback_years"]
+                sens_val = round(float(pb_sens), 1) if pb_sens is not None and 0 <= pb_sens <= 100 else None
+                base_pb = s_match["payback_years"]
+                if base_pb is not None and (sens_val is None or sens_val > base_pb):
+                    sens_val = base_pb
+                sensitivities_rows.append({
+                    "group": "보일러 회피비용 반영",
+                    "case": f"{hp_lbl} · AWHP · {tgt_lbl} · 100%",
+                    "base": base_pb,
+                    "sens": sens_val,
+                })
 
-            sensitivities_rows.append({
-                "group": "ZE 시작 조건 해제",
-                "case": f"{hp_lbl} · {heat_lbl} · Zero energy · 100%",
-                "base": s_match["payback_years"],
-                "sens": sens_val_ns,
-            })
+        # ZE Start Condition Removal Sensitivities (3 representative houses, 2 persons, 100% occ, gas & AWHP)
+        ze_no_start_cache = metadata.get("ze_no_start_cache", {}) if metadata else {}
+        for hp_id, hp_lbl in rep_hp_list:
+            house_name = next(h[1] for h in HP_MAP if h[0] == hp_id)
+            occ_cnt = 2
+            for heat_id, heat_lbl, heat_pkg in [("gas", "가스보일러", "가스보일러"), ("awhp", "AWHP", "AWHP")]:
+                s_match = next(s for s in scenarios_rows if s["hp"] == hp_id and s["heat"] == heat_id and s["occ"] == 100 and s["target"] == "ze" and s["sub"] == "pv2026")
+                e_base = next(e for e in energy_rows if e["hp"] == hp_id and e["occ"] == 100 and e["sub"] == "pv2026" and e["case"] == "baseline")
+                e_alt = next(e for e in energy_rows if e["hp"] == hp_id and e["occ"] == 100 and e["sub"] == "pv2026" and e["case"] == f"{heat_id}_ze")
+                tot_b = e_base["elec_fixed_krw"] + e_base["elec_variable_krw"] + e_base["gas_krw"]
+                tot_a = e_alt["elec_fixed_krw"] + e_alt["elec_variable_krw"] + e_alt["gas_krw"]
 
-    sensitivities_rows.extend([
-        {"group": "외피 법정기준", "case": "MONO Core 72 · 3인 · AWHP · Zero bill · 100%", "base": 60.1, "sens": 52.3},
-        {"group": "AWHP 보조금 70%", "case": "MONO Core 72 · 3인 · AWHP · Near zero · 100%", "base": 20.1, "sens": 15.7},
-        {"group": "AWHP 수명 10년", "case": "MONO Core 72 · 3인 · AWHP · Near zero · 100%", "base": 20.1, "sens": None},
-        {"group": "AWHP 수명 20년", "case": "MONO Core 72 · 3인 · AWHP · Near zero · 100%", "base": 20.1, "sens": 17.9},
-    ])
+                ze_ns = ze_no_start_cache.get((house_name, occ_cnt, heat_pkg, 1.00))
+                if ze_ns:
+                    ns_c_bk = ze_ns["capex_info"]
+                    cf_ns = calculate_100y_cashflow(
+                        net_capex=ns_c_bk["net_capex"],
+                        baseline_annual_cost=tot_b,
+                        alternative_year1_cost=tot_a,
+                        baseline_propane_cost=e_base["gas_krw"],
+                        alternative_propane_cost=e_alt["gas_krw"],
+                        pv_capacity_kw=ze_ns["pv_capacity_kw"],
+                        ess_capacity_kwh=ze_ns["ess_capacity_kwh"],
+                        is_awhp=(heat_id == "awhp"),
+                        pv_turnkey_cost=ns_c_bk.get("pv_capex", 0.0),
+                        inverter_replacement_cost=ns_c_bk.get("inverter_replacement_cost", 0.0),
+                        ess_replacement_cost=ns_c_bk.get("ess_replacement_cost", 0.0),
+                        awhp_replacement_cost=ns_c_bk.get("awhp_replacement_cost", 0.0),
+                    )
+                    pb_ns = cf_ns["payback_years"]
+                    sens_val_ns = round(float(pb_ns), 1) if pb_ns is not None and 0 <= pb_ns <= 100 else None
+                else:
+                    sens_val_ns = None
+
+                sensitivities_rows.append({
+                    "group": "ZE 시작 조건 해제",
+                    "case": f"{hp_lbl} · {heat_lbl} · Zero energy · 100%",
+                    "base": s_match["payback_years"],
+                    "sens": sens_val_ns,
+                })
+
+        sensitivities_rows.extend([
+            {"group": "외피 법정기준", "case": "MONO Core 72 · 3인 · AWHP · Zero bill · 100%", "base": 60.1, "sens": 52.3},
+            {"group": "AWHP 보조금 70%", "case": "MONO Core 72 · 3인 · AWHP · Near zero · 100%", "base": 20.1, "sens": 15.7},
+            {"group": "AWHP 수명 10년", "case": "MONO Core 72 · 3인 · AWHP · Near zero · 100%", "base": 20.1, "sens": None},
+            {"group": "AWHP 수명 20년", "case": "MONO Core 72 · 3인 · AWHP · Near zero · 100%", "base": 20.1, "sens": 17.9},
+        ])
 
     # 11. lifetimes
     lifetimes_rows = [
@@ -1487,5 +1490,28 @@ def _write_validation_tables(report_data: Dict[str, Any], country_dir: Path, fil
             lines.append(f"- **경고 내용**: {w}")
     else:
         lines.append("- 경고 없음 (0건): 모든 검증 조건(스키마, 물리적 타당성, 단조성, 거주자 상식 점검)을 0건의 경고로 통과함.")
+
+    step_timings = metadata.get("step_timings") if metadata else None
+    if step_timings:
+        lines.extend([
+            "",
+            "## 8. 단계별 소요 시간 표",
+            "| 단계 | 단계명 | 소요 시간(초) | 상태 |",
+            "|---|---|---|---|",
+        ])
+        step_names = [
+            ("step1", "1", "부하·재실 (Load & Occupancy TUS)"),
+            ("step2", "2", "열 계산 (Thermal / HVAC / DHW)"),
+            ("step3", "3", "디스패치·사이징 (Dispatch & Sizing)"),
+            ("step4", "4", "현금흐름·민감도 (Cashflow & Sensitivities)"),
+            ("step5", "5", "report_data·빌드 (Report Data & Build)"),
+        ]
+        total_time = 0.0
+        for skey, snum, sname in step_names:
+            if skey in step_timings:
+                sec, status = step_timings[skey]
+                total_time += sec
+                lines.append(f"| {snum} | {sname} | {sec:.2f}s | {status} |")
+        lines.append(f"| **총합** | **전체 파이프라인** | **{total_time:.2f}s** | - |")
 
     filepath.write_text("\n".join(lines) + "\n", encoding="utf-8")

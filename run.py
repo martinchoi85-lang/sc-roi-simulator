@@ -2,19 +2,26 @@
 
 Usage:
     python run.py --country korea
+    python run.py --country korea --from 4
 """
 
 import argparse
 import sys
+import time
 from pathlib import Path
 import numpy as np
 import pandas as pd
 
 from engine.schema import load_country_config
 from engine.weather import load_weather_data
-from engine.scenarios import run_all_scenarios
-from engine.report import generate_v9_outputs
 from engine.run_id import compute_run_id
+from engine.pipeline import (
+    run_step1_load,
+    run_step2_thermal,
+    run_step3_sizing,
+    run_step4_cashflow,
+    run_step5_report,
+)
 
 
 def main():
@@ -24,6 +31,14 @@ def main():
         type=str,
         default="korea",
         help="Country directory name to run (default: korea)",
+    )
+    parser.add_argument(
+        "--from-step", "--from",
+        dest="from_step",
+        type=int,
+        default=1,
+        choices=[1, 2, 3, 4, 5],
+        help="Run pipeline starting from specified step (1..5, default: 1)",
     )
     args = parser.parse_args()
 
@@ -52,42 +67,83 @@ def main():
     weather_df = load_weather_data(weather_path)
     annual_ghi = float(weather_df["ghi"].sum() * 0.25 / 1000.0)
 
-    print("Running full scenario simulations (420 scenarios across 7 pairs x 2 heating x 5 occupancies x 3 targets x 2 subsidies)...")
     kosis_dir = country_dir / "source" / "kosis"
-    df_results, df_energy_comp, df_ze_sizing, metadata = run_all_scenarios(
+    cache_dir = country_dir / "cache"
+    out_dir = country_dir / "output"
+    report_dir = country_dir / "report"
+
+    print(f"\n=======================================================")
+    print(f"Starting 5-Step ROI Pipeline (Running from Step {args.from_step})")
+    print(f"=======================================================")
+
+    step_timings = {}
+    pipe_t0 = time.perf_counter()
+
+    # Step 1: 부하·재실
+    step1_data, t1, s1 = run_step1_load(
         config_values=country_config.values,
         weather_df=weather_df,
-        placeholders_list=country_config.placeholders,
-        unverifieds_list=country_config.unverifieds,
-        assumptions_list=country_config.assumptions,
         kosis_dir=kosis_dir,
+        cache_dir=cache_dir,
+        from_step=args.from_step,
     )
+    step_timings["step1"] = (t1, s1)
 
-    output_dir = country_dir / "output"
-    report_dir = country_dir / "report"
-    print(f"Generating output files and charts in: {output_dir}...")
-    generate_v9_outputs(
-        df_results=df_results,
-        df_energy_comp=df_energy_comp,
-        df_ze_sizing=df_ze_sizing,
-        metadata=metadata,
-        output_dir=output_dir,
-        report_dir=report_dir,
+    # Step 2: 열 계산
+    step2_data, t2, s2 = run_step2_thermal(
         config_values=country_config.values,
-        config_placeholders=country_config.placeholders,
-        config_unverifieds=country_config.unverifieds,
-        config_assumptions=country_config.assumptions,
+        weather_df=weather_df,
+        step1_data=step1_data,
+        cache_dir=cache_dir,
+        from_step=args.from_step,
+    )
+    step_timings["step2"] = (t2, s2)
+
+    # Step 3: 디스패치·사이징
+    step3_data, t3, s3 = run_step3_sizing(
+        config_values=country_config.values,
+        weather_df=weather_df,
+        kosis_dir=kosis_dir,
+        step1_data=step1_data,
+        step2_data=step2_data,
+        cache_dir=cache_dir,
+        out_dir=out_dir,
+        from_step=args.from_step,
+    )
+    step_timings["step3"] = (t3, s3)
+
+    # Step 4: 현금흐름·민감도 (차분 점검 포함)
+    step4_data, t4, s4 = run_step4_cashflow(
+        config_values=country_config.values,
+        weather_df=weather_df,
+        step1_data=step1_data,
+        step2_data=step2_data,
+        step3_data=step3_data,
+        cache_dir=cache_dir,
+        from_step=args.from_step,
+    )
+    step_timings["step4"] = (t4, s4)
+
+    # Step 5: report_data·빌드
+    t5, s5 = run_step5_report(
+        country_dir=country_dir,
+        config_values=country_config.values,
         weather_df=weather_df,
         annual_ghi=annual_ghi,
         run_id=run_id,
+        step4_data=step4_data,
+        step_timings=step_timings,
     )
+    step_timings["step5"] = (t5, s5)
 
-    print("\n[SUCCESS] Completed v9 scenario ROI computations and reports.")
-    print(f"- Output Full CSV: {output_dir / 'results_all.csv'} (Rows: {len(df_results)})")
-    print(f"- Energy Comparison CSV: {output_dir / 'energy_comparison.csv'} (Rows: {len(df_energy_comp)})")
-    print(f"- Zero Energy Sizing CSV: {output_dir / 'ze_sizing.csv'} (Rows: {len(df_ze_sizing)})")
-    print(f"- Summary: {output_dir / 'results_summary.md'}")
-    print(f"- Validation: {output_dir / 'validation.md'}")
+    total_pipe_time = time.perf_counter() - pipe_t0
+    print(f"\n[SUCCESS] Completed 5-Step ROI pipeline in {total_pipe_time:.2f}s.")
+    print(f"- Output Full CSV: {out_dir / 'results_all.csv'} (Rows: {len(step4_data['df_results'])})")
+    print(f"- Energy Comparison CSV: {out_dir / 'energy_comparison.csv'} (Rows: {len(step4_data['df_energy_comp'])})")
+    print(f"- Zero Energy Sizing CSV: {out_dir / 'ze_sizing.csv'} (Rows: {len(step4_data['df_ze_sizing'])})")
+    print(f"- ZE No Start Constraint CSV: {out_dir / 'ze_no_start_constraint.csv'}")
+    print(f"- Summary: {out_dir / 'results_summary.md'}")
+    print(f"- Validation: {out_dir / 'validation.md'}")
     print(f"- Report Data: {report_dir / 'report_data.json'}")
     print(f"- HTML Report: {report_dir / 'LG_SC_Korea_ROI_Report.html'}")
 

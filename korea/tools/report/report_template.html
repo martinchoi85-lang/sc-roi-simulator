@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LG Smart Cottage 한국 ROI 분석</title>
+<style>
+:root{
+  --brand:#A50034; --brand-soft:#F6E6EC;
+  --bg:#F4F3F0; --surface:#FFFFFF; --surface-2:#FAFAF8; --line:#E4E2DD;
+  --ink:#1D1D1B; --ink-2:#55534E; --ink-3:#8A8781;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#6250d6; --s8:#e34948;
+  --neutral:#B9B6AE; --na:#ECEBE7;
+  --pb0:#104281; --pb1:#256abf; --pb2:#6da7ec; --pb3:#cde2fb;
+  --ok:#0ca30c; --warn:#fab219; --crit:#d03b3b;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 "Pretendard","Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+header.top{background:var(--surface);border-bottom:3px solid var(--brand)}
+header.top .wrap{padding-top:22px;padding-bottom:16px}
+h1{font-size:24px;margin:0;letter-spacing:-.3px}
+h1 b{color:var(--brand)}
+.meta{color:var(--ink-2);font-size:12.5px;margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 14px}
+.mock{background:#FFF3CD;border:1px solid #E8C55A;color:#6B4E00;padding:8px 12px;border-radius:6px;margin-top:10px;font-weight:600}
+.bar{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.96);backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
+.bar .wrap{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding-top:10px;padding-bottom:10px}
+.ctl{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2)}
+.ctl select{font:inherit;color:var(--ink);padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--surface)}
+.seg button{font:inherit;font-size:12.5px;border:0;background:transparent;padding:5px 11px;color:var(--ink-2);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--ink);color:#fff}
+nav.toc{display:flex;flex-wrap:wrap;gap:6px;padding:14px 0 2px}
+nav.toc a{font-size:12.5px;color:var(--ink-2);text-decoration:none;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px 11px}
+nav.toc a:hover{border-color:var(--brand);color:var(--brand)}
+section.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:22px 24px;margin:18px 0}
+h2{font-size:18px;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+h2 .no{color:var(--brand);font-weight:800}
+h3{font-size:14.5px;margin:22px 0 4px;display:flex;align-items:center;gap:6px}
+.lead{color:var(--ink-2);margin:2px 0 12px;font-size:13.5px}
+.sub{color:var(--ink-3);font-size:12.5px;margin:0 0 8px}
+.chart{width:100%;height:360px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.grid2>*,.grid3>*{min-width:0}
+@media (max-width:820px){.grid2,.grid3{grid-template-columns:1fr}section.card{padding:18px 16px}.wrap{padding:0 16px}}
+/* tooltip "!" */
+.tip{position:relative;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--ink-3);color:#fff;font-size:11.5px;font-weight:800;cursor:help;flex:none;outline:none}
+.tip:focus-visible{box-shadow:0 0 0 3px var(--brand-soft)}
+.tip .pop{display:none;position:absolute;left:24px;top:-6px;width:min(380px,78vw);background:#26241F;color:#F4F2EC;font-size:12.5px;font-weight:400;line-height:1.6;padding:11px 13px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);z-index:50;text-align:left}
+.tip .pop b{color:#fff;display:block;margin-top:4px}
+.tip .pop b:first-child{margin-top:0}
+.tip:hover .pop,.tip.open .pop{display:block}
+@media (max-width:820px){.tip .pop{position:fixed;left:16px;right:16px;top:auto;bottom:16px;width:auto}}
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:10px 0 16px}
+@media (max-width:980px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:13px 14px}
+.kpi .k{font-size:12px;color:var(--ink-2)}
+.kpi .v{font-size:26px;font-weight:800;letter-spacing:-.5px;margin-top:2px;white-space:nowrap}
+.kpi .v.sm{font-size:20px}
+.kpi .v small{font-size:13px;font-weight:600;color:var(--ink-2);margin-left:2px}
+.kpi .d{font-size:11.5px;color:var(--ink-3);margin-top:3px;line-height:1.45}
+ul.facts{margin:0;padding-left:18px}
+ul.facts li{margin:4px 0}
+.defs{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media (max-width:980px){.defs{grid-template-columns:1fr}}
+.def{border:1px solid var(--line);border-top:4px solid var(--c);border-radius:8px;padding:12px 14px;background:var(--surface-2)}
+.def h4{margin:0 0 4px;font-size:14px}
+.def p{margin:4px 0;font-size:12.8px;color:var(--ink-2)}
+.def p b{color:var(--ink)}
+/* tables */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:12.8px}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{background:var(--surface-2);color:var(--ink-2);font-weight:600;position:sticky;top:0}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tr.row{cursor:pointer}
+tr.row:hover td{background:#F7F6F2}
+tr.row.sel td{background:#EEF4FC}
+tr.exp td{background:var(--surface-2);white-space:normal}
+.caret{display:inline-block;width:12px;color:var(--ink-3)}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;border:1px solid}
+.b-VERIFIED{color:#0a6b0a;border-color:#9fd49f;background:#EEF8EE}
+.b-UNVERIFIED{color:#7A5200;border-color:#E7C77A;background:#FFF8E5}
+.b-PLACEHOLDER{color:#9B2B2B;border-color:#E8A9A9;background:#FDEEEE}
+.b-ASSUMPTION{color:#4B4A46;border-color:#C9C6BE;background:#F1F0EC}
+.capbox{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12.5px;margin:2px 0 6px}
+.capbox span b{font-variant-numeric:tabular-nums}
+.reps{font-size:12px;color:var(--ink-2)}
+/* heatmap tables */
+.hm{border-collapse:separate;border-spacing:3px;width:100%;font-size:12.5px}
+.hm th{background:transparent;border:0;position:static;font-weight:600;color:var(--ink-2);padding:4px 6px}
+.hm td{border:0;text-align:center;border-radius:5px;padding:7px 4px;cursor:pointer;line-height:1.25}
+.hm td .y{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+.hm td .c{font-size:10.5px;opacity:.85}
+.hm td:hover{outline:2px solid var(--ink)}
+.hm td.cur{outline:2px solid var(--brand)}
+.hm td.rowh{text-align:left;cursor:default;color:var(--ink);font-weight:600;background:transparent;padding-left:0}
+.hm td.rowh:hover{outline:0}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--ink-2);margin:8px 0}
+.legend i{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-3px;margin-right:5px}
+.tabs{display:flex;gap:6px;margin:6px 0 10px;flex-wrap:wrap}
+.tabs button{font:inherit;font-size:12.5px;padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);cursor:pointer;color:var(--ink-2)}
+.tabs button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.note{font-size:12.5px;color:var(--ink-2);background:var(--surface-2);border-left:3px solid var(--neutral);padding:8px 12px;border-radius:0 6px 6px 0;margin:10px 0}
+.app-head{margin:34px 0 0;font-size:13px;letter-spacing:.08em;color:var(--brand);font-weight:800}
+footer{color:var(--ink-3);font-size:12px;padding:20px 0 40px}
+@media print{.bar{position:static}.tip{display:none}section.card{break-inside:avoid}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <h1>LG Smart Cottage <b>한국</b> PV·ESS·AWHP ROI 분석</h1>
+  <div class="meta" id="meta"></div>
+  <div id="mock"></div>
+</div></header>
+
+<div class="bar"><div class="wrap">
+  <label class="ctl">주택·인원 <select id="f-hp"></select></label>
+  <span class="ctl">난방 <span class="seg" id="f-heat"></span></span>
+  <span class="ctl">이용률 <span class="seg" id="f-occ"></span></span>
+  <span class="ctl">보조금 <span class="seg" id="f-sub"></span></span>
+</div></div>
+
+<main class="wrap">
+<nav class="toc" id="toc"></nav>
+
+<section class="card" id="sec-summary">
+  <h2><span class="no">0</span>요약 <span class="tip" data-t="summary">!</span></h2>
+  <p class="lead">전체 시나리오 결과를 집계한 값이다. 상단 선택기와 무관하게 전체 기준이다.</p>
+  <div class="kpis" id="kpis"></div>
+  <ul class="facts" id="facts"></ul>
+  <div class="note" id="loadnote"></div>
+</section>
+
+<section class="card" id="sec-def">
+  <h2><span class="no">1</span>세 가지 목표의 정의와 산정 방법 <span class="tip" data-t="def">!</span></h2>
+  <p class="lead">대안은 모두 기준안(가스보일러 + 계통, PV·ESS 없음)과 같은 주택·인원·이용률에서 비교한다.</p>
+  <div class="defs" id="defs"></div>
+</section>
+
+<section class="card" id="sec-energy">
+  <h2><span class="no">2</span>연간 에너지비용·에너지량 비교 <span class="tip" data-t="energy">!</span></h2>
+  <p class="lead" id="energy-lead"></p>
+  <h3>연간 에너지비용 (1년 차) <span class="tip" data-t="energy_cost">!</span></h3>
+  <div id="c-cost" class="chart" style="height:440px"></div>
+  <div class="grid2">
+    <div><h3>계통 전력량 <span class="tip" data-t="energy_kwh">!</span></h3><div id="c-kwh" class="chart" style="height:420px"></div></div>
+    <div><h3>프로판 사용량 <span class="tip" data-t="energy_kg">!</span></h3><div id="c-kg" class="chart" style="height:420px"></div></div>
+  </div>
+  <h3>연간 전력 소비 (용도별) <span class="tip" data-t="energy_use">!</span></h3>
+  <div id="c-use" class="chart" style="height:250px"></div>
+  <h3>난방·급탕·냉방 열 공급과 효율 <span class="tip" data-t="energy_heat">!</span></h3>
+  <div class="tbl-wrap"><table id="t-heat"></table></div>
+  <h3>월별 전력 소비와 PV 발전 <span class="tip" data-t="energy_month">!</span></h3>
+  <div id="c-month" class="chart" style="height:330px"></div>
+</section>
+
+<section class="card" id="sec-heat">
+  <h2><span class="no">3</span>회수기간 한눈에 보기 <span class="tip" data-t="heatmap">!</span></h2>
+  <p class="lead">칸을 누르면 그 조건이 상단 선택기에 반영되고, 아래 4~7절이 그 조건으로 바뀐다.</p>
+  <div class="tabs" id="hm-tabs"></div>
+  <div class="legend" id="hm-legend"></div>
+  <div class="grid2" id="hm"></div>
+</section>
+
+<section class="card" id="sec-detail">
+  <h2><span class="no">4</span>선택한 주택·인원의 시나리오 상세 <span class="tip" data-t="detail">!</span></h2>
+  <p class="lead" id="detail-lead"></p>
+  <h3>누적 현금흐름 0~100년 <span class="tip" data-t="cashflow">!</span></h3>
+  <p class="sub" id="cf-sub"></p>
+  <div id="c-cf" class="chart" style="height:400px"></div>
+  <h3>초기 CAPEX 구성 <span class="tip" data-t="capex">!</span></h3>
+  <div id="c-capex" class="chart" style="height:260px"></div>
+  <h3>시나리오 표 <span class="tip" data-t="table">!</span></h3>
+  <p class="sub">행을 누르면 CAPEX 구성과 교체 일정이 펼쳐진다.</p>
+  <div class="tbl-wrap" style="max-height:560px;overflow:auto"><table id="t-scen"></table></div>
+</section>
+
+<section class="card" id="sec-nz">
+  <h2><span class="no">5</span>Near zero: 3년 회수까지의 거리 <span class="tip" data-t="nz">!</span></h2>
+  <p class="lead" id="nz-lead"></p>
+  <div id="c-nz" class="chart" style="height:440px"></div>
+</section>
+
+<section class="card" id="sec-zb">
+  <h2><span class="no">6</span>Zero bill: ESS 단가에 따른 회수기간 <span class="tip" data-t="zb">!</span></h2>
+  <p class="lead" id="zb-lead"></p>
+  <div id="c-zb" class="chart" style="height:480px"></div>
+  <div class="tbl-wrap"><table id="t-ess"></table></div>
+</section>
+
+<section class="card" id="sec-ze">
+  <h2><span class="no">7</span>Zero energy: 필요 설비 규모 <span class="tip" data-t="ze">!</span></h2>
+  <p class="lead" id="ze-lead"></p>
+  <div class="grid3">
+    <div><h3>PV 용량</h3><div id="c-ze-pv" class="chart" style="height:340px"></div></div>
+    <div><h3>ESS 용량</h3><div id="c-ze-ess" class="chart" style="height:340px"></div></div>
+    <div><h3>초기 순CAPEX</h3><div id="c-ze-capex" class="chart" style="height:340px"></div></div>
+  </div>
+</section>
+
+<section class="card" id="sec-life">
+  <h2><span class="no">8</span>설비 수명과 교체 주기 <span class="tip" data-t="life">!</span></h2>
+  <p class="lead">교체 시점에는 현재 단가로 교체비가 발생하고 보조금은 다시 지급되지 않는다고 가정했다.</p>
+  <div id="c-life" class="chart" style="height:250px"></div>
+  <div class="tbl-wrap"><table id="t-life"></table></div>
+</section>
+
+<section class="card" id="sec-limits">
+  <h2><span class="no">9</span>분석의 한계 <span class="tip" data-t="limits">!</span></h2>
+  <ul class="facts" id="limits"></ul>
+</section>
+
+<div class="app-head" id="appendix">부록</div>
+
+<section class="card" id="sec-a">
+  <h2><span class="no">A</span>생활·가전 사용 패턴 (확률 시뮬레이션) <span class="tip" data-t="a">!</span></h2>
+  <p class="lead" id="a-lead"></p>
+  <h3>하루 24시간 용도별 전력 <span class="tip" data-t="a_day">!</span></h3>
+  <div class="tabs" id="a-day-tabs"></div>
+  <p class="sub" id="a-day-sub"></p>
+  <div id="c-day" class="chart" style="height:660px"></div>
+  <h3>7일 연속 샘플 <span class="tip" data-t="a_week">!</span></h3>
+  <p class="sub" id="a-week-sub"></p>
+  <div id="c-week" class="chart" style="height:560px"></div>
+  <h3>무작위 거주자-일 일과표 <span class="tip" data-t="a_raster">!</span></h3>
+  <p class="sub" id="a-raster-sub"></p>
+  <div id="c-raster" class="chart" style="height:520px"></div>
+  <div class="grid2">
+    <div><h3>하루 수면 시간 분포 <span class="tip" data-t="a_sleep">!</span></h3><div id="c-sleep" class="chart" style="height:290px"></div></div>
+    <div><h3>개인 단위 현실성 점검 (KOSIS 평균시간 대비) <span class="tip" data-t="a_real">!</span></h3><div class="tbl-wrap"><table id="t-real"></table></div></div>
+  </div>
+  <h3>365일 × 24시간 전력 히트맵 <span class="tip" data-t="a_heat">!</span></h3>
+  <div id="c-year" class="chart" style="height:380px"></div>
+  <h3>요일 유형별 15분 전력 분포 (P10·P50·P90) <span class="tip" data-t="a_band">!</span></h3>
+  <div class="grid3"><div id="c-band-weekday" class="chart" style="height:280px"></div><div id="c-band-saturday" class="chart" style="height:280px"></div><div id="c-band-sunday" class="chart" style="height:280px"></div></div>
+  <div class="grid2">
+    <div><h3>일 사용량 분포 <span class="tip" data-t="a_hist">!</span></h3><div id="c-dhist" class="chart" style="height:300px"></div></div>
+    <div><h3>평일 출근·귀가 시각 분포 <span class="tip" data-t="a_commute">!</span></h3><div id="c-commute" class="chart" style="height:300px"></div></div>
+  </div>
+  <h3>통계 재현 점검: KOSIS 목표 곡선 vs 시뮬레이션 평균 <span class="tip" data-t="a_fit">!</span></h3>
+  <p class="sub" id="a-fit-sub"></p>
+  <div class="tabs" id="a-fit-tabs"></div>
+  <div class="grid3"><div id="c-fit-weekday" class="chart" style="height:260px"></div><div id="c-fit-saturday" class="chart" style="height:260px"></div><div id="c-fit-sunday" class="chart" style="height:260px"></div></div>
+  <h3>가전별 연간 사용량 보정 <span class="tip" data-t="a_appl">!</span></h3>
+  <div class="tbl-wrap"><table id="t-appl"></table></div>
+  <div class="grid2">
+    <div><h3>확률 시드 10개에 따른 Zero energy 사이징 범위 <span class="tip" data-t="a_seed">!</span></h3><div class="tbl-wrap"><table id="t-seed"></table></div></div>
+    <div><h3>외출 계수 κ 민감도 <span class="tip" data-t="a_kappa">!</span></h3><div class="tbl-wrap"><table id="t-kappa"></table></div></div>
+  </div>
+</section>
+
+<section class="card" id="sec-b">
+  <h2><span class="no">B</span>Zero energy 산정 과정 <span class="tip" data-t="b">!</span></h2>
+  <p class="lead" id="b-lead"></p>
+  <div class="grid2">
+    <div><h3>ESS 모듈 수별 최소 PV</h3><div id="c-b-pv" class="chart" style="height:300px"></div></div>
+    <div><h3>ESS 모듈 수별 초기 순CAPEX</h3><div id="c-b-capex" class="chart" style="height:300px"></div></div>
+  </div>
+  <h3>365일 일부하 vs 일 PV 발전(수명 말기) <span class="tip" data-t="b_daily">!</span></h3>
+  <div id="c-b-daily" class="chart" style="height:340px"></div>
+  <h3>ESS 충전 상태가 연중 가장 낮아지는 7일 <span class="tip" data-t="b_soc">!</span></h3>
+  <p class="sub" id="b-soc-sub"></p>
+  <div id="c-b-soc" class="chart" style="height:460px"></div>
+</section>
+
+<section class="card" id="sec-c">
+  <h2><span class="no">C</span>민감도 <span class="tip" data-t="c">!</span></h2>
+  <div id="c-sens" class="chart" style="height:320px"></div>
+  <div class="tbl-wrap"><table id="t-sens"></table></div>
+</section>
+
+<section class="card" id="sec-d">
+  <h2><span class="no">D</span>입력값과 근거 상태 <span class="tip" data-t="d">!</span></h2>
+  <div class="legend"><span class="badge b-VERIFIED">VERIFIED</span>출처 확인 <span class="badge b-UNVERIFIED">UNVERIFIED</span>출처 미확인 <span class="badge b-PLACEHOLDER">PLACEHOLDER</span>근거 없는 임시값 <span class="badge b-ASSUMPTION">ASSUMPTION</span>분석 가정</div>
+  <div class="tbl-wrap"><table id="t-inputs"></table></div>
+</section>
+<footer id="foot"></footer>
+</main>
+
+<script>/*__ECHARTS__*/</script>
+<script>
+const D = /*__DATA__*/null;
+</script>
+<script>
+"use strict";
+/* ---------- 상수·서식 ---------- */
+const FONT='"Pretendard","Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif';
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const COL={s:[1,2,3,4,5,6,7,8].map(i=>css('--s'+i)),ink:css('--ink'),ink2:css('--ink-2'),ink3:css('--ink-3'),line:css('--line'),neutral:css('--neutral'),na:css('--na'),pb:[0,1,2,3].map(i=>css('--pb'+i)),brand:css('--brand')};
+const TGT_COL={nz:COL.s[0],zb:COL.s[1],ze:COL.s[2]};
+const ENDUSE=[ // 8개 그룹(범주색 8칸 고정 순서)
+  {id:'cool',label:'냉방',keys:['cooling']},
+  {id:'heat',label:'난방',keys:['heating']},
+  {id:'dhw',label:'급탕',keys:['dhw']},
+  {id:'cook',label:'취사',keys:['cooking']},
+  {id:'wash',label:'세탁·식기세척',keys:['laundry','dishwasher']},
+  {id:'fridge',label:'냉장·정수(상시)',keys:['fridge']},
+  {id:'light',label:'조명',keys:['lighting']},
+  {id:'etc',label:'TV·플러그·환기·대기',keys:['plug','vent_standby']}];
+const STATE=[{v:0,label:'외출',c:css('--na')},{v:1,label:'재택(활동)',c:COL.s[3]},{v:2,label:'수면',c:COL.s[6]}];
+const man=v=>v==null?'-':(Math.round(v/1e4)).toLocaleString('ko-KR')+'만원';
+const manN=v=>Math.round(v/1e4).toLocaleString('ko-KR');
+const yr=p=>p==null?'불가능':p.toFixed(1)+'년';
+const f1=v=>v==null?'-':(+v).toFixed(1);
+const f0=v=>v==null?'-':Math.round(v).toLocaleString('ko-KR');
+const pct=v=>v==null?'-':Math.round(v)+'%';
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const T96=Array.from({length:96},(_,i)=>String(Math.floor(i/4)).padStart(2,'0')+':'+String(i%4*15).padStart(2,'0'));
+const T48=Array.from({length:48},(_,i)=>String(Math.floor(i/2)).padStart(2,'0')+':'+(i%2?'30':'00'));
+const $=id=>document.getElementById(id);
+
+/* ---------- 데이터 색인 ---------- */
+const HP=D.dims.house_persons, HEAT=D.dims.heating, OCC=D.dims.occupancy, TGT=D.dims.targets, SUB=D.dims.subsidy;
+const lab=(arr,id)=>(arr.find(x=>x.id===id)||{label:id}).label;
+const hpShort=id=>{const h=HP.find(x=>x.id===id);return h?h.house.replace('MONO ','')+'·'+h.persons+'인':id;};
+const SC={}; D.scenarios.forEach(s=>SC[[s.hp,s.heat,s.occ,s.target,s.sub].join('|')]=s);
+const sc=(hp,heat,occ,t,sub)=>SC[[hp,heat,occ,t,sub].join('|')];
+const EN={}; D.energy.forEach(e=>EN[[e.hp,e.occ,e.sub,e.case].join('|')]=e);
+const etot=e=>e.elec_fixed_krw+e.elec_variable_krw+e.gas_krw;
+const S={hp:HP[HP.length>4?4:0].id,heat:'awhp',occ:OCC[0],sub:SUB[SUB.length-1].id,target:'nz',dayKind:'weekday',fit:'sleep'};
+
+/* ---------- 차트 공통 ---------- */
+const CH={};
+function draw(id,opt){
+  const el=$(id); if(!el) return;
+  let c=CH[id]; if(!c){c=echarts.init(el,null,{renderer:'canvas'});CH[id]=c;}
+  opt.textStyle=Object.assign({fontFamily:FONT,color:COL.ink2,fontSize:12},opt.textStyle||{});
+  opt.animation=false;
+  if(opt.tooltip!==false) opt.tooltip=Object.assign({trigger:'axis',confine:true,axisPointer:{type:'shadow'},backgroundColor:'#26241F',borderWidth:0,textStyle:{color:'#F4F2EC',fontFamily:FONT,fontSize:12}},opt.tooltip||{});
+  c.setOption(opt,true); c.resize();
+}
+const valAxis=(name,o={})=>Object.assign({type:'value',name,nameLocation:'middle',nameGap:o.gap||42,nameTextStyle:{color:COL.ink2,fontSize:12},axisLine:{show:true,lineStyle:{color:'#BDBAB2'}},axisTick:{show:true},axisLabel:{color:COL.ink2,formatter:o.fmt,hideOverlap:true},splitLine:{lineStyle:{color:'#EFEDE8'}}},o.extra||{});
+const catAxis=(data,o={})=>Object.assign({type:'category',data,axisLine:{lineStyle:{color:'#BDBAB2'}},axisTick:{show:false},axisLabel:{color:COL.ink,fontSize:12,lineHeight:16}},o);
+const legend=(data,o={})=>Object.assign({data,top:0,left:0,itemWidth:12,itemHeight:12,icon:'roundRect',textStyle:{color:COL.ink2,fontSize:12}},o);
+const ttRows=(title,rows)=>`<b>${esc(title)}</b><br>`+rows.map(r=>`${r.marker||''}${esc(r.name)} <b style="float:right;margin-left:14px">${r.v}</b>`).join('<br>');
+
+/* ---------- 툴팁 문구 (설명·해석만) ---------- */
+const TIPS={
+ summary:['420개 시나리오(주택·인원 7 × 난방 2 × 이용률 5 × 목표 3 × 보조금 2)의 회수기간과 CAPEX를 집계했다.','회수기간은 할인 없는 100년 누적 현금흐름이 0을 넘어 다시 내려가지 않는 시점이다. 100년 안에 회수하지 못하면 "불가능"으로 표시한다.'],
+ def:['세 목표의 정의와 PV·ESS 조합을 고르는 규칙이다.','같은 목표라도 주택·인원·이용률·보조금마다 조합이 따로 계산된다.'],
+ energy:['선택한 주택·인원·이용률·보조금에서 기준안과 대안 7개의 1년 차 에너지비용·에너지량을 나란히 놓았다.','AWHP 대안은 난방·급탕을 전기로 바꾸므로 프로판이 0이 되고 전력량이 늘어난다. PV 발전은 월 합산 상계로 그 전력량을 상쇄한다.'],
+ energy_cost:['막대 하나가 연간 에너지비용 합계이고, 전기 전력량요금·가스(프로판)·전기 기본요금과 세금으로 나뉜다.','막대 끝 숫자는 합계와 기준안 대비 연간 이득이다. "AWHP만"은 PV·ESS 없이 AWHP로 바꾼 경우로, 연료 전환 효과와 PV 효과를 나눠 볼 수 있다.'],
+ energy_kwh:['계통에서 받은 전력량(수전), 계통으로 보낸 전력량(역송), 월 합산 상계 후 요금이 부과된 전력량(과금)이다.','Zero bill·Zero energy는 과금 전력량이 0이다. Zero energy는 수전도 0이다.'],
+ energy_kg:['연간 프로판 사용량이다. 가스보일러 케이스의 난방·급탕 연료다.','AWHP 케이스는 0이다.'],
+ heatmap:['목표별로 가스보일러와 AWHP를 좌우로 나눠, 주택·인원(행)과 이용률(열)에 따른 회수기간을 색으로 보여준다.','진할수록 회수가 빠르다. 칸 아래 작은 글씨는 선택된 PV 용량과 ESS 모듈 수다. 보조금은 상단 선택기를 따른다.'],
+ detail:['선택한 주택·인원·보조금 조건의 30개 시나리오(난방 2 × 이용률 5 × 목표 3)다.','현금흐름 차트와 CAPEX 구성은 상단의 난방·이용률 선택을 따른다.'],
+ cashflow:['초기 순CAPEX를 지출한 뒤 매년 연간 이득을 더하고 교체비를 뺀 누적 금액이다. 세모 표시는 교체가 일어난 해다.','선이 0원을 넘는 지점이 회수 시점이다. 범례를 누르면 해당 목표를 숨길 수 있다.'],
+ capex:['목표별 초기 투자비의 구성이다. PV 턴키 금액에 인버터가 포함된다.','PV 보조금은 PV 3kW 이하일 때만 차감되며 막대의 왼쪽(음수)으로 표시한다. 막대 끝 숫자는 순CAPEX다.'],
+ table:['선택한 주택·인원·보조금의 시나리오 목록이다.','변동요금 절감률은 기준안 대비 전력량요금이 줄어든 비율이다. 25년 누적은 25년 차까지의 누적 현금흐름이다.'],
+ nz:['Near zero 조합의 현재 순CAPEX와, 3년 안에 회수하려면 필요한 순CAPEX(연간 이득 × 3)를 비교한다.','두 막대의 차이가 3년 회수까지 줄여야 하는 금액이다. 축 라벨의 감액률이 그 비율이다.'],
+ zb:['Zero bill 조합의 회수기간을 ESS 단가 Low·Central·High(NREL 범위값)별로 비교한다.','ESS 단가는 국내 근거가 없어 해외 범위값을 쓴 가장 불확실한 입력이다. 100년 안에 회수하지 못하면 "불가능"이다.'],
+ ze:['계통 수전 없이 LOL 0시간을 만족하는 최소비용 PV·ESS 조합의 규모다.','ESS가 클수록 필요한 PV는 작아진다. 조합 탐색 과정은 부록 B에 있다.'],
+ life:['설비별 수명과 100년 동안의 교체 시점이다.','근거 수준은 제조사 보증 / 공공·법정 / 업계 통상 / 추정 중 하나다. 수명이 짧을수록 100년 현금흐름에 교체비가 자주 들어간다.'],
+ limits:['결과를 해석할 때 함께 봐야 할 가정과 한계다.',''],
+ a:['실측 데이터가 아니라 KOSIS 생활시간조사의 시간대별 행동비율로 거주자 하루를 매일 다르게 생성한 결과다.','먼저 하루·7일 샘플로 패턴을 보고, 365일 히트맵과 분포로 날마다 달라지는 정도를, 마지막 점검 차트로 통계와 맞는지를 확인한다.'],
+ a_day:['15분 단위 전력을 용도별로 쌓은 막대다. 아래 띠는 거주자별 상태(외출·재택·수면)다.','취사·식기세척·세탁은 짧은 이벤트로 뾰족하게 나타난다. 거주자가 외출한 시간에는 상시 부하(냉장·환기·대기)와 난방만 남는다.'],
+ a_week:['연속 7일의 15분 전력 합계와 재택 인원이다.','같은 평일이라도 날마다 모양이 다르다. 주말은 낮 시간 재택이 늘어난다.'],
+ a_heat:['가로가 날짜, 세로가 시각이며 색이 그 시각의 평균 전력(kW)이다.','겨울 아침·저녁에 진한 띠가 생기는지, 평일 낮(외출)이 옅은지 확인한다.'],
+ a_band:['같은 요일 유형의 모든 날을 15분 칸별로 모아 하위 10%·중앙값·상위 10%를 그렸다.','띠가 넓을수록 날마다 차이가 크다.'],
+ a_hist:['365일의 일 사용량(kWh)을 구간별로 센 막대다.','겨울철 난방일이 오른쪽 꼬리를 만든다.'],
+ a_commute:['평일 시뮬레이션에서 첫 외출과 마지막 귀가가 일어난 30분 칸의 비율이다.','통계 곡선에서 생성된 출퇴근 시각의 분포다.'],
+ a_fit:['KOSIS 통계로 만든 목표 곡선과, 시뮬레이션 수천 인-일을 평균한 곡선을 겹쳤다.','평균은 원래 매끄럽다. 개별 하루의 들쭉날쭉함은 위의 하루·7일 차트에서 본다. MAE는 두 곡선의 시간대별 평균 차이(%p)다.'],
+ a_appl:['가전별 정격전력·1회 사용 시간과, 연간 목표 사용량 대비 시뮬레이션 결과다.','연간 목표 사용량은 미검증 입력값이다.'],
+ a_seed:['확률 시드 10개 각각으로 Zero energy를 사이징했을 때 결과 범위다.','본문 Zero energy는 10개 시드 모두에서 LOL 0을 만족하는 조합을 쓴다.'],
+ a_kappa:['외출 확률을 만들 때 여가·교제 시간 중 집 밖으로 보는 비율 κ를 바꾼 결과다.','κ는 가정값이다.'],
+ b:['선택한 주택·인원·난방의 Zero energy 조합(이용률 100%)이 어떻게 정해졌는지 보여준다.','ESS 모듈 수마다 LOL 0을 만족하는 최소 PV를 찾고, 그중 초기 순CAPEX가 가장 작은 조합을 고른다.'],
+ b_daily:['막대는 일 부하(kWh), 선은 선택된 PV의 수명 말기 일 발전량, 점선은 ESS 사용 가능 용량이다.','발전량이 부하보다 낮은 날이 이어지면 ESS가 그 차이를 메운다.'],
+ b_soc:['일사량이 가장 낮은 7일 동안 15분 단위 부하·PV 발전과 ESS 충전 상태다.','충전 상태가 하한에 닿지 않으면 그 기간에 정전(LOL)이 없다.'],
+ c:['주요 가정을 바꿨을 때 회수기간 변화다.','막대 길이가 회수기간이며 100년 안에 회수하지 못하면 "불가능"으로 표시한다.'],
+ d:['분석에 쓴 주요 입력값과 근거 상태다.','VERIFIED는 출처를 직접 확인한 값이다. PLACEHOLDER는 근거 없는 임시값으로 결과에 큰 영향을 줄 수 있다.']
+};
+Object.assign(TIPS,{
+ energy_use:['가스보일러 케이스와 AWHP 케이스의 연간 전력 소비를 용도별로 나눈 값이다. PV·ESS는 소비량을 바꾸지 않으므로 목표와 무관하다.','AWHP 케이스의 난방·급탕 막대가 AWHP가 쓴 전력이다. 위 계통 전력량 차트는 이 소비 전체에서 PV 발전을 상계한 결과다.'],
+ energy_heat:['난방·급탕·냉방에 공급된 열량, 그 열을 만드는 데 들어간 에너지, 효율이다.','AWHP 연평균 COP = (난방+급탕 열량) ÷ (난방+급탕 전력). 보일러 효율 = 열량 ÷ 프로판 순발열량.'],
+ energy_month:['월별 전력 소비와, 상단에서 선택한 난방·목표 조합의 월별 PV 발전량이다.','전기요금은 월 사용량 기준 누진제로 계산된다. 월 합산 상계에서는 발전이 소비보다 많은 달의 잉여가 다음 달로 이월된다.'],
+ zb:['Zero bill 조합의 회수기간을 ESS 단가 시나리오별로 비교한다. 축 라벨 아래 숫자는 25년 안에 회수되려면 ESS 단가가 얼마 이하여야 하는지다.','Low·Central·High는 NREL 범위값, Specific은 실제 판매·설치 사례 단가다(아래 표의 출처 참조). 다른 조건은 모두 같고 ESS 단가만 바꿨다.'],
+ a_day:['15분 단위 전력을 용도별로 쌓은 막대, 그 아래 실외·실내·설정온도, 마지막 띠는 거주자별 상태다.','난방·냉방은 실내온도를 설정온도에 맞추는 데 필요한 만큼 작동한다. 설정온도는 거주자 상태(재택·수면·외출)에 따라 바뀐다.'],
+ a_week:['연속 7일의 15분 전력(용도별), 온도, 재택 인원이다.','설정온도가 바뀌는 기상·귀가 직후에 난방 전력이 짧게 커지는지, 외출 시간에 부하가 줄어드는지 확인할 수 있다.'],
+ a_raster:['시뮬레이션에서 무작위로 뽑은 거주자-일의 15분 상태(외출·재택·수면)다. 한 줄이 한 사람의 하루다.','같은 요일 유형이라도 사람과 날마다 기상·출근·귀가·취침 시각이 다르다.'],
+ a_sleep:['시뮬레이션 거주자-일의 하루 수면 시간 분포다.','KOSIS 평균 수면 시간과의 비교는 오른쪽 표에 있다.'],
+ a_real:['한 사람의 하루 단위로 합산한 수면·일·이동 시간 등을 KOSIS 생활시간조사 평균시간과 비교한다.','아래 점검 곡선이 시간대별 비율을 보는 반면, 이 표는 한 사람의 하루 총량이 통계 범위에 있는지 본다.'],
+ b:['선택한 주택·인원·난방의 Zero energy 조합(이용률 100%)이 어떻게 정해졌는지 보여준다.','ESS 모듈 수마다 LOL 0을 만족하는 최소 PV를 찾고(해 없음 = PV 상한 안에서 불가), 그중 초기 순CAPEX가 가장 작은 조합을 고른다.'],
+ b_soc:['선택된 Zero energy 조합을 수명 말기 조건(PV 출력 감소, ESS 용량 감소)과 사이징을 결정한 부하 시드로 1년 운전했을 때, 충전 상태가 연중 가장 낮아지는 시점을 포함한 7일이다.','계통 연결이 없으므로 ESS는 PV 잉여로만 충전된다. 충전 상태가 하한선에 닿는 시점이 이 조합의 크기를 결정한 순간이다.']
+});
+if(!D.constants.boiler_avoided_cost_included) TIPS.heatmap[1]+=' AWHP 케이스 CAPEX에는 AWHP 설치비와 수명마다의 교체비가 들어가고, 기존 가스보일러의 구입·교체비 절감은 반영하지 않았다.';
+function initTips(){
+  document.querySelectorAll('.tip').forEach(t=>{
+    const k=t.dataset.t,v=TIPS[k]; if(!v){t.remove();return;}
+    t.setAttribute('tabindex','0'); t.setAttribute('role','button'); t.setAttribute('aria-label','설명');
+    t.innerHTML='!<span class="pop"><b>무엇을 보여주나</b>'+esc(v[0])+(v[1]?'<b>어떻게 읽나</b>'+esc(v[1]):'')+'</span>';
+    t.addEventListener('click',e=>{e.stopPropagation();const o=t.classList.contains('open');document.querySelectorAll('.tip.open').forEach(x=>x.classList.remove('open'));if(!o)t.classList.add('open');});
+  });
+  document.addEventListener('click',()=>document.querySelectorAll('.tip.open').forEach(x=>x.classList.remove('open')));
+}
+
+/* ---------- 상단 ---------- */
+function renderHeader(){
+  const m=D.meta;
+  $('meta').innerHTML=[`기상: ${esc(m.weather_source)} · 연간 일사량 ${f1(m.annual_ghi_kwh_m2)} kWh/m²`,`시나리오 ${D.scenarios.length}건`,`run_id ${esc(D.run_id)}`,`생성 ${esc(m.created_at)}`].map(x=>`<span>${x}</span>`).join('');
+  if(m.is_mock) $('mock').innerHTML='<div class="mock">MOCK 데이터로 만든 화면이다. 표시된 숫자는 분석 결과가 아니다.</div>';
+  $('toc').innerHTML=[['sec-summary','요약'],['sec-def','목표 정의'],['sec-energy','에너지 비교'],['sec-heat','회수기간'],['sec-detail','시나리오 상세'],['sec-nz','Near zero'],['sec-zb','Zero bill'],['sec-ze','Zero energy'],['sec-life','수명·교체'],['sec-limits','한계'],['sec-a','부록 A 생활 패턴'],['sec-b','부록 B ZE 산정'],['sec-c','부록 C 민감도'],['sec-d','부록 D 입력값']].map(([i,l])=>`<a href="#${i}">${l}</a>`).join('');
+  $('foot').textContent=`run_id ${D.run_id} · 모든 숫자와 문장은 report_data.json(schema ${D.schema_version})에서 생성됨`;
+}
+function renderControls(){
+  $('f-hp').innerHTML=HP.map(h=>`<option value="${h.id}">${esc(h.label)}</option>`).join('');
+  $('f-hp').value=S.hp; $('f-hp').onchange=e=>{S.hp=e.target.value;renderAll();};
+  const seg=(id,items,key,fmt)=>{$(id).innerHTML=items.map(x=>{const v=typeof x==='object'?x.id:x;return `<button data-v="${v}" class="${String(S[key])===String(v)?'on':''}">${esc(fmt(x))}</button>`;}).join('');
+    $(id).querySelectorAll('button').forEach(b=>b.onclick=()=>{S[key]=typeof S[key]==='number'?+b.dataset.v:b.dataset.v;renderAll();});};
+  seg('f-heat',HEAT,'heat',x=>x.id==='gas'?'가스보일러':x.label);
+  seg('f-occ',OCC,'occ',x=>x+'%');
+  seg('f-sub',SUB,'sub',x=>x.id==='none'?'없음':'PV 보조금');
+}
+
+/* ---------- 0 요약 ---------- */
+function renderSummary(){
+  const all=D.scenarios, ok=all.filter(s=>s.payback_years!=null);
+  const n3=all.filter(s=>s.payback_years!=null&&s.payback_years<=3), n25=all.filter(s=>s.payback_years!=null&&s.payback_years<=25);
+  const best=ok.slice().sort((a,b)=>a.payback_years-b.payback_years)[0];
+  const ze=all.filter(s=>s.target==='ze'), zec=ze.map(s=>s.capex.net);
+  const desc=s=>`${lab(HP,s.hp)} · ${s.heat==='gas'?'가스보일러':'AWHP'} · 이용률 ${s.occ}% · ${lab(TGT,s.target)} · ${s.sub==='none'?'보조금 없음':'PV 보조금'} (PV ${f1(s.pv_kw)}kW · ESS ${s.ess_modules}모듈)`;
+  $('kpis').innerHTML=[
+    ['분석 시나리오',all.length,'건','주택·인원 7 × 난방 2 × 이용률 5 × 목표 3 × 보조금 2'],
+    ['3년 이내 회수',n3.length,'건',n3.length?`${[...new Set(n3.map(s=>lab(TGT,s.target)))].join('·')}에서만 발생`:'없음'],
+    ['최단 회수기간',best?best.payback_years.toFixed(1):'-',best?'년':'',best?desc(best):'회수 가능한 시나리오 없음'],
+    ['25년 이내 회수',n25.length,'건',`100년 이내 회수 ${ok.length}건 · 불가능 ${all.length-ok.length}건`],
+    ['Zero energy 순CAPEX',manN(Math.min(...zec))+'~'+manN(Math.max(...zec)),'만원',`${ze.length}건 모두 ${ze.every(s=>s.payback_years==null)?'회수 불가능':'회수 '+ze.filter(s=>s.payback_years!=null).length+'건'}`]
+  ].map(([k,v,u,d])=>`<div class="kpi"><div class="k">${k}</div><div class="v${String(v).length>7?' sm':''}">${v}<small>${u}</small></div><div class="d">${esc(d)}</div></div>`).join('');
+  const facts=TGT.map(t=>{const g=all.filter(s=>s.target===t.id),p=g.filter(s=>s.payback_years!=null).map(s=>s.payback_years).sort((a,b)=>a-b);
+    const med=p.length?p[Math.floor((p.length-1)/2)]:null;
+    return `<b>${t.label}</b>: ${g.length}건 중 100년 이내 회수 ${p.length}건${p.length?` (최단 ${p[0].toFixed(1)}년, 중앙값 ${med.toFixed(1)}년)`:''}, 25년 이내 ${p.filter(x=>x<=25).length}건.`;});
+  [100,15].forEach(o=>{const g=all.filter(s=>s.occ===o);facts.push(`이용률 ${o}%: ${g.length}건 중 25년 이내 회수 ${g.filter(s=>s.payback_years!=null&&s.payback_years<=25).length}건, 100년 이내 ${g.filter(s=>s.payback_years!=null).length}건.`);});
+  HEAT.forEach(h=>{const g=all.filter(s=>s.heat===h.id&&s.payback_years!=null).sort((a,b)=>a.payback_years-b.payback_years);facts.push(`${h.label}: 최단 회수 ${g.length?g[0].payback_years.toFixed(1)+'년 ('+lab(TGT,g[0].target)+', '+lab(HP,g[0].hp)+', 이용률 '+g[0].occ+'%)':'없음'}.`);});
+  $('facts').innerHTML=facts.map(f=>`<li>${f}</li>`).join('');
+  $('loadnote').innerHTML=`<b>부하 데이터</b>: ${esc(D.load_mode_detail)}`;
+}
+
+/* ---------- 1 정의 ---------- */
+function renderDefs(){
+  const k=D.constants;
+  const defs=[
+   ['nz','Near zero','연간 전기요금을 크게 줄이되 초기 투자를 최소화하는 조합.',`PV(0.5kW 단위)와 ESS(0~4모듈, 모듈당 ${k.ess_module_kwh}kWh)의 모든 조합을 계산한다. 3년 이내 회수 조합이 있으면 그중 변동요금 절감률이 가장 큰 조합을, 없으면 회수기간이 가장 짧은 조합을 고른다. 3년 회수에 필요한 순CAPEX(연간 이득 × 3)를 함께 제시한다.`],
+   ['zb','Zero bill','연간 전기요금 중 사용량에 따라 달라지는 변동요금이 0원인 조합. 기본요금·세금은 남는다.',`월 합산 상계와 잉여 전력의 무기한 이월을 반영해, 변동요금이 0원이 되는 최소비용 조합을 고른다. ESS는 최소 1모듈이다. 상계 제도 아래에서 ESS는 요금을 거의 줄이지 않는다.`],
+   ['ze','Zero energy','계통 전력을 1kWh도 받지 않는(LOL 0시간) 조합.',`ESS 사용 가능 용량(공칭 × SOH ${k.ess_soh_eol} × SoC 창 ${k.ess_soc_window} × √RTE ${k.ess_rte})이 연중 최대 일부하 이상인 모듈 수에서 시작해, 모듈 수마다 LOL 0을 만족하는 최소 PV를 찾고 초기 순CAPEX가 가장 작은 조합을 고른다. PV는 수명 말기 출력, 부하는 확률 시드 10개 모두를 적용한다. 가스 케이스는 프로판을 계속 쓴다(전력 기준).`]];
+  $('defs').innerHTML=defs.map(([id,n,d,m])=>`<div class="def" style="--c:${TGT_COL[id]}"><h4>${n}</h4><p><b>정의</b> ${esc(d)}</p><p><b>산정 방법</b> ${esc(m)}</p></div>`).join('');
+}
+
+/* ---------- 2 에너지 비교 ---------- */
+const CASES=[['baseline','기준안: 가스보일러 + 계통'],['awhp_only','AWHP만 (PV·ESS 없음)'],['gas_nz','가스 + Near zero'],['gas_zb','가스 + Zero bill'],['gas_ze','가스 + Zero energy'],['awhp_nz','AWHP + Near zero'],['awhp_zb','AWHP + Zero bill'],['awhp_ze','AWHP + Zero energy']];
+function renderEnergy(){
+  const rows=CASES.map(([c,l])=>({c,l,e:EN[[S.hp,S.occ,S.sub,c].join('|')]})).filter(r=>r.e);
+  if(!rows.length) return;
+  const base=etot(rows[0].e);
+  const cat=rows.map(r=>r.l+(r.e.pv_kw||r.e.ess_kwh?`\n{s|PV ${f1(r.e.pv_kw)}kW · ESS ${Math.round(r.e.ess_kwh/D.constants.ess_module_kwh)}모듈}`:'\n{s|PV·ESS 없음}'));
+  $('energy-lead').textContent=`${lab(HP,S.hp)} · 이용률 ${S.occ}% · ${S.sub==='none'?'보조금 없음':'PV 보조금'} 기준. 기준안 연간 에너지비용 ${man(base)}.`;
+  const rich={s:{color:COL.ink3,fontSize:11}};
+  const yA=catAxis(cat,{inverse:true,axisLabel:{color:COL.ink,fontSize:12,lineHeight:16,rich}});
+  const series=[['전기 전력량요금','elec_variable_krw',COL.s[0]],['가스(프로판)','gas_krw',COL.s[1]],['전기 기본요금·세금','elec_fixed_krw',COL.s[2]]].map(([n,k,c])=>({name:n,type:'bar',stack:'t',barWidth:22,itemStyle:{color:c,borderColor:'#fff',borderWidth:1},data:rows.map(r=>r.e[k])}));
+  series.push({name:'합계',type:'bar',stack:'t',barWidth:22,itemStyle:{color:'transparent'},data:rows.map(()=>0.0001),label:{show:true,position:'right',color:COL.ink,fontSize:12,formatter:p=>{const r=rows[p.dataIndex],t=etot(r.e);return r.c==='baseline'?`${man(t)} (기준)`:`${man(t)}  ·  이득 ${t<=base?'+':''}${man(base-t)}`;}},tooltip:{show:false}});
+  draw('c-cost',{legend:legend(series.slice(0,3).map(s=>s.name)),grid:{left:10,right:170,top:36,bottom:40,containLabel:true},
+    xAxis:valAxis('연간 비용 (만원)',{fmt:v=>manN(v),gap:28}),yAxis:yA,series,
+    tooltip:{formatter:ps=>{const r=rows[ps[0].dataIndex];return ttRows(r.l,[{name:'전기 전력량요금',v:man(r.e.elec_variable_krw)},{name:'가스(프로판)',v:man(r.e.gas_krw)},{name:'전기 기본요금·세금',v:man(r.e.elec_fixed_krw)},{name:'합계',v:man(etot(r.e))},{name:'기준안 대비 이득',v:man(base-etot(r.e))}]);}}});
+  const kser=[['수전','import_kwh',COL.s[0]],['역송','export_kwh',COL.s[1]],['과금(상계 후)','billed_kwh',COL.s[2]]].map(([n,k,c])=>({name:n,type:'bar',barGap:'10%',barWidth:9,itemStyle:{color:c,borderRadius:[0,3,3,0]},data:rows.map(r=>r.e[k]),label:{show:true,position:'right',fontSize:10.5,color:COL.ink2,formatter:p=>f0(p.value)}}));
+  const short=rows.map(r=>r.l.replace('기준안: 가스보일러 + 계통','기준안').replace(' (PV·ESS 없음)',''));
+  draw('c-kwh',{legend:legend(kser.map(s=>s.name)),grid:{left:6,right:56,top:34,bottom:36,containLabel:true},xAxis:valAxis('kWh/년',{fmt:v=>f0(v),gap:26}),yAxis:catAxis(short,{inverse:true}),series:kser});
+  draw('c-kg',{grid:{left:6,right:60,top:34,bottom:36,containLabel:true},xAxis:valAxis('kg/년',{fmt:v=>f0(v),gap:26}),yAxis:catAxis(short,{inverse:true}),
+    series:[{name:'프로판',type:'bar',barWidth:14,itemStyle:{color:COL.s[1],borderRadius:[0,3,3,0]},data:rows.map(r=>r.e.propane_kg),label:{show:true,position:'right',color:COL.ink2,formatter:p=>f0(p.value)+' kg'}}]});
+}
+
+function renderEnergyUse(){
+  const g=EN[[S.hp,S.occ,S.sub,'baseline'].join('|')], a=EN[[S.hp,S.occ,S.sub,'awhp_only'].join('|')];
+  if(!g||!a||!g.enduse_kwh||!a.enduse_kwh) return;
+  const rows=[['가스보일러 케이스',g],['AWHP 케이스',a]];
+  const grp=(e,u)=>u.keys.reduce((s,k)=>s+(e.enduse_kwh[k]||0),0), tot=e=>ENDUSE.reduce((s,u)=>s+grp(e,u),0);
+  const series=ENDUSE.map((u,i)=>({name:u.label,type:'bar',stack:'u',barWidth:26,itemStyle:{color:COL.s[i],borderColor:'#fff',borderWidth:1},data:rows.map(r=>grp(r[1],u))}));
+  series.push({name:'합계',type:'bar',stack:'u',barWidth:26,itemStyle:{color:'transparent'},data:rows.map(()=>0.0001),label:{show:true,position:'right',color:COL.ink,fontWeight:700,formatter:p=>f0(tot(rows[p.dataIndex][1]))+' kWh'},tooltip:{show:false}});
+  draw('c-use',{legend:legend(ENDUSE.map(u=>u.label)),grid:{left:6,right:100,top:58,bottom:40,containLabel:true},xAxis:valAxis('연간 전력 소비 (kWh)',{fmt:v=>f0(v),gap:26}),yAxis:catAxis(rows.map(r=>r[0]),{inverse:true}),series,
+    tooltip:{formatter:ps=>{const r=rows[ps[0].dataIndex];return ttRows(r[0],ENDUSE.map(u=>({name:u.label,v:f0(grp(r[1],u))+' kWh'})).concat([{name:'합계',v:f0(tot(r[1]))+' kWh'}]));}}});
+  const mj=D.constants.propane_mj_per_kg||46.3;
+  const hr=(lbl,e,gas)=>{const h=e.heat_th_kwh||{}, th=(h.heating||0)+(h.dhw||0), el=(e.enduse_kwh.heating||0)+(e.enduse_kwh.dhw||0), fuel=e.propane_kg*mj/3.6;
+    const inp=gas?`프로판 ${f0(e.propane_kg)} kg (${f0(fuel)} kWh) + 전력 ${f0(el)} kWh`:`전력 ${f0(el)} kWh`;
+    const eff=gas?(fuel>0?'보일러 효율 '+Math.round(th/fuel*100)+'%':'-'):(el>0?'연평균 COP '+(th/el).toFixed(2):'-');
+    const ce=e.enduse_kwh.cooling||0, cop=ce>0&&h.cooling?' (COP '+(h.cooling/ce).toFixed(2)+')':'';
+    return `<tr><td>${lbl}</td><td class="n">${f0(h.heating)}</td><td class="n">${f0(h.dhw)}</td><td class="n">${inp}</td><td class="n">${eff}</td><td class="n">${f0(h.cooling)} / ${f0(ce)}${cop}</td></tr>`;};
+  $('t-heat').innerHTML='<tr><th>케이스</th><th class="n">난방 열량 kWh</th><th class="n">급탕 열량 kWh</th><th class="n">난방·급탕 투입 에너지</th><th class="n">효율</th><th class="n">냉방 열량 / 전력 kWh</th></tr>'+hr('가스보일러',g,true)+hr('AWHP',a,false);
+  if(g.monthly&&a.monthly){const M=Array.from({length:12},(_,i)=>(i+1)+'월'), pe=EN[[S.hp,S.occ,S.sub,S.heat+'_'+S.target].join('|')];
+    const ser=[['가스보일러 케이스 소비',g.monthly.consumption_kwh,COL.s[0]],['AWHP 케이스 소비',a.monthly.consumption_kwh,COL.s[1]]].map(([n,d,c])=>({name:n,type:'bar',barGap:'10%',barWidth:12,itemStyle:{color:c,borderRadius:[3,3,0,0]},data:d}));
+    if(pe&&pe.monthly&&pe.pv_kw>0) ser.push({name:`PV 발전 (${S.heat==='gas'?'가스':'AWHP'} + ${lab(TGT,S.target)}, ${f1(pe.pv_kw)}kW)`,type:'line',data:pe.monthly.pv_kwh,symbolSize:6,lineStyle:{width:2,color:COL.s[2]},itemStyle:{color:COL.s[2]}});
+    draw('c-month',{legend:legend(ser.map(s=>s.name)),grid:{left:56,right:16,top:40,bottom:40},xAxis:catAxis(M),yAxis:valAxis('kWh/월',{fmt:v=>f0(v),gap:44}),series:ser,
+      tooltip:{formatter:ps=>ttRows(ps[0].axisValue,ps.map(p=>({marker:p.marker,name:p.seriesName,v:f0(p.value)+' kWh'})))}});}
+}
+
+/* ---------- 3 회수기간 히트맵 ---------- */
+const BINS=[{t:'3년 이하',c:COL.pb[0],fg:'#fff',test:p=>p<=3},{t:'3~10년',c:COL.pb[1],fg:'#fff',test:p=>p<=10},{t:'10~25년',c:COL.pb[2],fg:COL.ink,test:p=>p<=25},{t:'25~100년',c:COL.pb[3],fg:COL.ink,test:p=>p<=100}];
+const binOf=p=>p==null?{c:COL.na,fg:COL.ink3}:BINS.find(b=>b.test(p));
+function renderHeatmap(){
+  $('hm-tabs').innerHTML=TGT.map(t=>`<button data-t="${t.id}" class="${S.target===t.id?'on':''}">${t.label}</button>`).join('');
+  $('hm-tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.target=b.dataset.t;renderAll();});
+  $('hm-legend').innerHTML=BINS.map(b=>`<span><i style="background:${b.c}"></i>${b.t}</span>`).join('')+`<span><i style="background:${COL.na};border:1px solid #d6d4cf"></i>불가능(100년 초과 또는 연간 이득 없음)</span><span>· ${S.sub==='none'?'보조금 없음':'PV 보조금 적용'}</span>`;
+  $('hm').innerHTML=HEAT.map(h=>{
+    let html=`<div><h3>${esc(h.label)}</h3><div class="tbl-wrap" style="border:0"><table class="hm"><tr><th></th>${OCC.map(o=>`<th>${o}%</th>`).join('')}</tr>`;
+    HP.forEach(p=>{html+=`<tr><td class="rowh">${esc(p.label.replace('MONO ',''))}</td>`+OCC.map(o=>{const s=sc(p.id,h.id,o,S.target,S.sub);if(!s)return '<td>-</td>';const b=binOf(s.payback_years);
+      const cur=p.id===S.hp&&h.id===S.heat&&o===S.occ?' cur':'';
+      return `<td class="${cur}" style="background:${b.c};color:${b.fg}" data-hp="${p.id}" data-h="${h.id}" data-o="${o}" title="${esc(p.label)} · ${o}% · ${yr(s.payback_years)}"><div class="y">${yr(s.payback_years)}</div><div class="c">PV ${f1(s.pv_kw)} · ESS ${s.ess_modules}</div></td>`;}).join('')+'</tr>';});
+    return html+'</table></div></div>';}).join('');
+  $('hm').querySelectorAll('td[data-hp]').forEach(td=>td.onclick=()=>{S.hp=td.dataset.hp;S.heat=td.dataset.h;S.occ=+td.dataset.o;renderAll();$('sec-detail').scrollIntoView();});
+}
+
+/* ---------- 4 상세 ---------- */
+const CAPK=[['pv','PV(턴키, 인버터 포함)',COL.s[0]],['ess','ESS',COL.s[1]],['awhp','AWHP',COL.s[2]],['grid','계통연계·증설',COL.s[3]],['pv_subsidy','PV 보조금 차감',COL.s[4]],['awhp_subsidy','AWHP 보조금 차감',COL.s[5]]];
+const ITEM={pv:'PV 모듈',inverter:'인버터',ess:'ESS',awhp:'AWHP'};
+function renderDetail(){
+  $('detail-lead').textContent=`${lab(HP,S.hp)} · ${S.sub==='none'?'보조금 없음':'PV 보조금'} · 차트는 ${S.heat==='gas'?'가스보일러':'AWHP'} · 이용률 ${S.occ}% 기준.`;
+  const list=TGT.map(t=>sc(S.hp,S.heat,S.occ,t.id,S.sub)).filter(Boolean);
+  $('cf-sub').textContent=list.map(s=>`${lab(TGT,s.target)} ${yr(s.payback_years)}`).join(' · ');
+  const years=Array.from({length:101},(_,i)=>i);
+  const series=[];
+  list.forEach(s=>{const c=TGT_COL[s.target];
+    series.push({name:lab(TGT,s.target),type:'line',showSymbol:false,lineStyle:{width:2,color:c},itemStyle:{color:c},data:s.cum_cashflow,
+      markLine:s.payback_years!=null?{symbol:'none',silent:true,lineStyle:{color:c,type:'dashed',width:1},label:{formatter:`${lab(TGT,s.target)} ${s.payback_years.toFixed(1)}년`,color:COL.ink,fontSize:11,position:'insideEndTop'},data:[{xAxis:Math.round(s.payback_years)}]}:undefined});
+    const yrs=[...new Set(s.replacements.map(r=>r.year))];
+    series.push({name:lab(TGT,s.target),type:'scatter',symbol:'triangle',symbolSize:9,itemStyle:{color:c,borderColor:'#fff',borderWidth:1},z:5,
+      data:yrs.map(y=>[y,s.cum_cashflow[y]]),tooltip:{trigger:'item',formatter:p=>ttRows(`${lab(TGT,s.target)} · ${p.value[0]}년 차 교체`,s.replacements.filter(r=>r.year===p.value[0]).map(r=>({name:ITEM[r.item]||r.item,v:man(r.krw)})))}});
+  });
+  draw('c-cf',{legend:legend(list.map(s=>lab(TGT,s.target))),grid:{left:10,right:24,top:40,bottom:44,containLabel:true},
+    xAxis:Object.assign(catAxis(years,{boundaryGap:false,axisLabel:{interval:9,color:COL.ink2}}),{name:'경과 연수 (년)',nameLocation:'middle',nameGap:28}),
+    yAxis:valAxis('누적 현금흐름 (만원)',{fmt:v=>manN(v),gap:72,extra:{splitLine:{lineStyle:{color:'#EFEDE8'}}}}),series:series.concat([{type:'line',data:[],markLine:{symbol:'none',silent:true,lineStyle:{color:COL.ink,width:1},label:{show:false},data:[{yAxis:0}]}}]),
+    tooltip:{trigger:'axis',axisPointer:{type:'line'},formatter:ps=>ttRows(`${ps[0].axisValue}년 차`,ps.filter(p=>p.seriesType==='line').map(p=>({marker:p.marker,name:p.seriesName,v:man(p.value)})))}});
+  // CAPEX
+  const used=CAPK.filter(([k])=>list.some(s=>s.capex[k]));
+  draw('c-capex',{legend:legend(used.map(x=>x[1])),grid:{left:6,right:110,top:34,bottom:36,containLabel:true},xAxis:valAxis('초기 투자비 (만원)',{fmt:v=>manN(v),gap:26}),
+    yAxis:catAxis(list.map(s=>`${lab(TGT,s.target)}\n{s|PV ${f1(s.pv_kw)}kW · ESS ${s.ess_modules}모듈}`),{inverse:true,axisLabel:{color:COL.ink,lineHeight:16,rich:{s:{color:COL.ink3,fontSize:11}}}}),
+    series:used.map(([k,n,c])=>({name:n,type:'bar',stack:'c',barWidth:20,itemStyle:{color:c,borderColor:'#fff',borderWidth:1},data:list.map(s=>s.capex[k]||0)}))
+      .concat([{name:'순CAPEX',type:'bar',stack:'c',barWidth:20,itemStyle:{color:'transparent'},data:list.map(()=>0.0001),label:{show:true,position:'right',color:COL.ink,fontWeight:700,formatter:p=>'순 '+man(list[p.dataIndex].capex.net)},tooltip:{show:false}}]),
+    tooltip:{formatter:ps=>{const s=list[ps[0].dataIndex];return ttRows(lab(TGT,s.target),used.map(([k,n])=>({name:n,v:man(s.capex[k]||0)})).concat([{name:'순CAPEX',v:man(s.capex.net)}]));}}});
+  // 표
+  const rows=[];HEAT.forEach(h=>OCC.forEach(o=>TGT.forEach(t=>{const s=sc(S.hp,h.id,o,t.id,S.sub);if(s)rows.push(s);})));
+  let html=`<tr><th></th><th>난방</th><th class="n">이용률</th><th>목표</th><th class="n">PV kW</th><th class="n">ESS 모듈</th><th class="n">순CAPEX</th><th class="n">연간 이득</th><th class="n">변동요금 절감률</th><th class="n">25년 누적</th><th class="n">회수기간</th></tr>`;
+  rows.forEach(s=>{const sel=s.heat===S.heat&&s.occ===S.occ?' sel':'';
+    html+=`<tr class="row${sel}" data-id="${s.id}"><td><span class="caret">▸</span></td><td>${s.heat==='gas'?'가스보일러':'AWHP'}</td><td class="n">${s.occ}%</td><td>${lab(TGT,s.target)}</td><td class="n">${f1(s.pv_kw)}</td><td class="n">${s.ess_modules}</td><td class="n"><u>${man(s.capex.net)}</u></td><td class="n">${man(s.annual_benefit_krw)}</td><td class="n">${pct(s.var_bill_saving_pct)}</td><td class="n">${man(s.cum25_krw)}</td><td class="n"><b>${yr(s.payback_years)}</b></td></tr>`;});
+  $('t-scen').innerHTML=html;
+  $('t-scen').querySelectorAll('tr.row').forEach(tr=>tr.onclick=()=>{
+    const nx=tr.nextElementSibling; if(nx&&nx.classList.contains('exp')){nx.remove();tr.querySelector('.caret').textContent='▸';return;}
+    const s=D.scenarios[+tr.dataset.id]||D.scenarios.find(x=>x.id==tr.dataset.id); tr.querySelector('.caret').textContent='▾';
+    const reps=s.replacements; const shown=reps.slice(0,8).map(r=>`${r.year}년 차 ${ITEM[r.item]||r.item} ${man(r.krw)}`).join(', ');
+    const sumRep=reps.reduce((a,r)=>a+r.krw,0);
+    const ex=document.createElement('tr');ex.className='exp';
+    ex.innerHTML=`<td></td><td colspan="10"><div class="capbox">${CAPK.filter(([k])=>s.capex[k]).map(([k,n])=>`<span>${n} <b>${man(s.capex[k])}</b></span>`).join('')}<span>= 순CAPEX <b>${man(s.capex.net)}</b></span></div>
+      <div class="reps">100년간 교체 ${reps.length}건, 합계 ${man(sumRep)}${reps.length?': '+shown+(reps.length>8?` 외 ${reps.length-8}건`:''):''}${s.target==='nz'&&s.nz_required_capex_krw!=null?`<br>3년 회수 필요 순CAPEX ${man(s.nz_required_capex_krw)} (필요 감액률 ${pct(s.nz_required_cut_pct)})`:''}</div></td>`;
+    tr.after(ex);});
+}
+
+/* ---------- 5 Near zero ---------- */
+function renderNZ(){
+  const list=HP.map(h=>sc(h.id,S.heat,S.occ,'nz',S.sub)).filter(Boolean);
+  $('nz-lead').textContent=`${S.heat==='gas'?'가스보일러':'AWHP'} · 이용률 ${S.occ}% · ${S.sub==='none'?'보조금 없음':'PV 보조금'} 기준. 3년 이내 회수 ${list.filter(s=>s.payback_years!=null&&s.payback_years<=3).length}개 / ${list.length}개.`;
+  const cat=list.map(s=>`${hpShort(s.hp)}\n{s|${s.payback_years!=null&&s.payback_years<=3?'3년 이내 회수':'필요 감액 '+pct(s.nz_required_cut_pct)} · 절감률 ${pct(s.var_bill_saving_pct)}}`);
+  const ser=[['현재 순CAPEX',s=>s.capex.net,COL.s[0]],['3년 회수 필요 순CAPEX',s=>s.nz_required_capex_krw,COL.s[1]]].map(([n,f,c])=>({name:n,type:'bar',barWidth:12,barGap:'15%',itemStyle:{color:c,borderRadius:[0,3,3,0]},data:list.map(f),label:{show:true,position:'right',color:COL.ink2,fontSize:11,formatter:p=>man(p.value)}}));
+  draw('c-nz',{legend:legend(ser.map(s=>s.name)),grid:{left:6,right:70,top:34,bottom:40,containLabel:true},xAxis:valAxis('만원',{fmt:v=>manN(v),gap:26}),
+    yAxis:catAxis(cat,{inverse:true,axisLabel:{color:COL.ink,lineHeight:16,rich:{s:{color:COL.ink3,fontSize:11}}}}),series:ser,
+    tooltip:{formatter:ps=>{const s=list[ps[0].dataIndex];return ttRows(lab(HP,s.hp),[{name:'PV / ESS',v:`${f1(s.pv_kw)}kW / ${s.ess_modules}모듈`},{name:'현재 순CAPEX',v:man(s.capex.net)},{name:'연간 이득',v:man(s.annual_benefit_krw)},{name:'3년 회수 필요 순CAPEX',v:man(s.nz_required_capex_krw)},{name:'필요 감액률',v:pct(s.nz_required_cut_pct)},{name:'회수기간',v:yr(s.payback_years)}]);}}});
+}
+
+/* ---------- 6 Zero bill ---------- */
+function renderZB(){
+  const list=HP.map(h=>sc(h.id,S.heat,S.occ,'zb',S.sub)).filter(Boolean), PC=D.constants.ess_price_cases||[];
+  const cols=[COL.pb[2],COL.pb[1],COL.pb[0],COL.s[1],COL.s[4]];
+  $('zb-lead').textContent=`${S.heat==='gas'?'가스보일러':'AWHP'} · 이용률 ${S.occ}% · ${S.sub==='none'?'보조금 없음':'PV 보조금'} 기준. ESS 단가만 바꾸고 나머지 조건은 같다.`;
+  const be=s=>s.zb_breakeven_ess_krw_per_kwh, beTxt=s=>be(s)==null?'ESS 0원이어도 25년 내 회수 불가':`25년 회수 손익분기 ESS ${f0(be(s))}원/kWh`;
+  const ser=PC.map((p,i)=>({name:p.label,type:'bar',barWidth:8,barGap:'15%',itemStyle:{color:cols[i%cols.length],borderRadius:[0,3,3,0]},
+    data:list.map(s=>{const v=s.zb_payback_ess?s.zb_payback_ess[p.id]:null;return v==null?{value:100,na:true,itemStyle:{color:COL.na,borderColor:'#cfccc5',borderWidth:1}}:{value:v};}),
+    label:{show:true,position:'right',fontSize:10.5,color:COL.ink2,formatter:q=>q.data.na?'불가능':q.value.toFixed(1)+'년'}}));
+  draw('c-zb',{legend:legend(PC.map(p=>p.label)),grid:{left:6,right:56,top:34,bottom:40,containLabel:true},xAxis:valAxis('회수기간 (년)',{gap:26,extra:{max:100}}),
+    yAxis:catAxis(list.map(s=>`${hpShort(s.hp)} · PV ${f1(s.pv_kw)}kW · ESS ${s.ess_modules}모듈\n{s|${beTxt(s)}}`),{inverse:true,axisLabel:{color:COL.ink,lineHeight:16,rich:{s:{color:COL.ink3,fontSize:11}}}}),series:ser,
+    tooltip:{formatter:ps=>{const s=list[ps[0].dataIndex];return ttRows(lab(HP,s.hp),PC.map(p=>({name:p.label,v:yr(s.zb_payback_ess?s.zb_payback_ess[p.id]:null)})).concat([{name:'25년 회수 손익분기 ESS 단가',v:be(s)==null?'없음':f0(be(s))+'원/kWh'},{name:'순CAPEX (Central)',v:man(s.capex.net)}]));}}});
+  $('t-ess').innerHTML=`<tr><th>ESS 단가 시나리오</th><th class="n">원/kWh</th><th class="n">${D.constants.ess_module_kwh}kWh 1모듈</th><th>상태</th><th>출처·범위</th></tr>`+PC.map(p=>`<tr><td>${esc(p.label)}</td><td class="n">${f0(p.krw_per_kwh)}${p.usd_per_kwh?` <span style="color:var(--ink-3)">($${f0(p.usd_per_kwh)})</span>`:''}</td><td class="n">${man(p.krw_per_kwh*D.constants.ess_module_kwh)}</td><td><span class="badge b-${p.status}">${p.status}</span></td><td style="white-space:normal">${esc(p.source||'')}</td></tr>`).join('');
+}
+
+/* ---------- 7 Zero energy ---------- */
+function renderZE(){
+  const list=HP.map(h=>sc(h.id,S.heat,S.occ,'ze',S.sub)).filter(Boolean);
+  $('ze-lead').textContent=`${S.heat==='gas'?'가스보일러(프로판 계속 사용)':'AWHP'} · 이용률 ${S.occ}% · ${S.sub==='none'?'보조금 없음':'PV 보조금'} 기준. 회수: ${list.filter(s=>s.payback_years!=null).length}개 / ${list.length}개.`;
+  const one=(id,f,unit,fmt)=>draw(id,{grid:{left:6,right:58,top:10,bottom:40,containLabel:true},xAxis:valAxis(unit,{fmt:v=>unit==='만원'?manN(v):String(Math.round(v)),gap:26,extra:{splitNumber:3,axisLabel:{color:COL.ink2,hideOverlap:true,formatter:v=>unit==='만원'?manN(v):String(Math.round(v))}}}),yAxis:catAxis(list.map(s=>hpShort(s.hp)),{inverse:true}),
+    series:[{type:'bar',barWidth:14,itemStyle:{color:TGT_COL.ze,borderRadius:[0,3,3,0]},data:list.map(f),label:{show:true,position:'right',color:COL.ink2,fontSize:11,formatter:p=>fmt(p.value)+(unit==='만원'?'':'')}}],
+    tooltip:{formatter:ps=>{const s=list[ps[0].dataIndex];return ttRows(lab(HP,s.hp),[{name:'PV',v:f1(s.pv_kw)+' kW'},{name:'ESS',v:f1(s.ess_kwh)+` kWh (${s.ess_modules}모듈)`},{name:'순CAPEX',v:man(s.capex.net)},{name:'회수기간',v:yr(s.payback_years)}]);}}});
+  one('c-ze-pv',s=>s.pv_kw,'kW',v=>f1(v));
+  one('c-ze-ess',s=>s.ess_kwh,'kWh',v=>f1(v));
+  one('c-ze-capex',s=>s.capex.net,'만원',v=>manN(v));
+}
+
+/* ---------- 8 수명 ---------- */
+function renderLife(){
+  const L=D.lifetimes, H=D.constants.horizon_years||100;
+  const pts=[];L.forEach((l,i)=>{pts.push({value:[0,i],itemStyle:{color:COL.ink},label:{show:false}});for(let y=l.years+1;y<=H;y+=l.years)pts.push({value:[y,i],itemStyle:{color:COL.s[0]},label:{show:true,formatter:String(y),position:'top',fontSize:10.5,color:COL.ink2}});});
+  draw('c-life',{grid:{left:6,right:24,top:16,bottom:40,containLabel:true},xAxis:valAxis('경과 연수 (년) · 숫자는 교체가 일어나는 해',{gap:26,extra:{min:0,max:H,interval:10}}),yAxis:catAxis(L.map(l=>`${l.label} (${l.years}년)`),{inverse:true}),
+    series:[{type:'scatter',symbol:'diamond',symbolSize:11,data:pts}],tooltip:{trigger:'item',formatter:p=>p.value[0]===0?`${esc(L[p.value[1]].label)}: 최초 설치`:`${esc(L[p.value[1]].label)}: ${p.value[0]}년 차 교체`}});
+  $('t-life').innerHTML='<tr><th>설비</th><th class="n">수명</th><th>근거 수준</th><th>상태</th><th>근거·비고</th></tr>'+L.map(l=>`<tr><td>${esc(l.label)}</td><td class="n">${l.years}년</td><td>${esc(l.basis)}</td><td><span class="badge b-${l.status}">${l.status}</span></td><td style="white-space:normal">${esc(l.note||'')}</td></tr>`).join('');
+}
+function renderLimits(){ $('limits').innerHTML=D.limits.map(x=>`<li>${esc(x)}</li>`).join(''); }
+
+/* ---------- 부록 A ---------- */
+function prof(){return (D.profiles||{})[S.hp+'|'+S.heat];}
+function groupKW(kw,n){return ENDUSE.map(g=>Array.from({length:n},(_,i)=>g.keys.reduce((a,k)=>a+((kw[k]||[])[i]||0),0)));}
+const TEMP=[['t_out','실외 온도',COL.ink3],['t_in','실내 온도',COL.ink],['t_set','설정온도',COL.brand]];
+const DTL={weekday:'평일',saturday:'토요일',sunday:'일요일·공휴일',weekend:'주말'};
+const dot=c=>`<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${c};margin-right:5px"></span>`;
+const tempSeries=(src,xi,yi)=>TEMP.filter(([k])=>src[k]).map(([k,nm,c])=>({name:nm,type:'line',xAxisIndex:xi,yAxisIndex:yi,showSymbol:false,step:k==='t_set'?'end':false,data:src[k],lineStyle:{width:k==='t_set'?1.2:1.8,type:k==='t_set'?'dashed':'solid',color:c},itemStyle:{color:c}}));
+const fmtU=(v,u,sign)=>{if(v==null)return '-';if(u==='min'){const a=Math.round(v),s=sign&&a>0?'+':a<0?'-':'',b=Math.abs(a);return s+(b>=60?`${Math.floor(b/60)}시간 ${b%60}분`:`${b}분`);}return (sign&&v>0?'+':'')+(+v).toFixed(1)+(u?' '+u:'');};
+function renderA(){
+  const P=prof(); if(!P) return;
+  $('a-lead').textContent=`${lab(HP,S.hp)} · ${S.heat==='gas'?'가스보일러':'AWHP'} · 이용률 ${P.occ_basis}% 기준. ${D.load_mode_detail}`;
+  const keys=P.day_order||Object.keys(P.days); if(!P.days[S.dayKind]) S.dayKind=keys[0];
+  $('a-day-tabs').innerHTML=keys.map(k=>`<button data-k="${k}" class="${S.dayKind===k?'on':''}">${esc(P.days[k].label)}</button>`).join('');
+  $('a-day-tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.dayKind=b.dataset.k;renderA();});
+  const d=P.days[S.dayKind], g=groupKW(d.kw,96), tot=Array.from({length:96},(_,i)=>g.reduce((a,s)=>a+s[i],0));
+  const pk=tot.indexOf(Math.max(...tot)), dayK=tot.reduce((a,b)=>a+b,0)/4;
+  $('a-day-sub').textContent=`${d.date} · ${d.label} · 일 사용량 ${f1(dayK)} kWh · 최대 ${tot[pk].toFixed(2)} kW (${T96[pk]})${d.rule?' · 선정 기준: '+d.rule:''}`;
+  const L=52,R=16, grid=[{left:L,right:R,top:70,height:240}], xA=[catAxis(T96,{gridIndex:0,axisLabel:{interval:7,color:COL.ink2}})], yA=[valAxis('kW',{gap:34,extra:{gridIndex:0}})];
+  const series=ENDUSE.map((e,i)=>({name:e.label,type:'bar',stack:'k',barCategoryGap:'8%',itemStyle:{color:COL.s[i]},data:g[i].map(v=>+v.toFixed(3))}));
+  series.push({name:'합계',type:'line',data:tot.map(v=>+v.toFixed(3)),showSymbol:false,lineStyle:{width:1,color:COL.ink},itemStyle:{color:COL.ink},markPoint:{symbol:'pin',symbolSize:34,itemStyle:{color:COL.ink},label:{fontSize:10,color:'#fff',formatter:p=>p.value.toFixed(1)},data:[{type:'max'}]}});
+  const ln=ENDUSE.map(e=>e.label).concat(['합계']); let top=70+240+34;
+  if(d.t_out){grid.push({left:L,right:R,top,height:100});xA.push(catAxis(T96,{gridIndex:1,axisLabel:{interval:7,color:COL.ink2}}));yA.push(valAxis('°C',{gap:34,extra:{gridIndex:1,scale:true,splitNumber:3}}));
+    tempSeries(d,1,1).forEach(s=>{series.push(s);ln.push(s.name);});top+=134;}
+  const bi=grid.length, np=d.persons.length, bandH=Math.max(26,np*22);
+  grid.push({left:L,right:R,top,height:bandH});
+  xA.push(catAxis(T96,{gridIndex:bi,axisLabel:{interval:7,color:COL.ink2},name:'시각',nameLocation:'middle',nameGap:26}));
+  yA.push(catAxis(d.persons.map((_,i)=>'거주자 '+(i+1)),{gridIndex:bi,axisLabel:{fontSize:11,color:COL.ink2}}));
+  const hm=[];d.persons.forEach((st,pi)=>st.forEach((v,i)=>hm.push([i,pi,v])));
+  series.push({name:'거주자 상태',type:'heatmap',xAxisIndex:bi,yAxisIndex:bi,data:hm,itemStyle:{borderColor:'#fff',borderWidth:0.5},tooltip:{trigger:'item',formatter:p=>`거주자 ${p.value[1]+1} · ${T96[p.value[0]]} · ${STATE[p.value[2]].label}`}});
+  $('c-day').style.height=(top+bandH+80)+'px';
+  draw('c-day',{legend:legend(ln),grid,xAxis:xA,yAxis:yA,axisPointer:{link:[{xAxisIndex:'all'}]},
+    visualMap:{type:'piecewise',seriesIndex:series.length-1,dimension:2,orient:'horizontal',right:16,bottom:4,itemWidth:12,itemHeight:12,textStyle:{color:COL.ink2},pieces:STATE.map(s=>({value:s.v,label:s.label,color:s.c}))},
+    series,tooltip:{trigger:'axis',axisPointer:{type:'line'},formatter:ps=>{if(!ps.length)return '';const i=T96.indexOf(ps[0].axisValue);if(i<0)return '';
+      const rows=ENDUSE.map((e,j)=>({marker:dot(COL.s[j]),name:e.label,v:g[j][i]})).filter(r=>r.v>0.0005).reverse().map(r=>({marker:r.marker,name:r.name,v:r.v.toFixed(2)+' kW'}));
+      TEMP.forEach(([k,n])=>{if(d[k])rows.push({name:n,v:(+d[k][i]).toFixed(1)+'°C'});});
+      return ttRows(T96[i]+` · 합계 ${tot[i].toFixed(2)} kW`,rows)+'<br>'+d.persons.map((st,pi)=>`거주자 ${pi+1}: ${STATE[st[i]].label}`).join(' · ');}}});
+  // 7일
+  const W=P.week, n=(W.home_count||[]).length;
+  const wk=W.kw?groupKW(W.kw,n):null, wt=wk?Array.from({length:n},(_,i)=>wk.reduce((a,s)=>a+s[i],0)):W.kw_total;
+  const lab7=Array.from({length:n},(_,i)=>{const dt=new Date(W.start_date+'T00:00:00');dt.setDate(dt.getDate()+Math.floor(i/96));return `${dt.getMonth()+1}/${dt.getDate()}(${'일월화수목금토'[dt.getDay()]}) ${T96[i%96]}`;});
+  const dk=[];for(let i=0;i<n;i+=96)dk.push(wt.slice(i,i+96).reduce((a,b)=>a+b,0)/4);
+  $('a-week-sub').textContent='일별 사용량: '+dk.map((v,i)=>lab7[i*96].split(' ')[0]+' '+f1(v)+'kWh').join(' · ');
+  const xa=gi=>catAxis(lab7,{gridIndex:gi,boundaryGap:false,axisLabel:{interval:95,color:COL.ink2,formatter:v=>v.split(' ')[0]}});
+  const wg=[{left:L,right:R,top:62,height:220}], wx=[xa(0)], wy=[valAxis('kW',{gap:34,extra:{gridIndex:0}})], ws=[], wl=[];
+  if(wk) ENDUSE.forEach((e,j)=>{ws.push({name:e.label,type:'line',stack:'w',showSymbol:false,data:wk[j].map(v=>+v.toFixed(3)),lineStyle:{width:0},areaStyle:{color:COL.s[j],opacity:.9},itemStyle:{color:COL.s[j]}});wl.push(e.label);});
+  else {ws.push({name:'전력 합계',type:'line',showSymbol:false,data:wt,lineStyle:{width:1.2,color:COL.s[0]},areaStyle:{color:COL.s[0],opacity:.18},itemStyle:{color:COL.s[0]}});wl.push('전력 합계');}
+  let wtop=62+220+30;
+  if(W.t_out){wg.push({left:L,right:R,top:wtop,height:100});wx.push(xa(1));wy.push(valAxis('°C',{gap:34,extra:{gridIndex:1,scale:true,splitNumber:3}}));tempSeries(W,1,1).forEach(s=>{ws.push(s);wl.push(s.name);});wtop+=130;}
+  const hi=wg.length; wg.push({left:L,right:R,top:wtop,height:56}); wx.push(xa(hi)); wy.push(valAxis('재택 인원',{gap:34,extra:{gridIndex:hi,minInterval:1,max:Math.max(1,...W.home_count),splitNumber:2}}));
+  ws.push({name:'재택 인원',type:'line',step:'end',xAxisIndex:hi,yAxisIndex:hi,showSymbol:false,data:W.home_count,lineStyle:{width:1.2,color:COL.s[3]},areaStyle:{color:COL.s[3],opacity:.3},itemStyle:{color:COL.s[3]}});wl.push('재택 인원');
+  $('c-week').style.height=(wtop+56+50)+'px';
+  draw('c-week',{legend:legend(wl),grid:wg,xAxis:wx,yAxis:wy,series:ws,axisPointer:{link:[{xAxisIndex:'all'}]},
+    tooltip:{trigger:'axis',axisPointer:{type:'line'},formatter:ps=>{if(!ps.length)return '';const i=lab7.indexOf(ps[0].axisValue);if(i<0)return '';
+      const rows=wk?ENDUSE.map((e,j)=>({marker:dot(COL.s[j]),name:e.label,v:wk[j][i]})).filter(r=>r.v>0.0005).reverse().map(r=>({marker:r.marker,name:r.name,v:r.v.toFixed(2)+' kW'})):[];
+      TEMP.forEach(([k,nm])=>{if(W[k])rows.push({name:nm,v:(+W[k][i]).toFixed(1)+'°C'});});rows.push({name:'재택 인원',v:W.home_count[i]+'명'});
+      return ttRows(lab7[i]+` · 합계 ${(+wt[i]).toFixed(2)} kW`,rows);}}});
+  // 365×24
+  const Y=P.hourly_heatmap, hd=[];let mx=0;Y.forEach((r,di)=>r.forEach((v,h)=>{hd.push([di,h,v]);if(v>mx)mx=v;}));
+  const dl=Y.map((_,i)=>{const dt=new Date('2026-01-01T00:00:00');dt.setDate(dt.getDate()+i);return `${dt.getMonth()+1}/${dt.getDate()}`;});
+  draw('c-year',{grid:{left:52,right:16,top:10,bottom:92},xAxis:catAxis(dl,{axisLabel:{interval:30,color:COL.ink2},name:'날짜',nameLocation:'middle',nameGap:26}),yAxis:catAxis(Array.from({length:24},(_,h)=>h+'시'),{inverse:true,axisLabel:{interval:2,color:COL.ink2}}),
+    visualMap:{min:0,max:+mx.toFixed(1),calculable:false,orient:'horizontal',left:'center',bottom:0,itemHeight:220,text:[f1(mx)+' kW','0 kW'],textStyle:{color:COL.ink2},inRange:{color:['#F4F8FD',COL.pb[3],COL.pb[2],COL.pb[1],COL.pb[0]]}},
+    series:[{type:'heatmap',data:hd,progressive:0}],tooltip:{trigger:'item',formatter:p=>`${dl[p.value[0]]} ${p.value[1]}시 · ${(+p.value[2]).toFixed(2)} kW`}});
+  // 밴드
+  const bmax=Math.ceil(Math.max(...['weekday','saturday','sunday'].map(k=>P.bands[k]?Math.max(...P.bands[k].p90):0)));
+  [['weekday','평일'],['saturday','토요일'],['sunday','일요일·공휴일']].forEach(([k,l])=>{const b=P.bands[k];if(!b)return;
+    draw('c-band-'+k,{title:{text:l,left:0,top:0,textStyle:{fontSize:13,color:COL.ink,fontFamily:FONT}},grid:{left:44,right:10,top:34,bottom:40},xAxis:catAxis(T96,{boundaryGap:false,axisLabel:{interval:23,color:COL.ink2}}),yAxis:valAxis('kW',{gap:30,extra:{max:bmax}}),
+      series:[{name:'P10',type:'line',stack:'b',data:b.p10,showSymbol:false,lineStyle:{opacity:0},areaStyle:{opacity:0}},
+        {name:'P10~P90',type:'line',stack:'b',data:b.p90.map((v,i)=>+(v-b.p10[i]).toFixed(3)),showSymbol:false,lineStyle:{opacity:0},areaStyle:{color:COL.s[0],opacity:.2}},
+        {name:'중앙값',type:'line',data:b.p50,showSymbol:false,lineStyle:{width:2,color:COL.s[0]},itemStyle:{color:COL.s[0]}}],
+      tooltip:{trigger:'axis',axisPointer:{type:'line'},formatter:ps=>{const i=ps[0].dataIndex;return ttRows(T96[i],[{name:'P90',v:b.p90[i].toFixed(2)+' kW'},{name:'중앙값',v:b.p50[i].toFixed(2)+' kW'},{name:'P10',v:b.p10[i].toFixed(2)+' kW'}]);}}});});
+  // 일 사용량 분포
+  const dkw=P.daily_kwh, lo=Math.floor(Math.min(...dkw)), hi2=Math.ceil(Math.max(...dkw)), w=Math.max(1,Math.ceil((hi2-lo)/18)), nb=Math.ceil((hi2-lo+1)/w), cnt=Array(nb).fill(0);
+  dkw.forEach(v=>cnt[Math.min(nb-1,Math.floor((v-lo)/w))]++);
+  draw('c-dhist',{grid:{left:44,right:10,top:20,bottom:44},xAxis:catAxis(cnt.map((_,i)=>`${lo+i*w}`),{name:'일 사용량 (kWh, 구간 시작값)',nameLocation:'middle',nameGap:28,axisLabel:{color:COL.ink2}}),yAxis:valAxis('일수',{gap:30}),
+    series:[{type:'bar',barCategoryGap:'6%',data:cnt,itemStyle:{color:COL.s[0],borderRadius:[3,3,0,0]},label:{show:true,position:'top',fontSize:10,color:COL.ink2,formatter:p=>p.value||''}}],
+    tooltip:{formatter:ps=>`${lo+ps[0].dataIndex*w}~${lo+(ps[0].dataIndex+1)*w} kWh: ${ps[0].value}일`}});
+  // 출퇴근
+  const tu=D.tus||{};
+  if(tu.leave_hist) draw('c-commute',{legend:legend(['첫 외출','마지막 귀가']),grid:{left:44,right:10,top:34,bottom:44},xAxis:catAxis(T48,{name:'시각',nameLocation:'middle',nameGap:28,axisLabel:{interval:3,color:COL.ink2}}),yAxis:valAxis('비율 (%)',{gap:30}),
+    series:[['첫 외출',tu.leave_hist,COL.s[0]],['마지막 귀가',tu.return_hist,COL.s[1]]].map(([nm,a,c])=>({name:nm,type:'bar',barGap:0,data:a,itemStyle:{color:c},markPoint:{symbolSize:0,label:{color:COL.ink,fontSize:11,formatter:p=>`${T48[p.data.coord[0]]}`,offset:[0,-10]},data:[{type:'max'}]}})),
+    tooltip:{formatter:ps=>ttRows(T48[ps[0].dataIndex],ps.map(p=>({marker:p.marker,name:p.seriesName,v:(+p.value).toFixed(1)+'%'})))}});
+  renderFit();
+  const ap=(D.appliances||[]).filter(a=>a.hp===S.hp);
+  $('t-appl').innerHTML='<tr><th>가전</th><th class="n">정격 kW</th><th class="n">1회 사용(분)</th><th class="n">연간 목표 kWh</th><th class="n">시뮬레이션 kWh</th><th class="n">오차</th><th>상태</th></tr>'+ap.map(a=>`<tr><td>${esc(a.name)}</td><td class="n">${(+a.rated_kw).toFixed(2)}</td><td class="n">${a.cycle_min?a.cycle_min:'상시'}</td><td class="n">${f1(a.annual_target_kwh)}</td><td class="n">${f1(a.annual_sim_kwh)}</td><td class="n">${((a.annual_sim_kwh/a.annual_target_kwh-1)*100).toFixed(2)}%</td><td><span class="badge b-${a.status}">${a.status}</span></td></tr>`).join('');
+  $('t-seed').innerHTML='<tr><th>난방</th><th class="n">PV kW</th><th class="n">ESS kWh</th><th class="n">순CAPEX</th></tr>'+(D.seed_range||[]).filter(r=>r.hp===S.hp).map(r=>`<tr><td>${r.heat==='gas'?'가스보일러':'AWHP'}</td><td class="n">${f1(r.pv_min)}~${f1(r.pv_max)}</td><td class="n">${f1(r.ess_min)}~${f1(r.ess_max)}</td><td class="n">${manN(r.capex_min)}~${man(r.capex_max)}</td></tr>`).join('');
+  const ks=D.kappa_sens||[], kc=ks.length?Object.keys(ks[0].values||{}):[];
+  $('t-kappa').innerHTML=`<tr><th class="n">κ</th>${kc.map(c=>`<th class="n">${esc(c)}</th>`).join('')}</tr>`+ks.map(r=>`<tr><td class="n">${r.kappa}</td>${kc.map(c=>{const v=r.values[c];return `<td class="n">${typeof v==='number'?v.toLocaleString('ko-KR',{maximumFractionDigits:1}):v==null?'불가능':esc(v)}</td>`;}).join('')}</tr>`).join('');
+}
+function renderRaster(){
+  const tu=D.tus||{}, R=tu.sample_person_days||[];
+  if(R.length){
+    const DS={weekday:'평일',saturday:'토',sunday:'일·휴일'};const ylab=R.map((r,i)=>`${DS[r.daytype]||r.daytype} · ${r.sex==='M'?'남':r.sex==='F'?'여':esc(r.sex||'')} ${i+1}`);
+    const data=[];R.forEach((r,ri)=>r.states.forEach((v,i)=>data.push([i,ri,v])));
+    const cnt={};R.forEach(r=>cnt[r.daytype]=(cnt[r.daytype]||0)+1);
+    $('a-raster-sub').textContent=`무작위 추출 ${R.length}명-일 (`+Object.entries(cnt).map(([k,v])=>`${DTL[k]||k} ${v}`).join(' · ')+'). 한 줄이 한 사람의 하루다.';
+    $('c-raster').style.height=(R.length*14+100)+'px';
+    draw('c-raster',{grid:{left:96,right:16,top:8,bottom:72},xAxis:catAxis(T96,{axisLabel:{interval:7,color:COL.ink2},name:'시각',nameLocation:'middle',nameGap:26}),yAxis:catAxis(ylab,{inverse:true,axisLabel:{fontSize:10.5,color:COL.ink2,interval:0}}),
+      visualMap:{type:'piecewise',dimension:2,orient:'horizontal',left:'center',bottom:0,itemWidth:12,itemHeight:12,textStyle:{color:COL.ink2},pieces:STATE.map(s=>({value:s.v,label:s.label,color:s.c}))},
+      series:[{type:'heatmap',data,progressive:0,itemStyle:{borderColor:'#fff',borderWidth:0.4}}],tooltip:{trigger:'item',formatter:p=>`${ylab[p.value[1]]} · ${T96[p.value[0]]} · ${STATE[p.value[2]].label}`}});
+  }
+  const SH=tu.sleep_dur_hist;
+  if(SH){const ser=Object.keys(SH).filter(k=>k!=='edges_h').map((k,i)=>({name:DTL[k]||k,type:'bar',barGap:'10%',data:SH[k],itemStyle:{color:COL.s[i],borderRadius:[3,3,0,0]}}));
+    draw('c-sleep',{legend:legend(ser.map(s=>s.name)),grid:{left:44,right:10,top:34,bottom:44},xAxis:catAxis(SH.edges_h.slice(0,-1).map((e,i)=>`${e}~${SH.edges_h[i+1]}`),{name:'하루 수면 시간 (시간)',nameLocation:'middle',nameGap:28,axisLabel:{color:COL.ink2}}),yAxis:valAxis('비율 (%)',{gap:30}),series:ser,
+      tooltip:{formatter:ps=>ttRows(ps[0].axisValue+'시간',ps.map(p=>({marker:p.marker,name:p.seriesName,v:(+p.value).toFixed(1)+'%'})))}});}
+  const RL=tu.realism||[];
+  $('t-real').innerHTML='<tr><th>항목</th><th>요일</th><th class="n">시뮬레이션</th><th class="n">KOSIS</th><th class="n">차이</th></tr>'+RL.map(r=>`<tr><td>${esc(r.metric)}</td><td>${esc(DTL[r.daytype]||r.daytype)}</td><td class="n">${fmtU(r.sim,r.unit)}</td><td class="n">${fmtU(r.kosis,r.unit)}</td><td class="n">${r.sim==null||r.kosis==null?'-':fmtU(r.sim-r.kosis,r.unit,true)}</td></tr>`).join('');
+}
+const FITN={sleep:'수면',away:'외출',cook:'식사준비',media:'실시간 방송 시청'};
+function renderFit(){
+  const tu=D.tus||{}, F=tu.fit||[];
+  $('a-fit-sub').textContent=`${f0(tu.person_days)} 인-일 시뮬레이션 평균 · 평일 외출 횟수 평균 ${f1(tu.away_episodes_weekday_mean)}회 · 기준 MAE ≤ 2%p`;
+  const cs=[...new Set(F.map(f=>f.curve))];
+  $('a-fit-tabs').innerHTML=cs.map(c=>`<button data-c="${c}" class="${S.fit===c?'on':''}">${FITN[c]||c}</button>`).join('');
+  $('a-fit-tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.fit=b.dataset.c;renderFit();});
+  [['weekday','평일'],['saturday','토요일'],['sunday','일요일·공휴일']].forEach(([k,l])=>{const f=F.find(x=>x.curve===S.fit&&x.daytype===k);if(!f)return;
+    draw('c-fit-'+k,{title:{text:`${l} · MAE ${(+f.mae).toFixed(2)}%p`,left:0,top:0,textStyle:{fontSize:13,color:COL.ink,fontFamily:FONT}},legend:legend(['KOSIS 목표','시뮬레이션 평균'],{top:22}),grid:{left:44,right:10,top:56,bottom:40},
+      xAxis:catAxis(T48,{boundaryGap:false,axisLabel:{interval:11,color:COL.ink2}}),yAxis:valAxis('비율 (%)',{gap:30}),
+      series:[{name:'KOSIS 목표',type:'line',data:f.target,showSymbol:false,lineStyle:{width:2,type:'dashed',color:COL.ink3},itemStyle:{color:COL.ink3}},{name:'시뮬레이션 평균',type:'line',data:f.sim,showSymbol:false,lineStyle:{width:2,color:COL.s[0]},itemStyle:{color:COL.s[0]}}],
+      tooltip:{trigger:'axis',axisPointer:{type:'line'},formatter:ps=>ttRows(T48[ps[0].dataIndex],ps.map(p=>({marker:p.marker,name:p.seriesName,v:(+p.value).toFixed(1)+'%'})))}});});
+}
+
+/* ---------- 부록 B ---------- */
+function emptyChart(id,msg){draw(id,{tooltip:false,xAxis:{show:false},yAxis:{show:false},series:[],graphic:{type:'text',left:'center',top:'middle',style:{text:msg,fill:COL.ink3,font:'13px '+FONT}}});}
+function renderB(){
+  const Z=(D.ze||{})[S.hp+'|'+S.heat], s=sc(S.hp,S.heat,100,'ze',S.sub); if(!Z) return;
+  const Q=Z.soc7||{}, Bs=Q.basis||{};
+  $('b-lead').textContent=`${lab(HP,S.hp)} · ${S.heat==='gas'?'가스보일러':'AWHP'} · 이용률 100%. 선택된 조합: PV ${s?f1(s.pv_kw):'-'} kW · ESS ${s?s.ess_modules:'-'}모듈 · ESS 사용 가능 용량(수명 말기) ${f1(Z.daily.ess_usable_kwh)} kWh.`;
+  const srch=(Z.search||[]).filter(r=>r&&r.modules!=null);
+  if(!srch.length){emptyChart('c-b-pv','탐색 결과 데이터 없음 (ze.search)');emptyChart('c-b-capex','탐색 결과 데이터 없음 (ze.search)');}
+  else{
+    const mods=srch.map(r=>r.modules+'모듈'); let bi=s?srch.findIndex(r=>r.modules===s.ess_modules):-1;
+    if(bi<0){let m=Infinity;srch.forEach((r,i)=>{if(r.capex_krw!=null&&r.capex_krw<m){m=r.capex_krw;bi=i;}});}
+    const bar=(id,f,unit,fmt)=>draw(id,{grid:{left:54,right:10,top:20,bottom:44},xAxis:catAxis(mods,{name:'ESS 모듈 수',nameLocation:'middle',nameGap:28,axisLabel:{color:COL.ink2}}),yAxis:valAxis(unit,{fmt,gap:42}),
+      series:[{type:'bar',barWidth:'55%',data:srch.map((r,i)=>f(r)==null?{value:0,na:true}:{value:f(r),itemStyle:{color:i===bi?TGT_COL.ze:COL.neutral,borderRadius:[3,3,0,0]}}),label:{show:true,position:'top',fontSize:10.5,color:COL.ink2,formatter:p=>p.data.na?'해 없음':fmt(p.value)}}],
+      tooltip:{formatter:ps=>{const r=srch[ps[0].dataIndex];return ttRows(r.modules+'모듈'+(ps[0].dataIndex===bi?' (선택)':''),[{name:'최소 PV',v:r.min_pv_kw==null?'해 없음':f1(r.min_pv_kw)+' kW'},{name:'초기 순CAPEX',v:r.capex_krw==null?'-':man(r.capex_krw)}]);}}});
+    bar('c-b-pv',r=>r.min_pv_kw,'kW',v=>f1(v)); bar('c-b-capex',r=>r.capex_krw,'만원',v=>manN(v));
+  }
+  const dl=Z.daily.load_kwh.map((_,i)=>{const dt=new Date('2026-01-01T00:00:00');dt.setDate(dt.getDate()+i);return `${dt.getMonth()+1}/${dt.getDate()}`;});
+  draw('c-b-daily',{legend:legend(['일 부하','일 PV 발전(수명 말기)','ESS 사용 가능 용량']),grid:{left:50,right:16,top:34,bottom:44},xAxis:catAxis(dl,{axisLabel:{interval:30,color:COL.ink2},name:'날짜',nameLocation:'middle',nameGap:28}),yAxis:valAxis('kWh/일',{gap:36}),
+    series:[{name:'일 부하',type:'bar',barCategoryGap:'0%',data:Z.daily.load_kwh,itemStyle:{color:COL.s[0],opacity:.75}},{name:'일 PV 발전(수명 말기)',type:'line',showSymbol:false,data:Z.daily.pv_kwh,lineStyle:{width:1.2,color:COL.s[1]},itemStyle:{color:COL.s[1]}},
+      {name:'ESS 사용 가능 용량',type:'line',data:[],itemStyle:{color:COL.ink},lineStyle:{type:'dashed',color:COL.ink},markLine:{symbol:'none',lineStyle:{type:'dashed',color:COL.ink,width:1.2},label:{formatter:`ESS 사용 가능 ${f1(Z.daily.ess_usable_kwh)} kWh`,position:'insideEndTop',color:COL.ink},data:[{yAxis:Z.daily.ess_usable_kwh}]}}],
+    tooltip:{trigger:'axis',axisPointer:{type:'line'},formatter:ps=>ttRows(dl[ps[0].dataIndex],ps.filter(p=>p.value!=null).map(p=>({marker:p.marker,name:p.seriesName,v:f1(p.value)+' kWh'})))}});
+  if(!Q.soc_pct){emptyChart('c-b-soc','SoC 데이터 없음 (ze.soc7)');$('b-soc-sub').textContent='';return;}
+  const n=Q.soc_pct.length, ql=Array.from({length:n},(_,i)=>{const dt=new Date(Q.start_date+'T00:00:00');dt.setDate(dt.getDate()+Math.floor(i/96));return `${dt.getMonth()+1}/${dt.getDate()} ${T96[i%96]}`;});
+  const fl=Q.soc_floor_pct;
+  $('b-soc-sub').textContent=`${Q.start_date}부터 7일 · ${Bs.rule||''}${Bs.seed!=null?' · 부하 시드 '+Bs.seed:''}${Bs.pv_factor!=null?' · PV 출력 '+Math.round(Bs.pv_factor*100)+'%':''}${Bs.soh!=null?' · ESS 용량 '+Math.round(Bs.soh*100)+'%':''} · 최저 충전 상태 ${f1(Math.min(...Q.soc_pct))}%${fl!=null?' (하한 '+f1(fl)+'%)':''}`;
+  draw('c-b-soc',{legend:legend(['부하','PV 발전','ESS 충전 상태']),grid:[{left:50,right:16,top:34,height:180},{left:50,right:16,top:260,bottom:44}],
+    xAxis:[catAxis(ql,{gridIndex:0,boundaryGap:false,axisLabel:{interval:95,color:COL.ink2,formatter:v=>v.split(' ')[0]}}),catAxis(ql,{gridIndex:1,boundaryGap:false,axisLabel:{interval:95,color:COL.ink2,formatter:v=>v.split(' ')[0]}})],
+    yAxis:[valAxis('kW',{gap:36,extra:{gridIndex:0}}),valAxis('충전 상태 (%)',{gap:36,extra:{gridIndex:1,min:0,max:100}})],
+    series:[{name:'부하',type:'line',showSymbol:false,data:Q.load_kw,lineStyle:{width:1,color:COL.s[0]},itemStyle:{color:COL.s[0]}},{name:'PV 발전',type:'line',showSymbol:false,data:Q.pv_kw,lineStyle:{width:1,color:COL.s[1]},areaStyle:{color:COL.s[1],opacity:.2},itemStyle:{color:COL.s[1]}},
+      {name:'ESS 충전 상태',type:'line',xAxisIndex:1,yAxisIndex:1,showSymbol:false,data:Q.soc_pct,lineStyle:{width:1.6,color:COL.s[2]},areaStyle:{color:COL.s[2],opacity:.15},itemStyle:{color:COL.s[2]},
+        markLine:fl!=null?{symbol:'none',silent:true,lineStyle:{type:'dashed',color:css('--crit'),width:1.2},label:{formatter:'하한 '+f1(fl)+'%',position:'insideEndTop',color:COL.ink},data:[{yAxis:fl}]}:undefined}],
+    axisPointer:{link:[{xAxisIndex:'all'}]},tooltip:{trigger:'axis',axisPointer:{type:'line'},formatter:ps=>ttRows(ps[0].axisValue,ps.map(p=>({marker:p.marker,name:p.seriesName,v:p.seriesName==='ESS 충전 상태'?f1(p.value)+'%':(+p.value).toFixed(2)+' kW'})))}});
+}
+
+/* ---------- 부록 C·D ---------- */
+function renderC(){
+  const R=D.sensitivities||[]; if(!R.length) return;
+  const cat=R.map(r=>`${r.group}\n{s|${r.case}}`);
+  const ser=[['기준','base',COL.neutral],['민감도','sens',COL.s[0]]].map(([n,k,c])=>({name:n,type:'bar',barWidth:11,barGap:'15%',itemStyle:{color:c,borderRadius:[0,3,3,0]},data:R.map(r=>r[k]==null?{value:0,na:true}:{value:r[k]}),label:{show:true,position:'right',fontSize:11,color:COL.ink2,formatter:p=>p.data.na?'불가능':p.value.toFixed(1)+'년'}}));
+  draw('c-sens',{legend:legend(['기준','민감도']),grid:{left:6,right:56,top:34,bottom:40,containLabel:true},xAxis:valAxis('회수기간 (년)',{gap:26,extra:{max:100}}),yAxis:catAxis(cat,{inverse:true,axisLabel:{color:COL.ink,lineHeight:16,rich:{s:{color:COL.ink3,fontSize:11}}}}),series:ser});
+  $('t-sens').innerHTML='<tr><th>항목</th><th>시나리오</th><th class="n">기준</th><th class="n">민감도</th></tr>'+R.map(r=>`<tr><td>${esc(r.group)}</td><td>${esc(r.case)}</td><td class="n">${yr(r.base)}</td><td class="n">${yr(r.sens)}</td></tr>`).join('');
+}
+function renderD(){
+  $('t-inputs').innerHTML='<tr><th>구분</th><th>항목</th><th class="n">값</th><th>단위</th><th>상태</th><th>출처·비고</th></tr>'+(D.inputs||[]).map(r=>`<tr><td>${esc(r.group)}</td><td>${esc(r.name)}</td><td class="n">${esc(r.value)}</td><td>${esc(r.unit)}</td><td><span class="badge b-${r.status}">${r.status}</span></td><td style="white-space:normal">${esc(r.source)}</td></tr>`).join('');
+}
+
+/* ---------- 실행 ---------- */
+function renderAll(){renderControls();renderEnergy();renderEnergyUse();renderHeatmap();renderDetail();renderNZ();renderZB();renderZE();renderA();renderB();}
+renderHeader();initTips();renderSummary();renderDefs();renderLife();renderLimits();renderC();renderD();renderRaster();renderAll();
+let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>Object.values(CH).forEach(c=>c.resize()),120);});
+window.__REPORT_READY__=true;
+</script>
+</body>
+</html>

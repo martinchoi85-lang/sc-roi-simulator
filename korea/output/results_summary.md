@@ -1,4 +1,4 @@
-run_id: 20261111T213308_ed7afce_928540a2
+run_id: 20261111T234611_b83f981-dirty_928540a2
 
 # LG Smart Cottage 한국 ROI 계산 요약 표 (results_summary.md)
 
