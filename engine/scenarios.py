@@ -542,11 +542,52 @@ def run_all_scenarios(
                         scenario_id += 1
 
     # 70 cases zero energy minimality validation
-    print("Validating 70 Zero Energy cases for zero grid import and minimality...")
+    print("Validating 70 Zero Energy cases for zero grid import and minimality across 10 seeds (42..51)...")
     ze_minimality_rows = []
     pv_deg_factor = 0.995 ** 24
     soh_eol = 0.70
     rte = 0.90
+    eff_d = np.sqrt(rte)
+    single_module_usable_kwh = 9.6 * soh_eol * 1.0 * eff_d
+
+    # Pre-cache load profiles for seeds 42..51 across the 35 (h_name, occ, occ_rate) combinations
+    seed_list = list(range(42, 52))
+    multi_seed_load_cache = {}
+    for pair in house_occupant_pairs:
+        h_name = pair["house"]
+        occ = pair["occupants"]
+        h_cfg = config_values["houses"][h_name]
+        for occ_rate in occupancy_rates:
+            ld = load_cache[(h_name, occ, occ_rate)]
+            p_cool_elec = np.where(ld["q_cool_kw"] > 0, ld["q_cool_kw"] / cop_cool_std, 0.0)
+            
+            # Base seed 42
+            base_gas = baseline_cache[(h_name, occ, occ_rate)]["p_elec_total_kw"]
+            base_awhp = awhp_load_cache[(h_name, occ, occ_rate)]["p_total_elec"]
+            gas_loads = [base_gas]
+            awhp_loads = [base_awhp]
+            
+            # Additional seeds 43..51
+            for s in seed_list[1:]:
+                m_s = OccupancyTUSModel(
+                    kosis_dir=kosis_dir,
+                    load_config=config_values["load"],
+                    house_config=h_cfg,
+                    weather_df=weather_df,
+                    occupants=occ,
+                    seed=s,
+                )
+                res_s = m_s.simulate_year(occupancy_rate=occ_rate)
+                # Gas boiler electricity: seed base load + cooling
+                p_gas_s = res_s["total_elec_base_load_kw_15min"] + p_cool_elec
+                gas_loads.append(p_gas_s)
+                # AWHP electricity: seed base load + AWHP HVAC load
+                p_awhp_s = awhp_load_cache[(h_name, occ, occ_rate)]["p_hvac_elec"] + res_s["total_elec_base_load_kw_15min"]
+                awhp_loads.append(p_awhp_s)
+                
+            multi_seed_load_cache[(h_name, occ, occ_rate, "가스보일러")] = gas_loads
+            multi_seed_load_cache[(h_name, occ, occ_rate, "AWHP")] = awhp_loads
+
     for pair in house_occupant_pairs:
         h_name = pair["house"]
         occ = pair["occupants"]
@@ -556,12 +597,13 @@ def run_all_scenarios(
                 pv_kw = ze_res["pv_capacity_kw"]
                 ess_mod = ze_res["ess_modules"]
                 ess_kwh = ze_res["ess_capacity_kwh"]
-                is_awhp = (heat_pkg == "AWHP")
-                p_load = awhp_load_cache[(h_name, occ, occ_rate)]["p_total_elec"] if is_awhp else baseline_cache[(h_name, occ, occ_rate)]["p_elec_total_kw"]
+                max_daily_load = float(ze_res["max_daily_load_kwh"])
 
-                # Base run
+                loads_10 = multi_seed_load_cache[(h_name, occ, occ_rate, heat_pkg)]
+
+                # Base run (Seed 42)
                 unmet_base, lol_base, _ = fast_simulate_offgrid(
-                    p_load_kw=p_load,
+                    p_load_kw=loads_10[0],
                     p_pv_kw=p_pv1_kw * pv_kw * pv_deg_factor,
                     ess_kwh=ess_kwh,
                     soc_min=0.0,
@@ -571,53 +613,83 @@ def run_all_scenarios(
                 )
                 is_zero_grid = (unmet_base <= 1e-4 and lol_base <= 1e-4)
 
-                # PV - 0.5 kW
-                if pv_kw > 0.5:
-                    _, lol_pv_minus, _ = fast_simulate_offgrid(
-                        p_load_kw=p_load,
-                        p_pv_kw=p_pv1_kw * (pv_kw - 0.5) * pv_deg_factor,
-                        ess_kwh=ess_kwh,
-                        soc_min=0.0,
-                        soc_max=1.0,
-                        soh_eol=soh_eol,
-                        rte=rte,
-                    )
-                else:
-                    lol_pv_minus = 10.0
+                # Check ESS - 1 module start condition constraint
+                # Constraint: usable_ess >= max_daily_load
+                usable_ess_minus = (ess_mod - 1) * single_module_usable_kwh
+                ess_minus_limited_by_start = (ess_mod <= 1) or (usable_ess_minus < max_daily_load - 1e-4)
 
-                # ESS - 1 module
-                if ess_mod > 1:
-                    _, lol_ess_minus, _ = fast_simulate_offgrid(
-                        p_load_kw=p_load,
-                        p_pv_kw=p_pv1_kw * pv_kw * pv_deg_factor,
-                        ess_kwh=(ess_mod - 1) * 9.6,
-                        soc_min=0.0,
-                        soc_max=1.0,
-                        soh_eol=soh_eol,
-                        rte=rte,
-                    )
-                else:
-                    lol_ess_minus = 10.0
+                # Evaluate across all 10 seeds (42..51)
+                lol_pv_minus_list = []
+                lol_ess_minus_list = []
 
-                is_minimal = (lol_pv_minus > 0.0) or (lol_ess_minus > 0.0)
-                is_passed = is_zero_grid and is_minimal
+                for p_load_s in loads_10:
+                    # PV - 0.5 kW
+                    if pv_kw > 0.5:
+                        _, lol_pv_s, _ = fast_simulate_offgrid(
+                            p_load_kw=p_load_s,
+                            p_pv_kw=p_pv1_kw * (pv_kw - 0.5) * pv_deg_factor,
+                            ess_kwh=ess_kwh,
+                            soc_min=0.0,
+                            soc_max=1.0,
+                            soh_eol=soh_eol,
+                            rte=rte,
+                        )
+                    else:
+                        lol_pv_s = 10.0
+                    lol_pv_minus_list.append(lol_pv_s)
+
+                    # ESS - 1 module
+                    if not ess_minus_limited_by_start:
+                        _, lol_ess_s, _ = fast_simulate_offgrid(
+                            p_load_kw=p_load_s,
+                            p_pv_kw=p_pv1_kw * pv_kw * pv_deg_factor,
+                            ess_kwh=(ess_mod - 1) * 9.6,
+                            soc_min=0.0,
+                            soc_max=1.0,
+                            soh_eol=soh_eol,
+                            rte=rte,
+                        )
+                    else:
+                        lol_ess_s = 0.0
+                    lol_ess_minus_list.append(lol_ess_s)
+
+                max_lol_pv_minus = max(lol_pv_minus_list)
+                max_lol_ess_minus = max(lol_ess_minus_list)
+
+                # Determination rule (Requirement 3):
+                # 1. If ESS -1 module violates start condition -> "시작 조건 제한"
+                # 2. Else if lol_pv_minus > 0 or lol_ess_minus > 0 -> "PASS"
+                # 3. Else -> "FAIL"
+                if ess_minus_limited_by_start:
+                    status_str = "시작 조건 제한"
+                    is_minimal = True
+                    is_passed = is_zero_grid
+                elif (max_lol_pv_minus > 0.0) or (max_lol_ess_minus > 0.0):
+                    status_str = "PASS"
+                    is_minimal = True
+                    is_passed = is_zero_grid
+                else:
+                    status_str = "FAIL"
+                    is_minimal = False
+                    is_passed = False
 
                 ze_minimality_rows.append({
                     "house_name": h_name,
                     "occupants": occ,
                     "heat_pkg": heat_pkg,
                     "occupancy_rate": occ_rate,
-                    "pv_kw": pv_kw,
-                    "ess_modules": ess_mod,
-                    "ess_kwh": ess_kwh,
-                    "unmet_base_kwh": round(unmet_base, 2),
-                    "lol_base_hours": round(lol_base, 2),
-                    "lol_pv_minus_hours": round(lol_pv_minus, 2),
-                    "lol_ess_minus_hours": round(lol_ess_minus, 2),
+                    "max_daily_load_kwh": round(max_daily_load, 1),
+                    "pv_kw": round(float(pv_kw), 1),
+                    "ess_modules": int(ess_mod),
+                    "ess_kwh": round(float(ess_kwh), 1),
+                    "unmet_base_kwh": round(float(unmet_base), 1),
+                    "lol_base_hours": round(float(lol_base), 1),
+                    "lol_pv_minus_hours": round(float(max_lol_pv_minus), 1),
+                    "lol_ess_minus_hours": round(float(max_lol_ess_minus), 1),
                     "is_zero_grid": is_zero_grid,
                     "is_minimal": is_minimal,
                     "is_passed": is_passed,
-                    "status": "PASS" if is_passed else "FAIL",
+                    "status": status_str,
                 })
 
     df_results = pd.DataFrame(results_all_rows)
