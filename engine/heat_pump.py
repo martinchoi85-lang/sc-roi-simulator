@@ -389,7 +389,34 @@ def simulate_awhp_space_heating_with_capacity_bound(
     t_set = np.zeros(n, dtype=float)
     unmet_step_mask = np.zeros(n, dtype=bool)
 
+    # Warm-up preconditioning using December (day 334 to 364, timesteps 32064 to n)
+    # to establish realistic winter dynamic thermal equilibrium at start of year (Jan 1 00:00).
+    dec_start_idx = 334 * 96
     t_curr = 20.0
+    for i in range(dec_start_idx, n):
+        t_amb = temp_air[i]
+        q_g = q_gains[i]
+        t_inf = t_amb + q_g / h_tot
+        t_free = t_inf + (t_curr - t_inf) * decay
+        d_idx = day_indices[i]
+        is_occ = day_occupied_15min[i]
+        t_set_heat = float(heat_setpoint_schedule[i]) if heat_setpoint_schedule is not None else (20.0 if is_occ else 10.0)
+
+        if t_free < t_set_heat:
+            q_needed_w = (t_set_heat - t_free) * heat_gain_factor
+            q_needed_kw = max(0.0, q_needed_w / 1000.0)
+            cap_awhp = max_cap_heat_kw[i]
+            q_awhp = min(q_needed_kw, cap_awhp)
+            t_temp = t_free + (q_awhp * 1000.0) / heat_gain_factor
+            if t_temp < (t_set_heat - 1.5):
+                q_deficit = q_needed_kw - q_awhp
+                q_backup = min(q_deficit, max_backup_kw)
+            else:
+                q_backup = 0.0
+            q_actual_kw = q_awhp + q_backup
+            t_curr = t_free + (q_actual_kw * 1000.0) / heat_gain_factor
+        else:
+            t_curr = t_free
 
     for i in range(n):
         t_amb = temp_air[i]

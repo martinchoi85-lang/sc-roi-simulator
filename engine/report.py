@@ -783,25 +783,38 @@ def _build_sc_report_data(
             key = f"{hp_id}|{heat_id}"
 
             if is_awhp:
-                hvac_res = simulate_hvac_and_dhw(
-                    heating_package="AWHP",
-                    q_heat_kw=ld_100["q_heat_kw"],
-                    q_cool_kw=ld_100["q_cool_kw"],
-                    q_dhw_kw=ld_100["q_dhw_kw"],
-                    temp_air=weather_df["temp_air"].values,
-                    equipment_config=equip_cfg,
-                    tariff_config=tariff_cfg,
-                    house_config=houses_cfg[house_name],
-                    t_indoor=ld_100["t_indoor"],
-                    t_set_heat=ld_100["tus_res"]["heat_setpoint_15min"],
-                )
-                kw_heating = hvac_res["p_heating_kw"]
-                kw_cooling = hvac_res["p_cooling_kw"]
-                kw_dhw = hvac_res["p_dhw_kw"]
+                awhp_cache = metadata.get("awhp_load_cache", {}) if metadata else {}
+                aw_entry = awhp_cache.get((house_name, occ_n, 1.00))
+                if aw_entry is not None:
+                    kw_heating = aw_entry["p_heating_kw"]
+                    kw_cooling = aw_entry["p_cooling_kw"]
+                    kw_dhw = aw_entry["p_dhw_elec_kw"]
+                    t_indoor_prof = aw_entry["t_indoor"]
+                    t_set_prof = aw_entry["t_set"]
+                else:
+                    hvac_res = simulate_hvac_and_dhw(
+                        heating_package="AWHP",
+                        q_heat_kw=ld_100["q_heat_kw"],
+                        q_cool_kw=ld_100["q_cool_kw"],
+                        q_dhw_kw=ld_100["q_dhw_kw"],
+                        temp_air=weather_df["temp_air"].values,
+                        equipment_config=equip_cfg,
+                        tariff_config=tariff_cfg,
+                        house_config=houses_cfg[house_name],
+                        t_indoor=ld_100["t_indoor"],
+                        t_set_heat=ld_100["tus_res"]["heat_setpoint_15min"],
+                    )
+                    kw_heating = hvac_res["p_heating_kw"]
+                    kw_cooling = hvac_res["p_cooling_kw"]
+                    kw_dhw = hvac_res["p_dhw_kw"]
+                    t_indoor_prof = ld_100["t_indoor"]
+                    t_set_prof = ld_100["t_set"]
             else:
                 kw_heating = np.where(ld_100["q_heat_kw"] > 0, 0.05, 0.0)
                 kw_dhw = np.where(ld_100["q_dhw_kw"] > 0, 0.05, 0.0)
                 kw_cooling = ld_100["q_cool_kw"] / cop_cool_std
+                t_indoor_prof = ld_100["t_indoor"]
+                t_set_prof = ld_100["t_set"]
 
             total_15m = (
                 kw_heating + kw_dhw + kw_cooling
@@ -860,8 +873,8 @@ def _build_sc_report_data(
                 }
                 persons_sub = [[int(p[step]) for step in range(s_idx, e_idx)] for p in persons_state]
                 t_out_sub = [round(float(weather_df["temp_air"].values[step]), 1) for step in range(s_idx, e_idx)]
-                t_in_sub = [round(float(ld_100["t_indoor"][step]), 1) for step in range(s_idx, e_idx)]
-                t_set_sub = [round(float(ld_100["t_set"][step]), 1) for step in range(s_idx, e_idx)]
+                t_in_sub = [round(float(t_indoor_prof[step]), 1) for step in range(s_idx, e_idx)]
+                t_set_sub = [round(float(t_set_prof[step]), 1) for step in range(s_idx, e_idx)]
 
                 days_dict[kind] = {
                     "date": date_str,
@@ -897,8 +910,8 @@ def _build_sc_report_data(
                 for step in range(week_start_idx, week_end_idx)
             ]
             t_out_week = [round(float(weather_df["temp_air"].values[step]), 1) for step in range(week_start_idx, week_end_idx)]
-            t_in_week = [round(float(ld_100["t_indoor"][step]), 1) for step in range(week_start_idx, week_end_idx)]
-            t_set_week = [round(float(ld_100["t_set"][step]), 1) for step in range(week_start_idx, week_end_idx)]
+            t_in_week = [round(float(t_indoor_prof[step]), 1) for step in range(week_start_idx, week_end_idx)]
+            t_set_week = [round(float(t_set_prof[step]), 1) for step in range(week_start_idx, week_end_idx)]
 
             week_dict = {
                 "start_date": dates[week_start_idx].strftime("%Y-%m-%d"),
@@ -1135,8 +1148,8 @@ def _build_sc_report_data(
         {"group": "설비", "name": "PV 단가(3kW 이하)", "value": "1,513,667", "unit": "원/kW", "status": "VERIFIED", "source": "2026 주택지원사업 지원공고"},
         {"group": "설비", "name": "AWHP 초기비용", "value": "14,000,000", "unit": "원", "status": "ASSUMPTION", "source": "LG Therma V 업계 견적 상한"},
         {"group": "설비", "name": "계통 접속 기본요금", "value": "306,000", "unit": "원", "status": "VERIFIED", "source": "한전 배전공급업무처리지침"},
-        {"group": "부하", "name": "난방 설정온도", "value": "20/18/16/10", "unit": "°C", "status": "ASSUMPTION", "source": "재택 20°C, 수면 18°C, 외출 16°C, 비재실 10°C"},
-        {"group": "부하", "name": "냉방 운전 기간 및 설정온도", "value": "6/1~9/30 운전 (재택 26°C, 수면 27°C, 외출·비재실 정지, 기간 외 정지)", "unit": "°C", "status": "ASSUMPTION", "source": "SPEC v9.1 및 냉방 가이드라인"},
+        {"group": "부하", "name": "난방 설정온도", "value": "21/18/16/10", "unit": "°C", "status": "ASSUMPTION", "source": "재택 21°C, 수면 18°C, 외출 16°C, 비재실 10°C"},
+        {"group": "부하", "name": "냉방 운전 기간 및 설정온도", "value": "6/1~9/30 운전 (재택 26°C, 수면 27°C, 외출·비재실 정지, 기간 외 정지)", "unit": "-", "status": "ASSUMPTION", "source": "재택 26°C, 수면 27°C, 외출·비재실 정지"},
         {"group": "설비", "name": "냉방 설비 효율(기준안·대안 동일)", "value": "COP 4.40", "unit": "COP", "status": "ASSUMPTION", "source": "1등급 주택용 에어컨 효율 통일"},
         {"group": "설비", "name": "AWHP 보조히터 작동 제약", "value": "실내온도 < 설정온도 − 1.5°C 시에만 작동", "unit": "°C", "status": "ASSUMPTION", "source": "보조히터 과가동 방지 제약"},
     ]
