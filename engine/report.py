@@ -957,8 +957,6 @@ def _build_sc_report_data(
             ("식기세척기", 1.4, 45, 185.0, "dishwasher", "dishwasher"),
             ("워시타워", 1.5, 45, 345.0, "laundry", "washtower"),
             ("세탁기", 0.5, 45, 130.0, "laundry", "washing_machine"),
-            ("광파오븐", 1.6, 20, 120.0, "cooking", "lightwave_oven"),
-            ("정수기", 0.0167, 0, 146.0, "vent_standby", "water_purifier"),
             ("TV·플러그", 0.4, 200, round(0.9 * occ_n * 365.0, 1), "plug", "plug_standard"),
             ("조명", 0.15, 0, round(h_area * 4.3452, 1), "lighting", "lighting_standard"),
             ("환기·대기", 0.09, 0, 803.0, "vent_standby", "vent_standard"),
