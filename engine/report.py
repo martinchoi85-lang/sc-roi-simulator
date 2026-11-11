@@ -854,6 +854,40 @@ def _build_sc_report_data(
                 ("peak", d_peak, "최대 부하일", "연중 일 전력 소비량이 가장 높은 최대 부하일"),
             ]
 
+            def _get_actual_t_set(step_idx: int, kind_name: str) -> Optional[float]:
+                d = step_idx // 96
+                is_occ_d = bool(tus_res["is_occupied_day_365"][d]) if "is_occupied_day_365" in tus_res else True
+                p_states = [persons_state[p][step_idx] for p in range(len(persons_state))]
+                has_active = any(s == 1 for s in p_states)
+                has_sleep = any(s == 2 for s in p_states)
+
+                if kind_name in ("summer_weekday", "summer_weekend"):
+                    is_cool = True
+                elif kind_name in ("winter_weekday", "winter_weekend", "week"):
+                    is_cool = False
+                else:
+                    is_cool = (151 <= d <= 272)
+
+                if is_cool:
+                    if not is_occ_d:
+                        return None
+                    if has_active:
+                        return 26.0
+                    elif has_sleep:
+                        return 27.0
+                    else:
+                        return None
+                else:
+                    # Heating: 재택 21 / 수면 18 / 외출 16 / 비재실 10
+                    if not is_occ_d:
+                        return 10.0
+                    elif has_active:
+                        return 21.0
+                    elif has_sleep:
+                        return 18.0
+                    else:
+                        return 16.0
+
             days_dict = {}
             for kind, d_idx, lbl, rule_text in day_defs:
                 date_str = dates[d_idx * 96].strftime("%Y-%m-%d")
@@ -874,7 +908,7 @@ def _build_sc_report_data(
                 persons_sub = [[int(p[step]) for step in range(s_idx, e_idx)] for p in persons_state]
                 t_out_sub = [round(float(weather_df["temp_air"].values[step]), 1) for step in range(s_idx, e_idx)]
                 t_in_sub = [round(float(t_indoor_prof[step]), 1) for step in range(s_idx, e_idx)]
-                t_set_sub = [round(float(t_set_prof[step]), 1) for step in range(s_idx, e_idx)]
+                t_set_sub = [_get_actual_t_set(step, kind) for step in range(s_idx, e_idx)]
 
                 days_dict[kind] = {
                     "date": date_str,
@@ -911,7 +945,7 @@ def _build_sc_report_data(
             ]
             t_out_week = [round(float(weather_df["temp_air"].values[step]), 1) for step in range(week_start_idx, week_end_idx)]
             t_in_week = [round(float(t_indoor_prof[step]), 1) for step in range(week_start_idx, week_end_idx)]
-            t_set_week = [round(float(t_set_prof[step]), 1) for step in range(week_start_idx, week_end_idx)]
+            t_set_week = [_get_actual_t_set(step, "week") for step in range(week_start_idx, week_end_idx)]
 
             week_dict = {
                 "start_date": dates[week_start_idx].strftime("%Y-%m-%d"),
