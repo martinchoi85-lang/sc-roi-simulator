@@ -225,6 +225,17 @@ for e in energy:
     e["billed_kwh"] = sum(bil); e["import_kwh"] = sum(imp); e["export_kwh"] = sum(exp_)
     e["monthly"] = {"consumption_kwh": cons, "pv_kwh": pvm, "import_kwh": imp, "export_kwh": exp_, "carry_in_kwh": cin, "billed_kwh": bil, "bill_krw": bills}
 
+EK = {(e["hp"], e["occ"], e["sub"], e["case"]): e for e in energy}
+_t = lambda e: e["elec_fixed_krw"] + e["elec_variable_krw"] + e["gas_krw"]
+for s_ in scen:
+    b_ = _t(EK[(s_["hp"], s_["occ"], s_["sub"], "baseline")]) - _t(EK[(s_["hp"], s_["occ"], s_["sub"], f"{s_['heat']}_{s_['target']}")])
+    cf_, reps_ = cumflow(s_["capex"]["net"], b_, s_["pv_kw"], s_["ess_kwh"] / 9.6, s_["heat"])
+    pb_ = payback(cf_) if b_ > 0 else None
+    s_.update(annual_benefit_krw=round(b_), cum_cashflow=cf_, replacements=reps_, cum25_krw=cf_[25], payback_years=pb_,
+              payback_reason=None if pb_ is not None else ("no_benefit" if b_ <= 0 else "over_100y"))
+    if s_["target"] == "nz":
+        s_["nz_required_capex_krw"] = round(max(0, 3 * b_)); s_["nz_required_cut_pct"] = max(0, round(100 * (1 - max(0, 3 * b_) / s_["capex"]["net"]), 1))
+
 def tday(base, amp=5):
     return [round(base + amp * math.sin(math.pi * (i / 4 - 9) / 12), 1) for i in range(96)]
 def setp(persons, summer):

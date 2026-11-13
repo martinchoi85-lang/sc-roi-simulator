@@ -149,6 +149,23 @@ def check(d):
                 b, a = ek.get((h, o, sb, "baseline")), ek.get((h, o, sb, "awhp_only"))
                 if b and a and sum(a["enduse_kwh"].values()) < sum(b["enduse_kwh"].values()):
                     warn(f"{h}/{o}%: AWHP 케이스 전력 소비가 가스 케이스보다 작음")
+    # 연간 이득 = 기준안 총에너지비용 − 대안 총에너지비용 (1년 차), 현금흐름 1년 차와 일치
+    tot = lambda e: e["elec_fixed_krw"] + e["elec_variable_krw"] + e["gas_krw"]
+    nb = 0
+    for s in d["scenarios"]:
+        b_ = ek.get((s["hp"], s["occ"], s["sub"], "baseline")); a_ = ek.get((s["hp"], s["occ"], s["sub"], f"{s['heat']}_{s['target']}"))
+        if not b_ or not a_: continue
+        if a_["pv_kw"] != s["pv_kw"] or abs(a_["ess_kwh"] - s["ess_kwh"]) > 0.01:
+            err(f"scenario {s['id']} PV·ESS가 energy 행과 다름"); continue
+        diff = tot(b_) - tot(a_)
+        if abs(s["annual_benefit_krw"] - diff) > 10:
+            nb += 1
+            if nb <= 10: err(f"scenario {s['id']} 연간 이득 {s['annual_benefit_krw']} ≠ 기준안−대안 에너지비용 {diff}")
+        rep1 = sum(r["krw"] for r in s["replacements"] if r["year"] == 1)
+        y1 = s["cum_cashflow"][1] - s["cum_cashflow"][0] + rep1
+        if abs(y1 - s["annual_benefit_krw"]) > max(10, 0.001 * abs(s["annual_benefit_krw"])):
+            warn(f"scenario {s['id']} 현금흐름 1년 차 증가 {y1} ≠ 연간 이득 {s['annual_benefit_krw']}")
+    if nb > 10: err(f"연간 이득 불일치 총 {nb}건")
     for l in d["lifetimes"]:
         if l.get("status") not in STATUS: err(f"lifetimes status 오류 {l.get('item')}")
         if l.get("basis") not in BASIS: err(f"lifetimes basis는 {sorted(BASIS)} 중 하나: {l.get('basis')}")
