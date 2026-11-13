@@ -125,6 +125,8 @@ def check(d):
                 if i < 11 and abs(cout - m["carry_in_kwh"][i + 1]) > 1: err(f"energy {kk} {i+1}월 이월 연결 오류"); break
                 if i == 11 and abs(cout - m["carry_in_kwh"][0]) > 1 and not (cout > m["carry_in_kwh"][0] and sum(m["import_kwh"]) <= sum(m["export_kwh"])):
                     err(f"energy {kk} 12월 말 이월 ≠ 1월 초 이월(연간 잉여가 없는데 정상상태 아님)"); break
+            if sum(m["import_kwh"]) - sum(m["export_kwh"]) >= -1 and min(m["carry_in_kwh"]) > 1:
+                warn(f"energy {kk} 연간 잉여가 없는데 이월 잔고가 1년 내내 {min(m['carry_in_kwh']):.0f} kWh 이상 남음(정상상태 초기값 확인)")
             cv = m["consumption_kwh"]; mean = sum(cv) / 12
             if mean > 0 and max(cv) - min(cv) > 0.1 * mean and len(set(m["bill_krw"])) == 1 and e["billed_kwh"] > 0:
                 warn(f"energy {kk} 월 소비는 다른데 월 요금이 12개월 모두 같음")

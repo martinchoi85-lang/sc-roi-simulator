@@ -168,36 +168,48 @@ class KoreaTariffCalculator(BaseTariffCalculator):
             monthly_import_kwh = np.bincount(m_idx, weights=p_grid_import_kw, minlength=12) * dt_h
             monthly_export_kwh = np.bincount(m_idx, weights=p_grid_export_kw, minlength=12) * dt_h
 
-        # Steady-state fixed-point iteration for rollover
-        carried_start = 0.0
-        max_iters = 10
+        # Minimum balance solution with rollover convergence (up to 50 years)
+        carried_in = 0.0
+        max_years = 50
         converged_results = None
+        year_start_carried = 0.0
         final_carried = 0.0
+        prev_annual_billed = None
 
         if net_metering_scheme == "monthly_net" and self.rollover_scheme == "indefinite":
-            for _ in range(max_iters):
-                m_results, carried_end = self._simulate_12_months_pass(
-                    monthly_import_kwh, monthly_export_kwh, carried_start, net_metering_scheme
+            for yr in range(1, max_years + 1):
+                cur_year_start = carried_in
+                m_results, carried_out = self._simulate_12_months_pass(
+                    monthly_import_kwh, monthly_export_kwh, cur_year_start, net_metering_scheme
                 )
-                if abs(carried_end - carried_start) < 0.01:
+                annual_billed = sum(r["billed_kwh"] for r in m_results)
+                if prev_annual_billed is not None and abs(annual_billed - prev_annual_billed) < 0.1:
                     converged_results = m_results
-                    final_carried = carried_end
+                    year_start_carried = cur_year_start
+                    final_carried = carried_out
                     break
-                carried_start = carried_end
+                prev_annual_billed = annual_billed
+                carried_in = carried_out
+
             if converged_results is None:
-                converged_results, final_carried = self._simulate_12_months_pass(
-                    monthly_import_kwh, monthly_export_kwh, carried_start, net_metering_scheme
-                )
+                converged_results = m_results
+                year_start_carried = cur_year_start
+                final_carried = carried_out
         else:
             converged_results, final_carried = self._simulate_12_months_pass(
                 monthly_import_kwh, monthly_export_kwh, 0.0, net_metering_scheme
             )
+            year_start_carried = 0.0
 
         annual_base_fee = sum(r["base_fee"] for r in converged_results)
         annual_variable_fee = sum(r["variable_fee"] for r in converged_results)
         annual_vat_and_fund = sum(r["vat"] + r["fund"] for r in converged_results)
         annual_total_bill = sum(r["total_bill"] for r in converged_results)
         annual_billed_kwh = sum(r["billed_kwh"] for r in converged_results)
+
+        ann_imp = float(sum(monthly_import_kwh))
+        ann_exp = float(sum(monthly_export_kwh))
+        annual_surplus = max(0.0, ann_exp - ann_imp)
 
         return {
             "annual_total_bill": float(annual_total_bill),
@@ -206,5 +218,7 @@ class KoreaTariffCalculator(BaseTariffCalculator):
             "annual_vat_and_fund": float(annual_vat_and_fund),
             "annual_billed_kwh": float(annual_billed_kwh),
             "steady_state_rollover_kwh": float(final_carried),
+            "year_start_rollover_kwh": float(year_start_carried),
+            "annual_surplus_kwh_per_year": float(annual_surplus),
             "monthly_details": converged_results,
         }

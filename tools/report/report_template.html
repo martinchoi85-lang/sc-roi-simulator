@@ -507,7 +507,7 @@ function renderEnergyUse(){
         bills.forEach(([n,e,c])=>{const m=e.monthly;rows.push({marker:dot(c),name:n,v:f0(m.bill_krw[i])+'원'+(m.billed_kwh?` (과금 ${f0(m.billed_kwh[i])} kWh)`:'')});});
         return ttRows(M[i],rows);}}});
     const B=bills.map(b=>b[1]);
-    $('t-month').innerHTML='<tr><th>월</th>'+bills.map(([n])=>`<th class="n">${esc(n)}</th>`).join('')+(pe&&pe.monthly.carry_in_kwh?`<th class="n">${esc(tl)} 과금 kWh</th><th class="n">${esc(tl)} 전월 이월 kWh</th>`:'')+'</tr>'+
+    $('t-month').innerHTML='<tr><th>월</th>'+bills.map(([n])=>`<th class="n">${esc(n)}</th>`).join('')+(pe&&pe.monthly.carry_in_kwh?`<th class="n">${esc(tl)} 과금 kWh</th><th class="n">${esc(tl)} 월초 이월 잔고 kWh</th>`:'')+'</tr>'+
       M.map((m,i)=>`<tr><td>${m}</td>`+B.map(e=>`<td class="n">${f0(e.monthly.bill_krw[i])}원</td>`).join('')+(pe&&pe.monthly.carry_in_kwh?`<td class="n">${f0(pe.monthly.billed_kwh[i])}</td><td class="n">${f0(pe.monthly.carry_in_kwh[i])}</td>`:'')+'</tr>').join('')+
       '<tr><td><b>연간</b></td>'+B.map(e=>`<td class="n"><b>${f0(sumB(e))}원</b></td>`).join('')+(pe&&pe.monthly.carry_in_kwh?'<td></td><td></td>':'')+'</tr>';}
 }

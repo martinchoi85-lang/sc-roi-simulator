@@ -536,16 +536,10 @@ def _build_sc_report_data(
                             m_exp = [round(float(m["export_kwh"]), 1) for m in md_cs]
                             ann_imp = sum(m["import_kwh"] for m in md_cs)
                             ann_exp = sum(m["export_kwh"] for m in md_cs)
-                            final_carried = b_res_cs["steady_state_rollover_kwh"]
-                            init_c = final_carried if ann_exp <= ann_imp else max(0.0, final_carried - (ann_exp - ann_imp))
-                            carry_ins = [init_c]
-                            c = init_c
-                            for mi in range(12):
-                                c_in = c
-                                if mi > 0:
-                                    carry_ins.append(c_in)
-                                net = m_imp[mi] - m_exp[mi] - c_in
-                                c = 0.0 if net > 0 else -net
+                            year_start = b_res_cs.get("year_start_rollover_kwh", 0.0)
+                            carry_ins = [year_start]
+                            for mi in range(11):
+                                carry_ins.append(md_cs[mi]["carried_rollover_kwh"])
                             m_cin = [round(float(x), 1) for x in carry_ins]
                             m_billed = [round(float(m["billed_kwh"]), 1) for m in md_cs]
                             m_bill = [int(round(m["total_bill"])) for m in md_cs]
@@ -1601,6 +1595,7 @@ def _write_validation_tables(report_data: Dict[str, Any], country_dir: Path, fil
             ("step1", "1", "부하·재실 (Load & Occupancy TUS)"),
             ("step2", "2", "열 계산 (Thermal / HVAC / DHW)"),
             ("step3", "3", "디스패치·사이징 (Dispatch & Sizing)"),
+            ("step3b", "3b", "디스패치 재현 (Dispatch Reproduction)"),
             ("step4", "4", "현금흐름·민감도 (Cashflow & Sensitivities)"),
             ("step5", "5", "report_data·빌드 (Report Data & Build)"),
         ]
@@ -1611,6 +1606,38 @@ def _write_validation_tables(report_data: Dict[str, Any], country_dir: Path, fil
                 total_time += sec
                 lines.append(f"| {snum} | {sname} | {sec:.2f}s | {status} |")
         lines.append(f"| **총합** | **전체 파이프라인** | **{total_time:.2f}s** | - |")
+
+    # 9. Annual Surplus Cases Balance Accumulation (Minimum Balance Solution)
+    energy_list = report_data.get("energy", [])
+    surplus_rows = []
+    for e in energy_list:
+        diff_surplus = round(e["export_kwh"] - e["import_kwh"], 1)
+        if diff_surplus > 0.1:
+            surplus_rows.append({
+                "hp": e["hp"],
+                "occ": f"{e['occ']}%",
+                "sub": e["sub"],
+                "case": e["case"],
+                "pv_kw": e["pv_kw"],
+                "import_kwh": e["import_kwh"],
+                "export_kwh": e["export_kwh"],
+                "surplus_kwh_per_year": diff_surplus,
+            })
+
+    lines.extend([
+        "",
+        "## 9. 연간 잉여 케이스 잔고 증가량 표 (최소 잔고 해)",
+        f"- 총 560건 중 연간 잉여(수출 > 수입) 케이스: **{len(surplus_rows)}건**",
+        "- 정상상태 기준: 연초 이월 0에서 시작하여 연간 과금량 수렴(변화 < 0.1kWh) 달성 후의 마지막 해 과금 결과 적용",
+        "",
+        "| 주택 | 점유율 | 보조금 | 케이스 | PV (kW) | 연간 수전 (kWh) | 연간 역송 (kWh) | 잔고 증가량 (kWh/년) |",
+        "|---|---|---|---|---|---|---|---|",
+    ])
+    for sr in surplus_rows:
+        lines.append(
+            f"| {sr['hp']} | {sr['occ']} | {sr['sub']} | {sr['case']} | "
+            f"{sr['pv_kw']:.1f} | {sr['import_kwh']:.1f} | {sr['export_kwh']:.1f} | {sr['surplus_kwh_per_year']:.1f} |"
+        )
 
     filepath.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
