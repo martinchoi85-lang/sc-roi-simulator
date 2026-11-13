@@ -205,8 +205,25 @@ for e in energy:
         th_ = e["heat_th_kwh"]["heating"] + e["heat_th_kwh"]["dhw"]; k_ = e["propane_kg"] * 46.3 / 3.6 * 0.88 / th_
         e["heat_th_kwh"]["heating"] = round(e["heat_th_kwh"]["heating"] * k_); e["heat_th_kwh"]["dhw"] = round(e["heat_th_kwh"]["dhw"] * k_)
     cons = [round(tot * w / sum(WM)) for w in WM]; cons[-1] += tot - sum(cons)
-    e["monthly"] = {"consumption_kwh": cons, "pv_kwh": [round(e["pv_gen_kwh"] * w / sum(WS)) for w in WS],
-                    "bill_krw": [round((e["elec_fixed_krw"] + e["elec_variable_krw"]) * w / sum(WM)) for w in WM]}
+    pvm = [round(e["pv_gen_kwh"] * w / sum(WS)) for w in WS]
+    imp = [round(c - min(c, p) * 0.35) for c, p in zip(cons, pvm)]; exp_ = [round(p - min(c, p) * 0.35) for c, p in zip(cons, pvm)]
+    zeroE = e["case"].endswith("_ze")
+    if zeroE: imp = [0] * 12; exp_ = [0] * 12
+    carry = 0
+    for _ in range(30):  # 정상상태: 12월 말 이월 = 1월 초 이월(연간 잉여면 계속 누적)
+        cin = []; bil = []
+        for i in range(12):
+            cin.append(carry); net = imp[i] - exp_[i] - carry; bil.append(max(0, net)); carry = max(0, -net)
+        if sum(imp) <= sum(exp_) or carry == cin[0]: break
+    def kbill(kwh, mon):
+        t1, t2 = (300, 450) if mon in (7, 8) else (200, 400)
+        base = 910 if kwh <= t1 else 1600 if kwh <= t2 else 7300
+        en = min(kwh, t1) * 120 + max(0, min(kwh, t2) - t1) * 214.6 + max(0, kwh - t2) * 307.3 + kwh * 14
+        return int(((base + en) * 1.127) // 10 * 10)
+    bills = [0 if zeroE else kbill(bil[i], i + 1) for i in range(12)]
+    e["elec_fixed_krw"] = 0 if zeroE else sum(kbill(0, i + 1) for i in range(12)); e["elec_variable_krw"] = sum(bills) - e["elec_fixed_krw"]
+    e["billed_kwh"] = sum(bil); e["import_kwh"] = sum(imp); e["export_kwh"] = sum(exp_)
+    e["monthly"] = {"consumption_kwh": cons, "pv_kwh": pvm, "import_kwh": imp, "export_kwh": exp_, "carry_in_kwh": cin, "billed_kwh": bil, "bill_krw": bills}
 
 def tday(base, amp=5):
     return [round(base + amp * math.sin(math.pi * (i / 4 - 9) / 12), 1) for i in range(96)]

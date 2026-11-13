@@ -350,6 +350,8 @@ def _build_sc_report_data(
 
     from engine.tariffs.korea import KoreaTariffCalculator
     tariff_calc = KoreaTariffCalculator(tariff_cfg)
+    step3b_data = metadata.get("step3b_data")
+    monthly_map = step3b_data.get("monthly_map", {}) if step3b_data else {}
 
     for hp_id, house_name, occ_n, _ in HP_MAP:
         for occ in OCC_LIST:
@@ -511,13 +513,42 @@ def _build_sc_report_data(
                     cons_diff = round(enduse_sum - sum(m_cons), 1)
                     m_cons[-1] = round(m_cons[-1] + cons_diff, 1)
 
-                    if cs.endswith("_ze"):
-                        m_bill = [0] * 12
-                    elif cd["bill_res"] is not None and "monthly_total_bills" in cd["bill_res"]:
-                        m_bill = [int(round(b)) for b in cd["bill_res"]["monthly_total_bills"]]
+                    m_disp = monthly_map.get((hp_id, occ, sub_id, cs))
+                    if m_disp is not None:
+                        m_imp = m_disp["import_kwh"]
+                        m_exp = m_disp["export_kwh"]
+                        m_cin = m_disp["carry_in_kwh"]
+                        m_billed = m_disp["billed_kwh"]
+                        m_bill = m_disp["bill_krw"]
                     else:
-                        tot_b = cd["elec_fixed_krw"] + cd["elec_variable_krw"]
-                        m_bill = [int(round(tot_b / 12.0))] * 12
+                        if cs.endswith("_ze"):
+                            m_imp = [0.0] * 12
+                            m_exp = [0.0] * 12
+                            m_cin = [0.0] * 12
+                            m_billed = [0.0] * 12
+                            m_bill = [0] * 12
+                        else:
+                            p_imp_cs = np.maximum(0.0, p_load_cs - p_pv_cs)
+                            p_exp_cs = np.maximum(0.0, p_pv_cs - p_load_cs)
+                            b_res_cs = tariff_calc.calculate_annual_bill(p_imp_cs, p_exp_cs, dates, net_metering_scheme="monthly_net")
+                            md_cs = b_res_cs["monthly_details"]
+                            m_imp = [round(float(m["import_kwh"]), 1) for m in md_cs]
+                            m_exp = [round(float(m["export_kwh"]), 1) for m in md_cs]
+                            ann_imp = sum(m["import_kwh"] for m in md_cs)
+                            ann_exp = sum(m["export_kwh"] for m in md_cs)
+                            final_carried = b_res_cs["steady_state_rollover_kwh"]
+                            init_c = final_carried if ann_exp <= ann_imp else max(0.0, final_carried - (ann_exp - ann_imp))
+                            carry_ins = [init_c]
+                            c = init_c
+                            for mi in range(12):
+                                c_in = c
+                                if mi > 0:
+                                    carry_ins.append(c_in)
+                                net = m_imp[mi] - m_exp[mi] - c_in
+                                c = 0.0 if net > 0 else -net
+                            m_cin = [round(float(x), 1) for x in carry_ins]
+                            m_billed = [round(float(m["billed_kwh"]), 1) for m in md_cs]
+                            m_bill = [int(round(m["total_bill"])) for m in md_cs]
 
                     energy_rows.append({
                         "hp": hp_id,
@@ -539,6 +570,10 @@ def _build_sc_report_data(
                         "monthly": {
                             "consumption_kwh": m_cons,
                             "pv_kwh": m_pv,
+                            "import_kwh": m_imp,
+                            "export_kwh": m_exp,
+                            "carry_in_kwh": m_cin,
+                            "billed_kwh": m_billed,
                             "bill_krw": m_bill,
                         },
                     })

@@ -19,6 +19,7 @@ from engine.pipeline import (
     run_step1_load,
     run_step2_thermal,
     run_step3_sizing,
+    run_step3b_dispatch,
     run_step4_cashflow,
     run_step5_report,
 )
@@ -112,6 +113,17 @@ def main():
     )
     step_timings["step3"] = (t3, s3)
 
+    # Step 3b: 디스패치 재현 (560건 병렬 디스패치, 15분 시계열 저장 및 재현 점검)
+    step3b_data, t3b, s3b = run_step3b_dispatch(
+        config_values=country_config.values,
+        weather_df=weather_df,
+        step1_data=step1_data,
+        step2_data=step2_data,
+        step3_data=step3_data,
+        country_dir=country_dir,
+    )
+    step_timings["step3b"] = (t3b, s3b)
+
     # Step 4: 현금흐름·민감도 (차분 점검 포함)
     step4_data, t4, s4 = run_step4_cashflow(
         config_values=country_config.values,
@@ -121,6 +133,7 @@ def main():
         step3_data=step3_data,
         cache_dir=cache_dir,
         from_step=args.from_step,
+        step3b_data=step3b_data,
     )
     step_timings["step4"] = (t4, s4)
 

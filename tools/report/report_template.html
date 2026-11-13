@@ -155,8 +155,10 @@ footer{color:var(--ink-3);font-size:12px;padding:20px 0 40px}
   <div id="c-use" class="chart" style="height:250px"></div>
   <h3>난방·급탕·냉방 열 공급과 효율 <span class="tip" data-t="energy_heat">!</span></h3>
   <div class="tbl-wrap"><table id="t-heat"></table></div>
-  <h3>월별 전력 소비와 PV 발전 <span class="tip" data-t="energy_month">!</span></h3>
-  <div id="c-month" class="chart" style="height:330px"></div>
+  <h3>월별 전력 소비·PV 발전과 월 전기요금 <span class="tip" data-t="energy_month">!</span></h3>
+  <p class="sub" id="month-sub"></p>
+  <div id="c-month" class="chart" style="height:560px"></div>
+  <div class="tbl-wrap"><table id="t-month"></table></div>
 </section>
 
 <section class="card" id="sec-heat">
@@ -377,7 +379,7 @@ const TIPS={
 Object.assign(TIPS,{
  energy_use:['가스보일러 케이스와 AWHP 케이스의 연간 전력 소비를 용도별로 나눈 값이다. PV·ESS는 소비량을 바꾸지 않으므로 목표와 무관하다.','AWHP 케이스의 난방·급탕 막대가 AWHP가 쓴 전력이다. 위 계통 전력량 차트는 이 소비 전체에서 PV 발전을 상계한 결과다.'],
  energy_heat:['난방·급탕·냉방에 공급된 열량, 그 열을 만드는 데 들어간 에너지, 효율이다.','AWHP 연평균 COP = (난방+급탕 열량) ÷ (난방+급탕 전력). 보일러 효율 = 열량 ÷ 프로판 순발열량.'],
- energy_month:['월별 전력 소비와, 상단에서 선택한 난방·목표 조합의 월별 PV 발전량이다.','전기요금은 월 사용량 기준 누진제로 계산된다. 월 합산 상계에서는 발전이 소비보다 많은 달의 잉여가 다음 달로 이월된다.'],
+ energy_month:['위는 월별 전력 소비와 선택한 조합의 PV 발전량, 아래는 기준안·AWHP만·선택한 조합의 월 계통 전기요금이다.','월 요금은 그달 수전에서 역송과 전월 이월분을 뺀 과금 전력량에 누진 요금(하계 7~8월 구간 별도)·기본요금·부가세·전력기금을 적용한 값이다. 발전이 남는 달은 잉여가 다음 달로 이월되어 기본요금 수준만 남는다.'],
  zb:['Zero bill 조합의 회수기간을 ESS 단가 시나리오별로 비교한다. 축 라벨 아래 숫자는 25년 안에 회수되려면 ESS 단가가 얼마 이하여야 하는지다.','Low·Central·High는 NREL 범위값, Specific은 실제 판매·설치 사례 단가다(아래 표의 출처 참조). 다른 조건은 모두 같고 ESS 단가만 바꿨다.'],
  a_day:['15분 단위 전력을 용도별로 쌓은 막대, 그 아래 실외·실내·설정온도, 마지막 띠는 거주자별 상태다.','난방·냉방은 실내온도를 설정온도에 맞추는 데 필요한 만큼 작동한다. 설정온도는 거주자 상태(재택·수면·외출)에 따라 바뀐다.'],
  a_week:['연속 7일의 15분 전력(용도별), 온도, 재택 인원이다.','설정온도가 바뀌는 기상·귀가 직후에 난방 전력이 짧게 커지는지, 외출 시간에 부하가 줄어드는지 확인할 수 있다.'],
@@ -488,10 +490,26 @@ function renderEnergyUse(){
     return `<tr><td>${lbl}</td><td class="n">${f0(h.heating)}</td><td class="n">${f0(h.dhw)}</td><td class="n">${inp}</td><td class="n">${eff}</td><td class="n">${f0(h.cooling)} / ${f0(ce)}${cop}</td></tr>`;};
   $('t-heat').innerHTML='<tr><th>케이스</th><th class="n">난방 열량 kWh</th><th class="n">급탕 열량 kWh</th><th class="n">난방·급탕 투입 에너지</th><th class="n">효율</th><th class="n">냉방 열량 / 전력 kWh</th></tr>'+hr('가스보일러',g,true)+hr('AWHP',a,false);
   if(g.monthly&&a.monthly){const M=Array.from({length:12},(_,i)=>(i+1)+'월'), pe=EN[[S.hp,S.occ,S.sub,S.heat+'_'+S.target].join('|')];
+    const tl=`${S.heat==='gas'?'가스':'AWHP'} + ${lab(TGT,S.target)}`;
     const ser=[['가스보일러 케이스 소비',g.monthly.consumption_kwh,COL.s[0]],['AWHP 케이스 소비',a.monthly.consumption_kwh,COL.s[1]]].map(([n,d,c])=>({name:n,type:'bar',barGap:'10%',barWidth:12,itemStyle:{color:c,borderRadius:[3,3,0,0]},data:d}));
-    if(pe&&pe.monthly&&pe.pv_kw>0) ser.push({name:`PV 발전 (${S.heat==='gas'?'가스':'AWHP'} + ${lab(TGT,S.target)}, ${f1(pe.pv_kw)}kW)`,type:'line',data:pe.monthly.pv_kwh,symbolSize:6,lineStyle:{width:2,color:COL.s[2]},itemStyle:{color:COL.s[2]}});
-    draw('c-month',{legend:legend(ser.map(s=>s.name)),grid:{left:56,right:16,top:40,bottom:40},xAxis:catAxis(M),yAxis:valAxis('kWh/월',{fmt:v=>f0(v),gap:44}),series:ser,
-      tooltip:{formatter:ps=>ttRows(ps[0].axisValue,ps.map(p=>({marker:p.marker,name:p.seriesName,v:f0(p.value)+' kWh'})))}});}
+    if(pe&&pe.monthly&&pe.pv_kw>0) ser.push({name:`PV 발전 (${tl}, ${f1(pe.pv_kw)}kW)`,type:'line',data:pe.monthly.pv_kwh,symbolSize:6,lineStyle:{width:2,color:COL.s[2]},itemStyle:{color:COL.s[2]}});
+    const bills=[['기준안(가스보일러+계통) 요금',g,COL.s[0]],['AWHP만 요금',a,COL.s[1]]]; if(pe&&pe.case!=='baseline') bills.push([`${tl} 요금`,pe,COL.s[3]]);
+    bills.forEach(([n,e,c])=>ser.push({name:n,type:'bar',xAxisIndex:1,yAxisIndex:1,barGap:'10%',barWidth:9,itemStyle:{color:c,borderRadius:[3,3,0,0]},data:e.monthly.bill_krw,
+      label:{show:false}}));
+    const sumB=e=>e.monthly.bill_krw.reduce((x,y)=>x+y,0);
+    $('month-sub').textContent='연간 전기요금: '+bills.map(([n,e])=>`${n.replace(' 요금','')} ${man(sumB(e))}`).join(' · ')+' · 월 요금 = 그달 상계 후 과금 전력량에 누진 요금·기본요금·부가세·전력기금 적용';
+    draw('c-month',{legend:legend(ser.map(s=>s.name)),grid:[{left:80,right:16,top:62,height:200},{left:80,right:16,top:320,bottom:40}],
+      xAxis:[catAxis(M,{gridIndex:0}),catAxis(M,{gridIndex:1})],
+      yAxis:[valAxis('전력량 (kWh/월)',{fmt:v=>f0(v),gap:64,extra:{gridIndex:0}}),valAxis('전기요금 (원/월)',{fmt:v=>f0(v),gap:64,extra:{gridIndex:1}})],
+      series:ser,axisPointer:{link:[{xAxisIndex:'all'}]},
+      tooltip:{formatter:ps=>{const i=M.indexOf(ps[0].axisValue);const rows=[];
+        ser.forEach((s,k)=>{if(k<ser.length-bills.length) rows.push({marker:dot(s.itemStyle?s.itemStyle.color:(s.lineStyle||{}).color),name:s.name,v:f0(s.data[i])+' kWh'});});
+        bills.forEach(([n,e,c])=>{const m=e.monthly;rows.push({marker:dot(c),name:n,v:f0(m.bill_krw[i])+'원'+(m.billed_kwh?` (과금 ${f0(m.billed_kwh[i])} kWh)`:'')});});
+        return ttRows(M[i],rows);}}});
+    const B=bills.map(b=>b[1]);
+    $('t-month').innerHTML='<tr><th>월</th>'+bills.map(([n])=>`<th class="n">${esc(n)}</th>`).join('')+(pe&&pe.monthly.carry_in_kwh?`<th class="n">${esc(tl)} 과금 kWh</th><th class="n">${esc(tl)} 전월 이월 kWh</th>`:'')+'</tr>'+
+      M.map((m,i)=>`<tr><td>${m}</td>`+B.map(e=>`<td class="n">${f0(e.monthly.bill_krw[i])}원</td>`).join('')+(pe&&pe.monthly.carry_in_kwh?`<td class="n">${f0(pe.monthly.billed_kwh[i])}</td><td class="n">${f0(pe.monthly.carry_in_kwh[i])}</td>`:'')+'</tr>').join('')+
+      '<tr><td><b>연간</b></td>'+B.map(e=>`<td class="n"><b>${f0(sumB(e))}원</b></td>`).join('')+(pe&&pe.monthly.carry_in_kwh?'<td></td><td></td>':'')+'</tr>';}
 }
 
 /* ---------- 3 회수기간 히트맵 ---------- */

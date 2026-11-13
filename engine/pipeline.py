@@ -772,6 +772,244 @@ def run_step3_sizing(
 
 
 # ---------------------------------------------------------
+# Step 3b: 디스패치 재현 (Dispatch Reproduction & 15-min Series Cache)
+# ---------------------------------------------------------
+def _worker_dispatch_case(args):
+    (
+        case_idx, hp_id, house_name, occ_n, occ, sub_id, case,
+        pv_kw, ess_kwh,
+        p_load, p_pv1_kw,
+        dates, tariff_cfg,
+    ) = args
+    dt_h = 0.25
+    tariff_calc = KoreaTariffCalculator(tariff_cfg)
+
+    if case.endswith("_ze"):
+        p_imp = np.zeros(len(dates), dtype=np.float32)
+        p_exp = np.zeros(len(dates), dtype=np.float32)
+        m_imp = [0.0] * 12
+        m_exp = [0.0] * 12
+        m_carry_in = [0.0] * 12
+        m_billed = [0.0] * 12
+        m_bill = [0] * 12
+        imp_kwh = 0.0
+        exp_kwh = 0.0
+        billed_kwh = 0.0
+        tot_bill = 0.0
+    else:
+        p_pv = (p_pv1_kw * pv_kw).astype(np.float32)
+        p_imp = np.maximum(0.0, p_load - p_pv).astype(np.float32)
+        p_exp = np.maximum(0.0, p_pv - p_load).astype(np.float32)
+        imp_kwh = float(p_imp.sum() * dt_h)
+        exp_kwh = float(p_exp.sum() * dt_h)
+        b_res = tariff_calc.calculate_annual_bill(p_imp, p_exp, dates, net_metering_scheme="monthly_net")
+        billed_kwh = b_res["annual_billed_kwh"]
+        tot_bill = b_res["annual_total_bill"]
+
+        md = b_res["monthly_details"]
+        m_imp = [round(float(m["import_kwh"]), 1) for m in md]
+        m_exp = [round(float(m["export_kwh"]), 1) for m in md]
+
+        ann_imp = sum(m["import_kwh"] for m in md)
+        ann_exp = sum(m["export_kwh"] for m in md)
+        final_carried = b_res["steady_state_rollover_kwh"]
+        if ann_exp <= ann_imp:
+            init_c = final_carried
+        else:
+            init_c = max(0.0, final_carried - (ann_exp - ann_imp))
+
+        carry_ins = [init_c]
+        c = init_c
+        for i in range(12):
+            c_in = c
+            if i > 0:
+                carry_ins.append(c_in)
+            net = m_imp[i] - m_exp[i] - c_in
+            if net > 0:
+                c = 0.0
+            else:
+                c = -net
+
+        m_carry_in = [round(float(x), 1) for x in carry_ins]
+        m_billed = [round(float(m["billed_kwh"]), 1) for m in md]
+        m_bill = [int(round(m["total_bill"])) for m in md]
+
+    return {
+        "case_idx": case_idx,
+        "key": (hp_id, occ, sub_id, case),
+        "key_str": f"{hp_id}|{occ}|{sub_id}|{case}",
+        "pv_kw": pv_kw,
+        "ess_kwh": ess_kwh,
+        "imp_kwh": imp_kwh,
+        "exp_kwh": exp_kwh,
+        "billed_kwh": billed_kwh,
+        "tot_bill": tot_bill,
+        "p_imp": p_imp,
+        "p_exp": p_exp,
+        "monthly": {
+            "import_kwh": m_imp,
+            "export_kwh": m_exp,
+            "carry_in_kwh": m_carry_in,
+            "billed_kwh": m_billed,
+            "bill_krw": m_bill,
+        },
+    }
+
+
+def run_step3b_dispatch(
+    config_values: Dict[str, Any],
+    weather_df: pd.DataFrame,
+    step1_data: Dict[str, Any],
+    step2_data: Dict[str, Any],
+    step3_data: Dict[str, Any],
+    country_dir: Path,
+) -> Tuple[Dict[str, Any], float, str]:
+    t0 = time.perf_counter()
+    cache_dir = country_dir / "cache"
+    npz_path = cache_dir / "step3b_dispatch.npz"
+
+    # Unit test: 300kWh non-summer month = 57,760 KRW
+    tariff_cfg = config_values["tariff"]
+    tariff_calc = KoreaTariffCalculator(tariff_cfg)
+    test_res = tariff_calc._calculate_single_month(300.0, 5)
+    assert int(test_res["total_bill"]) == 57760, f"Unit test failed: 300kWh month got {test_res['total_bill']} KRW != 57,760 KRW"
+    print(" -> [단위테스트 통과] 300kWh 비하계 월 = 57,760원 검증 완료")
+
+    baseline_cache = step2_data["baseline_cache"]
+    awhp_load_cache = step2_data["awhp_load_cache"]
+    ze_sizing_cache = step3_data["ze_sizing_cache"]
+    zb_sizing_cache = step3_data["zb_sizing_cache"]
+    nz_sizing_cache = step3_data["nz_sizing_cache"]
+    p_pv1_kw = step3_data["p_pv1_kw"]
+    dates = pd.DatetimeIndex(weather_df["timestamp"])
+
+    hp_map = [
+        ("C54_1", "MONO Core 54", 1),
+        ("C54_2", "MONO Core 54", 2),
+        ("C72_1", "MONO Core 72", 1),
+        ("C72_2", "MONO Core 72", 2),
+        ("C72_3", "MONO Core 72", 3),
+        ("D45_1", "DUO Max 45", 1),
+        ("D45_2", "DUO Max 45", 2),
+    ]
+    occ_list = [100, 70, 50, 30, 15]
+    sub_list = ["none", "pv2026"]
+    case_list = ["baseline", "awhp_only", "gas_nz", "gas_zb", "gas_ze", "awhp_nz", "awhp_zb", "awhp_ze"]
+
+    # Build 560 task args
+    dispatch_tasks = []
+    case_idx = 0
+    for hp_id, house_name, occ_n in hp_map:
+        for occ in occ_list:
+            occ_rate = occ / 100.0
+            for sub_id in sub_list:
+                for case in case_list:
+                    is_awhp = "awhp" in case
+                    p_load = (
+                        awhp_load_cache[(house_name, occ_n, occ_rate)]["p_total_elec"]
+                        if is_awhp
+                        else baseline_cache[(house_name, occ_n, occ_rate)]["p_elec_total_kw"]
+                    )
+                    heat_pkg = "AWHP" if is_awhp else "가스보일러"
+
+                    if case == "baseline":
+                        pv_kw = 0.0
+                        ess_kwh = 0.0
+                    elif case == "awhp_only":
+                        pv_kw = 0.0
+                        ess_kwh = 0.0
+                    elif case.endswith("_nz"):
+                        nz_s = nz_sizing_cache[(house_name, occ_n, heat_pkg, occ_rate)]
+                        pv_kw = nz_s["pv_capacity_kw"]
+                        ess_kwh = nz_s["ess_capacity_kwh"]
+                    elif case.endswith("_zb"):
+                        zb_s = zb_sizing_cache[(house_name, occ_n, heat_pkg, occ_rate)]
+                        pv_kw = zb_s["pv_capacity_kw"]
+                        ess_kwh = zb_s["ess_capacity_kwh"]
+                    elif case.endswith("_ze"):
+                        ze_s = ze_sizing_cache[(house_name, occ_n, heat_pkg, occ_rate)]
+                        pv_kw = ze_s["pv_capacity_kw"]
+                        ess_kwh = ze_s["ess_capacity_kwh"]
+                    else:
+                        raise ValueError(f"Unknown case: {case}")
+
+                    dispatch_tasks.append((
+                        case_idx, hp_id, house_name, occ_n, occ, sub_id, case,
+                        pv_kw, ess_kwh,
+                        p_load, p_pv1_kw,
+                        dates, tariff_cfg,
+                    ))
+                    case_idx += 1
+
+    n_workers = min(os.cpu_count() or 4, 16)
+    print(f"[Step 3b: 디스패치 재현] 560건 병렬 디스패치 실행 중 ({n_workers} 워커)...")
+    with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        dispatch_results = list(executor.map(_worker_dispatch_case, dispatch_tasks))
+
+    # Sort results by case_idx
+    dispatch_results.sort(key=lambda r: r["case_idx"])
+
+    # 15min import/export arrays
+    import_kw_arr = np.stack([r["p_imp"] for r in dispatch_results])
+    export_kw_arr = np.stack([r["p_exp"] for r in dispatch_results])
+    case_keys = [r["key_str"] for r in dispatch_results]
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(
+        npz_path,
+        import_kw=import_kw_arr,
+        export_kw=export_kw_arr,
+        case_keys=case_keys,
+    )
+    print(f" -> 15분 수전·역송 시계열 저장 완료: {npz_path} ({import_kw_arr.shape})")
+
+    # Reproduction check against existing report_data.json if exists
+    report_json_path = country_dir / "report" / "report_data.json"
+    if report_json_path.exists():
+        with open(report_json_path, "r", encoding="utf-8") as f:
+            old_data = json.load(f)
+        old_energy = old_data.get("energy", [])
+        mismatches = []
+        for r_calc, r_old in zip(dispatch_results, old_energy):
+            orig_imp = r_old["import_kwh"]
+            orig_exp = r_old["export_kwh"]
+            orig_billed = r_old["billed_kwh"]
+            orig_bill = r_old["elec_fixed_krw"] + r_old["elec_variable_krw"]
+
+            diff_imp = abs(r_calc["imp_kwh"] - orig_imp)
+            diff_exp = abs(r_calc["exp_kwh"] - orig_exp)
+            diff_billed = abs(r_calc["billed_kwh"] - orig_billed)
+            diff_bill = abs(r_calc["tot_bill"] - orig_bill)
+
+            if diff_imp > 1.0 or diff_exp > 1.0 or diff_billed > 1.0 or diff_bill > 10.0:
+                mismatches.append({
+                    "key": r_calc["key_str"],
+                    "orig": {"import": orig_imp, "export": orig_exp, "billed": orig_billed, "bill": orig_bill},
+                    "calc": {"import": r_calc["imp_kwh"], "export": r_calc["exp_kwh"], "billed": r_calc["billed_kwh"], "bill": r_calc["tot_bill"]},
+                    "diff": {"import": diff_imp, "export": diff_exp, "billed": diff_billed, "bill": diff_bill},
+                })
+
+        if mismatches:
+            print(f"[재현 점검 실패] 불일치 행 {len(mismatches)} / {len(old_energy)}")
+            for m in mismatches[:5]:
+                print(f"  {m['key']}: 기존={m['orig']}, 재계산={m['calc']}, 차이={m['diff']}")
+            print("원인 후보: 시드 불일치, ESS 초기 SoC 차이, 정상상태 반복 횟수 부족")
+            raise RuntimeError(f"Step 3b 재현 점검 실패: {len(mismatches)}건 불일치 발생으로 중단합니다.")
+        else:
+            print(f"[재현 점검 통과] 560 / 560 행 완벽 일치 (허용오차: 전력량 +-1kWh, 요금 +-10원 이내)")
+
+    monthly_map = {r["key"]: r["monthly"] for r in dispatch_results}
+    data = {
+        "dispatch_results": dispatch_results,
+        "monthly_map": monthly_map,
+        "npz_path": str(npz_path),
+    }
+    el = time.perf_counter() - t0
+    print(f"[Step 3b: 디스패치 재현] 완료 ({el:.2f}s)")
+    return data, el, "계산 완료"
+
+
+# ---------------------------------------------------------
 # Step 4: 현금흐름·민감도 (Cashflow & Sensitivities) with Difference Verification
 # ---------------------------------------------------------
 def run_step4_cashflow(
@@ -782,6 +1020,7 @@ def run_step4_cashflow(
     step3_data: Dict[str, Any],
     cache_dir: Path,
     from_step: int,
+    step3b_data: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Dict[str, Any], float, str]:
     t0 = time.perf_counter()
     h_val = compute_config_hash(config_values.get("replacements"), config_values.get("tariff"))
@@ -1267,6 +1506,7 @@ def run_step4_cashflow(
         "ze_minimality_rows": ze_minimality_rows,
         "sensitivities_rows": sensitivities_rows,
         "awhp_stats_rows": step2_data.get("awhp_stats_rows", []),
+        "step3b_data": step3b_data,
     }
 
     data = {

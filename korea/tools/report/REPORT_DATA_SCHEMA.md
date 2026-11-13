@@ -39,7 +39,7 @@ case: baseline(가스보일러+계통), awhp_only(AWHP, PV·ESS 없음), gas_nz,
 | enduse_kwh | 연간 **전력** 소비 용도별 {heating, cooling, dhw, cooking, laundry, dishwasher, fridge, lighting, plug, vent_standby} 10개 모두. 가스 케이스의 heating·dhw는 보일러 보조전력(펌프·팬)만 |
 | heat_th_kwh | 공급 열량 {heating, dhw, cooling} (kWh_th) |
 | pv_gen_kwh | 연간 PV 발전량 |
-| monthly | {consumption_kwh[12](합 = enduse 합), pv_kwh[12], bill_krw[12]} |
+| monthly | {consumption_kwh, pv_kwh, import_kwh, export_kwh, carry_in_kwh(그달 시작 시 이월 잉여), billed_kwh(=max(0, 수전−역송−이월)), bill_krw(그달 청구액)} 각 12개월. 12월 말 이월 = 1월 carry_in(정상상태). bill_krw 합 = elec_fixed_krw + elec_variable_krw(±120원). consumption 합 = enduse 합 |
 
 ## 4. lifetimes
 `[{"item":"pv"|"inverter"|"ess"|"awhp","label","years","basis","status","note"}]` basis ∈ 제조사 보증 / 공공·법정 / 업계 통상 / 추정

@@ -112,6 +112,22 @@ def check(d):
         if any(len(m.get(k, [])) != 12 for k in ("consumption_kwh", "pv_kwh", "bill_krw")): err(f"energy {kk} monthly 배열 길이 12 아님")
         elif sum(eu.values()) > 0 and abs(sum(m["consumption_kwh"]) - sum(eu.values())) > 0.01 * sum(eu.values()) + 1:
             err(f"energy {kk} 월별 소비 합 {sum(m['consumption_kwh']):.0f} ≠ 용도별 합 {sum(eu.values()):.0f}")
+        MK = ("import_kwh", "export_kwh", "carry_in_kwh", "billed_kwh", "bill_krw")
+        if any(len(m.get(k, [])) != 12 for k in MK): err(f"energy {kk} monthly에 {MK} 각 12개월 필요")
+        else:
+            tot_bill = e["elec_fixed_krw"] + e["elec_variable_krw"]
+            if abs(sum(m["bill_krw"]) - tot_bill) > 120: err(f"energy {kk} 월 요금 합 {sum(m['bill_krw'])} ≠ 연간 전기요금 {tot_bill}")
+            if abs(sum(m["billed_kwh"]) - e["billed_kwh"]) > 12: err(f"energy {kk} 월 과금 kWh 합 ≠ billed_kwh")
+            for i in range(12):
+                net = m["import_kwh"][i] - m["export_kwh"][i] - m["carry_in_kwh"][i]
+                if abs(max(0, net) - m["billed_kwh"][i]) > 1: err(f"energy {kk} {i+1}월 과금 kWh ≠ max(0, 수전−역송−이월)"); break
+                cout = max(0, -net)
+                if i < 11 and abs(cout - m["carry_in_kwh"][i + 1]) > 1: err(f"energy {kk} {i+1}월 이월 연결 오류"); break
+                if i == 11 and abs(cout - m["carry_in_kwh"][0]) > 1 and not (cout > m["carry_in_kwh"][0] and sum(m["import_kwh"]) <= sum(m["export_kwh"])):
+                    err(f"energy {kk} 12월 말 이월 ≠ 1월 초 이월(연간 잉여가 없는데 정상상태 아님)"); break
+            cv = m["consumption_kwh"]; mean = sum(cv) / 12
+            if mean > 0 and max(cv) - min(cv) > 0.1 * mean and len(set(m["bill_krw"])) == 1 and e["billed_kwh"] > 0:
+                warn(f"energy {kk} 월 소비는 다른데 월 요금이 12개월 모두 같음")
         gas = e["case"] == "baseline" or e["case"].startswith("gas")
         if gas and eu.get("heating", 0) + eu.get("dhw", 0) > 400:
             warn(f"가스 케이스 {kk} 난방+급탕 전력 {eu['heating'] + eu['dhw']:.0f} kWh (보일러 보조전력만 있어야 함)")

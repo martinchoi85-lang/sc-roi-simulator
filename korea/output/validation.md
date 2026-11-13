@@ -1,4 +1,4 @@
-run_id: 20261112T010017_63ea749_312e7f7a
+run_id: 20261113T142006_d3b6ea5-dirty_312e7f7a
 
 # LG Smart Cottage 한국 검증 보고서 (validation.md)
 
@@ -275,9 +275,9 @@ run_id: 20261112T010017_63ea749_312e7f7a
 ## 8. 단계별 소요 시간 표
 | 단계 | 단계명 | 소요 시간(초) | 상태 |
 |---|---|---|---|
-| 1 | 부하·재실 (Load & Occupancy TUS) | 0.08s | 캐시 로드 |
-| 2 | 열 계산 (Thermal / HVAC / DHW) | 0.06s | 캐시 로드 |
+| 1 | 부하·재실 (Load & Occupancy TUS) | 0.28s | 캐시 로드 |
+| 2 | 열 계산 (Thermal / HVAC / DHW) | 0.05s | 캐시 로드 |
 | 3 | 디스패치·사이징 (Dispatch & Sizing) | 0.01s | 캐시 로드 |
-| 4 | 현금흐름·민감도 (Cashflow & Sensitivities) | 0.82s | 계산 완료 |
-| 5 | report_data·빌드 (Report Data & Build) | 88.57s | 계산 완료 |
-| **총합** | **전체 파이프라인** | **89.54s** | - |
+| 4 | 현금흐름·민감도 (Cashflow & Sensitivities) | 1.90s | 계산 완료 |
+| 5 | report_data·빌드 (Report Data & Build) | 85.91s | 계산 완료 |
+| **총합** | **전체 파이프라인** | **88.15s** | - |
