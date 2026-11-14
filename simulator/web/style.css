@@ -152,3 +152,8 @@ table#tbl{border-collapse:separate;border-spacing:0;font-size:12px;min-width:100
 .st.P{background:#fde8ea;color:var(--bad)}
 .st.A{background:#eef1f5;color:var(--sub)}
 .st.I{background:#e8f0fb;color:#1c5cab}
+
+.wrapseg{display:flex;flex-wrap:wrap;margin:6px 0 4px;border:0;gap:4px;background:transparent}
+.wrapseg button{border:1px solid var(--line)!important;border-radius:14px;padding:3px 11px}
+.autonote{font-size:11px;color:var(--muted);margin:-4px 0 8px;text-align:right}
+.cs b{font-weight:500;color:var(--ink)}

@@ -112,17 +112,8 @@
   }
 
   // ---------------- 상태 표시 ----------------
-  function changed() {
-    const s1 = conf.l1 === snap1(), s2 = conf.l2 === snap2(), s3 = conf.l3 === snap3();
-    const set = (id, ok, txt) => { const b = $(id); b.className = 'badge ' + (ok ? 'ok' : 'wait'); b.textContent = ok ? '✓ 확정' : txt; };
-    set('#b1', s1, '변경됨 · 확인 필요'); set('#b2', s1 && s2, conf.l2 ? '변경됨 · 확인 필요' : '확인 필요'); set('#b3', s1 && s2 && s3, '실행 필요');
-    $('#ok1').classList.toggle('pulse', !s1); $('#ok2').classList.toggle('pulse', s1 && !s2); $('#ok3').classList.toggle('pulse', s1 && s2 && !s3);
-    const stale = !(s1 && s2 && s3) && R3;
-    $('#results').classList.toggle('dim', !!stale);
-    const n = $('#staleNote'); n.classList.toggle('show', !!stale);
-    if (stale) n.textContent = !s1 ? '1단계 조건이 바뀌었습니다. 아래 결과는 이전 조건 기준입니다. 확인 또는 시뮬레이션 실행을 누르면 갱신됩니다.' :
-      !s2 ? '2단계 설비 조건이 바뀌었습니다. 아래 결과는 이전 조건 기준입니다.' : '3단계 요금 조건이 바뀌었습니다. 시뮬레이션 실행을 누르면 갱신됩니다.';
-  }
+  let _deb = null;
+  function changed() { clearTimeout(_deb); _deb = setTimeout(() => run(3), 120); }
 
   // ---------------- 계산 ----------------
   async function confirm1() {
@@ -156,7 +147,7 @@
       const do3 = do2 && (level >= 3 || conf.l3 === snap3());
       if (do2) { R2 = E.level2(L1, META.pv1kw_kwh, params()); conf.l2 = snap2(); }
       if (do3) { R3 = E.simulate(L1, META.pv1kw_kwh, params()); conf.l3 = snap3(); }
-      changed(); renderAll();
+      renderAll();
     } catch (err) { flash('오류: ' + err.message); console.error(err); }
   }
 
@@ -324,11 +315,23 @@
     o.dhw = aw ? c.aw_dhw : new Float64Array(E.H);
     return o;
   }
+  const ORANGE = ['#fdeee6', '#fbd3bf', '#f6ae8c', '#f08a5d', '#eb6834', '#c94f20', '#9e3b14', '#6e290d'];
+  const HEAT_DESC = {
+    before: '기준안 = 지금 상태(가스보일러 난방·급탕, PV·ESS 없음)의 시간별 전력 소비. 가전·조명·냉방만 전기를 씁니다.',
+    after: '도입안 = 1단계에서 고른 난방 방식의 시간별 전력 소비. AWHP 도입이면 AWHP 난방·급탕 전력이 더해집니다. PV 발전·HEMS 절감을 빼기 전 값.',
+    heat: '난방이 켜진 시간만 색칠(회색 = 꺼짐). 색이 진할수록 그 시간 난방에 쓴 에너지가 큼.',
+    gas: '기준안(가스보일러)의 시간별 프로판 소비. 난방 + 급탕.',
+    pv: '현재 PV 용량 기준 1년 차 시간별 발전량.', tin: '도입안 기준 실내 온도(난방·냉방 운전 결과).', tout: 'TMY 외기 온도.', occ: '집에 있는 인원(수면 포함).',
+  };
   function heatSeries(mode) {
     const c = combo.ch;
     switch (mode) {
-      case 'after': return { a: L1.after.elec, unit: 'kWh', name: '전력 사용 (설치 후, HEMS 전)' };
-      case 'before': return { a: L1.before.elec, unit: 'kWh', name: '전력 사용 (설치 전)' };
+      case 'after': return { a: L1.after.elec, unit: 'kWh', name: `도입안 전력 소비 (${L1.awhp ? 'AWHP 난방' : '가스보일러 유지'})` };
+      case 'before': return { a: L1.before.elec, unit: 'kWh', name: '기준안 전력 소비 (가스보일러)' };
+      case 'heat': {
+        if (L1.awhp) return { a: c.aw_heat.map((v, h) => v + c.aw_backup[h]), unit: 'kWh', name: '난방 가동 · AWHP 난방 전력 (보조히터 포함)', ramp: ORANGE, offZero: true };
+        return { a: c.heat_th_base, unit: 'kWh열', name: '난방 가동 · 가스보일러 난방 열량', ramp: ORANGE, offZero: true };
+      }
       case 'gas': return { a: L1.before.gas, unit: 'kg', name: '프로판 (설치 전)' };
       case 'pv': { const kw = (R3 ? R3.kpi.pvKw : S.pvN * 0.4) || 1; return { a: META.pv1kw_kwh.map(v => v * kw), unit: 'kWh', name: `PV 발전 (${kw.toFixed(1)} kW, 1년 차)` }; }
       case 'tin': return { a: S.awhp ? c.t_in_aw : c.t_in_base, unit: '°C', name: '실내 온도', temp: true };
@@ -347,9 +350,9 @@
       kpiHTML('재실일', rec.occupied_days, '일', `이용률 ${Math.round(S.rate * 100)}%`) + kpiHTML('PV 1kW 연간 발전', f0(E.sum(META.pv1kw_kwh)), 'kWh/kW', '경사 25°, 정남향');
     // 히트맵 보기 전환
     const hv = $('#heatView');
-    if (!hv._built) { seg(hv, [['after', '전력(후)'], ['before', '전력(전)'], ['gas', '프로판'], ['pv', 'PV'], ['tin', '실내온도'], ['tout', '외기온도'], ['occ', '재택인원']], () => heatMode, v => { heatMode = v; }); hv.addEventListener('click', () => drawHeat()); hv._built = 1; }
+    if (!hv._built) { seg(hv, [['before', '기준안 전력'], ['after', '도입안 전력'], ['heat', '난방 가동'], ['gas', '프로판'], ['pv', 'PV 발전'], ['tin', '실내 온도'], ['tout', '외기 온도'], ['occ', '재택 인원']], () => heatMode, v => { heatMode = v; }); hv.addEventListener('click', () => drawHeat()); hv._built = 1; }
     const ev = $('#euView');
-    if (!ev._built) { seg(ev, [['after', '설치 후'], ['before', '설치 전']], () => euMode, v => { euMode = v; }); ev.addEventListener('click', () => drawEU()); ev._built = 1; }
+    if (!ev._built) { seg(ev, [['after', '도입안'], ['before', '기준안']], () => euMode, v => { euMode = v; }); ev.addEventListener('click', () => drawEU()); ev._built = 1; }
     drawHeat(); drawEU();
     // 가스
     const gm = E.sumMonthly(combo.ch.gas_heat_kg), dm = E.sumMonthly(combo.ch.gas_dhw_kg);
@@ -359,23 +362,24 @@
   }
   function dateLabel(d) { const dt = new Date(2026, 0, 1 + d); return `${dt.getMonth() + 1}월 ${dt.getDate()}일(${'일월화수목금토'[dt.getDay()]})`; }
   function drawHeat() {
-    const { a, unit, name, temp } = heatSeries(heatMode), box = $('#heat');
+    const { a, unit, name, temp, ramp, offZero } = heatSeries(heatMode), box = $('#heat'), RAMP = ramp || SEQ;
     $('#heatTitle').textContent = '연간 시간별 히트맵 · ' + name;
+    $('#heatDesc').textContent = HEAT_DESC[heatMode];
     let mn = Infinity, mx = -Infinity; for (const v of a) { mn = Math.min(mn, v); mx = Math.max(mx, v); }
-    if (!temp) { mn = 0; const s = Array.from(a).sort((p, q) => p - q); mx = Math.max(s[Math.floor(s.length * 0.995)], 1e-6); }
+    if (!temp) { mn = 0; const s = Array.from(a).filter(v => !offZero || v > 1e-4).sort((p, q) => p - q); mx = Math.max(s[Math.floor(s.length * 0.995)] || 0, 1e-6); }
     const cw = 3, ch = 9, L = 34, W = L + 365 * cw + 70, Hh = 24 * ch + 22;
     box.innerHTML = `<canvas width="${W * 2}" height="${Hh * 2}" style="aspect-ratio:${W}/${Hh}"></canvas>`;
     const cv = box.querySelector('canvas'), g = cv.getContext('2d'); g.scale(2, 2);
-    const col = v => { const t = Math.max(0, Math.min(1, (v - mn) / (mx - mn || 1))); const i = t * (SEQ.length - 1), k = Math.floor(i), f = i - k; if (k >= SEQ.length - 1) return SEQ[SEQ.length - 1]; const p = hx(SEQ[k]), q = hx(SEQ[k + 1]); return `rgb(${p.map((x, j) => Math.round(x + (q[j] - x) * f)).join(',')})`; };
+    const col = v => { if (offZero && v <= 1e-4) return '#eceef1'; const t = Math.max(0, Math.min(1, (v - mn) / (mx - mn || 1))); const i = (offZero ? 0.15 + 0.85 * t : t) * (RAMP.length - 1), k = Math.floor(i), f = i - k; if (k >= RAMP.length - 1) return RAMP[RAMP.length - 1]; const p = hx(RAMP[k]), q = hx(RAMP[k + 1]); return `rgb(${p.map((x, j) => Math.round(x + (q[j] - x) * f)).join(',')})`; };
     for (let d = 0; d < 365; d++) for (let h = 0; h < 24; h++) { g.fillStyle = col(a[d * 24 + h]); g.fillRect(L + d * cw, h * ch, cw, ch); }
     g.fillStyle = COL.txt; g.font = '10px sans-serif'; g.textAlign = 'right';
     [0, 6, 12, 18, 23].forEach(h => g.fillText(h + '시', L - 4, h * ch + 8));
     g.textAlign = 'left'; let d0 = 0; MON.forEach((m, i) => { g.fillText(m, L + d0 * cw + 2, 24 * ch + 14); d0 += E.MDAYS[i]; });
     g.strokeStyle = COL.ink; g.lineWidth = 1.2; g.strokeRect(L + selDay * cw - 0.5, -0.5 + 0.5, cw + 1, 24 * ch);
-    for (let i = 0; i < 40; i++) { g.fillStyle = col(mn + (mx - mn) * (39 - i) / 39); g.fillRect(L + 365 * cw + 14, i * (24 * ch / 40), 10, 24 * ch / 40 + 0.5); }
+    for (let i = 0; i < 40; i++) { g.fillStyle = col(Math.max(offZero ? 1e-3 : -1e9, mn + (mx - mn) * (39 - i) / 39)); g.fillRect(L + 365 * cw + 14, i * (24 * ch / 40), 10, 24 * ch / 40 + 0.5); }
     g.fillStyle = COL.txt; g.fillText((temp ? mx.toFixed(0) : mx.toFixed(1)) + ' ' + unit, L + 365 * cw + 28, 8); g.fillText((temp ? mn.toFixed(0) : '0') + ' ' + unit, L + 365 * cw + 28, 24 * ch);
     const pos = e => { const r = cv.getBoundingClientRect(), sx = (e.clientX - r.left) / r.width * W, sy = (e.clientY - r.top) / r.height * Hh; const d = Math.floor((sx - L) / cw), h = Math.floor(sy / ch); return (d >= 0 && d < 365 && h >= 0 && h < 24) ? [d, h] : null; };
-    cv.onmousemove = e => { const p = pos(e); if (!p) return hideTip(); showTip(e, `<b>${dateLabel(p[0])} ${p[1]}시</b><br>${name}: ${(+a[p[0] * 24 + p[1]]).toFixed(2)} ${unit}<br>${combo.occDays[p[0]] ? '재실일' : '비재실일'}`); };
+    cv.onmousemove = e => { const p = pos(e); if (!p) return hideTip(); const i = p[0] * 24 + p[1], v = +a[i]; const extra = heatMode === 'heat' ? (v > 1e-4 ? `<br>설정 ${combo.ch.t_set[i].toFixed(1)}°C · 실내 ${(L1.awhp ? combo.ch.t_in_aw : combo.ch.t_in_base)[i].toFixed(1)}°C · 외기 ${META.temp_out[i].toFixed(1)}°C` : '<br>난방 꺼짐') : ''; showTip(e, `<b>${dateLabel(p[0])} ${p[1]}시</b><br>${name}: ${v.toFixed(2)} ${unit}${extra}<br>${combo.occDays[p[0]] ? '재실일' : '비재실일'}`); };
     cv.onmouseleave = hideTip; cv.onclick = e => { const p = pos(e); if (p) { selDay = p[0]; drawHeat(); drawDay(); drawOcc(); } };
   }
   function hx(c) { return [1, 3, 5].map(i => parseInt(c.substr(i, 2), 16)); }
@@ -422,7 +426,7 @@
 
   // ---------------- CSV ----------------
   const framed = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
-  function flash(msg) { const n = $('#staleNote'); n.textContent = msg; n.classList.add('show'); setTimeout(changed, 3500); }
+  function flash(msg) { const n = $('#staleNote'); n.textContent = msg; n.classList.add('show'); setTimeout(() => n.classList.remove('show'), 3500); }
   function download(name, text) {
     if (framed) { // claude.ai 아티팩트 안에서는 다운로드가 막혀 있어 클립보드로 복사
       navigator.clipboard.writeText(text).then(() => flash(`CSV(${name})를 클립보드에 복사했습니다. 엑셀에 붙여넣기 하세요.`), () => flash('이 화면에서는 CSV 저장·복사가 막혀 있습니다. 오프라인 버전(zip)에서 내보내기를 사용하세요.'));
@@ -498,7 +502,6 @@ ${D.costFields.filter(f => f[0] !== 'g').map(f => `<tr><td>${f[1].replace(/<[^>]
   function boot() {
     buildInputs();
     $$('#tabs a').forEach(a => a.onclick = () => { $$('#tabs a').forEach(x => x.classList.toggle('on', x === a)); $$('.tab').forEach(t => t.hidden = t.id !== 'tab-' + a.dataset.tab); if (a.dataset.tab === 'data') renderData(); scrollTo(0, 0); });
-    $('#ok1').onclick = () => run(1); $('#ok2').onclick = () => run(2); $('#ok3').onclick = () => run(3);
     $('#csvBtn').onclick = csvYears; $('#csvHour').onclick = csvHours;
     if (framed) { $('#csvBtn').textContent = 'CSV 복사'; $('#csvHour').textContent = '이 조합의 8,760시간 데이터 CSV 복사'; }
     $('#dataVer').textContent = window.SCREGIONS_VER ? '데이터 ' + window.SCREGIONS_VER : '';

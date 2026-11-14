@@ -30,17 +30,17 @@
 <aside class="inputs">
 
   <div class="card lv" id="lv1">
-    <div class="lvh"><div class="num">1</div><h3>사용량 조건<small>시간별 전기·가스 사용량</small></h3><span class="badge" id="b1"></span></div>
+    <div class="lvh"><div class="num">1</div><h3>사용량 조건<small>시간별 전기·가스 사용량</small></h3></div>
     <div class="row"><label>SC 모델</label><div class="seg" data-k="house"></div></div>
     <div class="row"><label>거주자 수</label><div class="seg" data-k="occ"></div></div>
     <div class="row"><label>연간 이용률</label><div class="seg" data-k="rate"></div></div>
     <div class="row"><label>지역</label><select id="region"></select></div>
     <div class="row"><label>난방</label><div class="seg" data-k="awhp"></div></div>
-    <button class="go ghost" id="ok1">확인 · 사용량 불러오기</button>
+    
   </div>
 
   <div class="card lv" id="lv2">
-    <div class="lvh"><div class="num">2</div><h3>설비 구성<small>에너지 자립률 · CAPEX</small></h3><span class="badge" id="b2"></span></div>
+    <div class="lvh"><div class="num">2</div><h3>설비 구성<small>에너지 자립률 · CAPEX</small></h3></div>
     <div class="row"><label>PV 모듈 <em>400W</em></label><div class="stepper" data-k="pvN" data-min="0" data-max="60"></div></div>
     <div class="row"><label>ESS 모듈 <em>5kWh</em></label><div class="stepper" data-k="essN" data-min="0" data-max="12"></div></div>
     <div class="row"><label>PV 열화</label><div class="slider" data-k="pvDeg" data-min="0" data-max="10" data-step="0.1" data-unit="%/년"></div></div>
@@ -60,11 +60,11 @@
       <summary>단가 · 보조금 (상사 입력값, 원)</summary>
       <div class="advgrid" id="costGrid"></div>
     </details>
-    <button class="go ghost" id="ok2">확인 · 자립률/CAPEX 계산</button>
+    
   </div>
 
   <div class="card lv" id="lv3">
-    <div class="lvh"><div class="num">3</div><h3>요금 · 기간<small>연도별 OPEX · 이득</small></h3><span class="badge" id="b3"></span></div>
+    <div class="lvh"><div class="num">3</div><h3>요금 · 기간<small>연도별 OPEX · 이득</small></h3></div>
     <div class="row"><label>전기요금제</label><select id="tariffSel"></select></div>
     <div id="touBox" class="toubox"></div>
     <div class="row"><label>매전 방식</label><div class="seg" data-k="exportMode"></div></div>
@@ -77,12 +77,13 @@
     <div class="row"><label>프로판 단가</label><div class="inl"><input type="text" data-k="gasPrice" inputmode="decimal"> 원/kg</div></div>
     <div class="row"><label>유지보수비</label><div class="inl">초기 CAPEX의 <input type="text" data-k="omPct" inputmode="decimal"> %/년</div></div>
     <div class="row"><label>분석 기간</label><div class="slider" data-k="years" data-min="5" data-max="20" data-step="1" data-unit="년"></div></div>
-    <button class="go" id="ok3">▶ 시뮬레이션 실행</button>
+    
   </div>
 </aside>
 
 <div class="results" id="results">
   <div class="stale" id="staleNote"></div>
+  <div class="autonote">조건을 바꾸면 바로 다시 계산됩니다.</div>
   <div class="kpis" id="kpis"></div>
   <div class="grid2">
     <div class="card">
@@ -129,14 +130,14 @@
   <div class="dgrid">
     <div>
       <div class="card">
-        <div class="ct row2"><span id="heatTitle">연간 시간별 히트맵</span>
-          <span class="seg small" id="heatView"></span></div>
-        <div class="cs">가로 = 날짜(1~12월), 세로 = 시각(0~23시). 색이 진할수록 값이 큼. 마우스를 올리면 값, 클릭하면 오른쪽에 그날 상세.</div>
+        <div class="ct" id="heatTitle">연간 시간별 히트맵</div>
+        <div class="seg small wrapseg" id="heatView"></div>
+        <div class="cs"><b id="heatDesc"></b><br>가로 = 날짜(1~12월), 세로 = 시각(0~23시). 마우스를 올리면 값, 클릭하면 오른쪽에 그날 상세.</div>
         <div id="heat" class="heat"></div>
       </div>
       <div class="card">
         <div class="ct row2">월별 용도별 전력 사용량 <span class="seg small" id="euView"></span></div>
-        <div class="cs">kWh. 냉장고·환기·대기에는 AWHP 대기전력 포함. HEMS 절감 반영 전 값.</div>
+        <div class="cs">kWh. 기준안 = 가스보일러(현재), 도입안 = 1단계에서 고른 난방. 냉장고·환기·대기에는 AWHP 대기전력 포함. HEMS 절감 반영 전 값.</div>
         <div class="legend" id="legEu"></div>
         <div id="chEu" class="chart"></div>
       </div>
