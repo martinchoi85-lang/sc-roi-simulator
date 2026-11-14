@@ -1,0 +1,6 @@
+[
+ {"key":"C72_3_100","awhp":true,"pvN":8,"essN":1,"pvDeg":0.5,"essDeg":2.5,"pvRepl":80,"essRepl":70,"hems":{"on":true,"winter":8,"summer":6,"mid":3},"tariff":"kr_prog","exportMode":"net","escE":3,"escG":2,"years":20,"awhpLife":15,"invLife":12,"omPct":0.5},
+ {"key":"C54_1_30","awhp":false,"pvN":5,"essN":0,"pvDeg":1,"essDeg":0,"pvRepl":80,"essRepl":70,"hems":{"on":false,"winter":0,"summer":0,"mid":0},"tariff":"kr_prog","exportMode":"fit","fitPrice":100,"escE":5,"escG":0,"years":20,"awhpLife":0,"invLife":10,"omPct":0},
+ {"key":"D45_2_70","awhp":true,"pvN":12,"essN":3,"pvDeg":0.7,"essDeg":4,"pvRepl":85,"essRepl":60,"hems":{"on":true,"winter":10,"summer":10,"mid":5},"tariff":"kr_tou","exportMode":"tou","escE":2,"escG":4,"years":20,"awhpLife":10,"invLife":8,"omPct":1,"essMode":"tou","gridCharge":true},
+ {"key":"C72_2_50","awhp":true,"pvN":0,"essN":2,"pvDeg":0.5,"essDeg":2.5,"pvRepl":80,"essRepl":70,"hems":{"on":false,"winter":0,"summer":0,"mid":0},"tariff":"kr_tou","exportMode":"net","escE":3,"escG":3,"years":15,"awhpLife":0,"invLife":0,"omPct":0,"essMode":"self"}
+]

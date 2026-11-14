@@ -1,0 +1,8 @@
+{"pvModW":400,"essModKwh":5,"essRte":0.9,"essCrate":0.5,"gasPrice":2812.26,"fitPrice":100,"touExportRatio":1.0,"essMode":"self","gridCharge":false,"hemi":"N",
+ "cost":{"pvPerKw":1513667,"pvReplPerKw":1513667,"essPerKwh":1775200,"essReplPerKwh":396200,"awhp":14000000,"awhpRepl":14000000,"invPerKw":250000,"invMin":750000,"hems":1000000,"hemsInclude":true,"misc":0,"subPV":2650000,"subESS":0,"subAWHP":0,"subHEMS":0},
+ "tariffs":{
+  "kr_prog":{"type":"kr_prog","kr":{"baseStd":[910,1600,7300],"baseSummer":[910,1600,7300],"energyStd":[120,214.6,307.3],"energySummer":[120,214.6,307.3],"superKwh":1000,"superRate":736.2,"climate":9,"fuel":5,"vat":0.1,"fund":0.027}},
+  "kr_tou":{"type":"tou","tou":{"baseFee":910,"addPerKwh":14,"krTax":true,"weekendOffpeak":false,
+     "rates":[[120,170,170],[120,170,276],[120,170,204]],
+     "hours":[[0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0],[0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,1,1,1,1,1,0,0],[0,0,0,0,0,0,0,0,1,2,2,2,1,1,1,1,1,1,1,1,1,1,0,0]]}}
+ }}

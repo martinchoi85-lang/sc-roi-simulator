@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LG Smart Cottage ROI 시뮬레이터</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="logo"><i></i>Smart Cottage ROI 시뮬레이터</div>
+  <nav id="tabs">
+    <a data-tab="sim" class="on">① 시뮬레이터</a>
+    <a data-tab="data">② 1년 데이터</a>
+    <a data-tab="info">③ 가정·출처</a>
+  </nav>
+  <div class="hright">
+    <label class="cur">표시 통화
+      <select id="curSel"><option value="KRW">원 (KRW)</option><option value="USD">USD</option><option value="AUD">AUD</option></select>
+    </label>
+    <label class="fx">1 USD = <input id="fxUSD" type="text" inputmode="decimal" value="1,400"> 원</label>
+    <label class="fx">1 AUD = <input id="fxAUD" type="text" inputmode="decimal" value="900"> 원</label>
+    <span class="ver" id="dataVer"></span>
+  </div>
+</header>
+
+<!-- ======================= 시뮬레이터 ======================= -->
+<section id="tab-sim" class="tab">
+<main class="simgrid">
+<aside class="inputs">
+
+  <div class="card lv" id="lv1">
+    <div class="lvh"><div class="num">1</div><h3>사용량 조건<small>시간별 전기·가스 사용량</small></h3><span class="badge" id="b1"></span></div>
+    <div class="row"><label>SC 모델</label><div class="seg" data-k="house"></div></div>
+    <div class="row"><label>거주자 수</label><div class="seg" data-k="occ"></div></div>
+    <div class="row"><label>연간 이용률</label><div class="seg" data-k="rate"></div></div>
+    <div class="row"><label>지역</label><select id="region"></select></div>
+    <div class="row"><label>난방</label><div class="seg" data-k="awhp"></div></div>
+    <button class="go ghost" id="ok1">확인 · 사용량 불러오기</button>
+  </div>
+
+  <div class="card lv" id="lv2">
+    <div class="lvh"><div class="num">2</div><h3>설비 구성<small>에너지 자립률 · CAPEX</small></h3><span class="badge" id="b2"></span></div>
+    <div class="row"><label>PV 모듈 <em>400W</em></label><div class="stepper" data-k="pvN" data-min="0" data-max="60"></div></div>
+    <div class="row"><label>ESS 모듈 <em>5kWh</em></label><div class="stepper" data-k="essN" data-min="0" data-max="12"></div></div>
+    <div class="row"><label>PV 열화</label><div class="slider" data-k="pvDeg" data-min="0" data-max="10" data-step="0.1" data-unit="%/년"></div></div>
+    <div class="row"><label>ESS 열화</label><div class="slider" data-k="essDeg" data-min="0" data-max="10" data-step="0.1" data-unit="%/년"></div></div>
+    <div class="row"><label>PV 교체 기준</label><div class="slider" data-k="pvRepl" data-min="50" data-max="99" data-step="1" data-unit="% 출력"></div></div>
+    <div class="row"><label>ESS 교체 기준</label><div class="slider" data-k="essRepl" data-min="50" data-max="99" data-step="1" data-unit="% SOH"></div></div>
+    <div class="row"><label>AWHP 수명</label><select data-k="awhpLife" class="life"></select></div>
+    <div class="row"><label>인버터 수명</label><select data-k="invLife" class="life"></select></div>
+    <div class="row"><label>HEMS</label><label class="tog"><input type="checkbox" data-k="hemsOn"><i></i><span>적용 · 계절별 전력 절감률</span></label></div>
+    <div class="hems" id="hemsBox">
+      <div>동절기 12~2월<input type="text" data-k="hemsWinter" inputmode="decimal"><b>%</b></div>
+      <div>하절기 6~8월<input type="text" data-k="hemsSummer" inputmode="decimal"><b>%</b></div>
+      <div>간절기<input type="text" data-k="hemsMid" inputmode="decimal"><b>%</b></div>
+      <label class="chk"><input type="checkbox" data-k="hemsInclude"> HEMS 비용을 CAPEX에 포함</label>
+    </div>
+    <details class="adv" id="advCost">
+      <summary>단가 · 보조금 (상사 입력값, 원)</summary>
+      <div class="advgrid" id="costGrid"></div>
+    </details>
+    <button class="go ghost" id="ok2">확인 · 자립률/CAPEX 계산</button>
+  </div>
+
+  <div class="card lv" id="lv3">
+    <div class="lvh"><div class="num">3</div><h3>요금 · 기간<small>연도별 OPEX · 이득</small></h3><span class="badge" id="b3"></span></div>
+    <div class="row"><label>전기요금제</label><select id="tariffSel"></select></div>
+    <div id="touBox" class="toubox"></div>
+    <div class="row"><label>매전 방식</label><div class="seg" data-k="exportMode"></div></div>
+    <div class="row" id="fitRow"><label>FIT 단가</label><div class="inl"><input type="text" data-k="fitPrice" inputmode="decimal"> 원/kWh <span class="hint">고정, 인상률 미적용</span></div></div>
+    <div class="row" id="touExpRow"><label>TOU 매전 단가</label><div class="inl">해당 시간대 수전 단가의 <input type="text" data-k="touExportPct" inputmode="decimal"> %</div></div>
+    <div class="row" id="essModeRow"><label>ESS 운전</label><div class="seg" data-k="essMode"></div></div>
+    <div class="row" id="gridChgRow"><label></label><label class="chk"><input type="checkbox" data-k="gridCharge"> 경부하 시간 계통 충전 허용</label></div>
+    <div class="row"><label>전기요금 인상</label><div class="slider" data-k="escE" data-min="0" data-max="10" data-step="0.5" data-unit="%/년"></div></div>
+    <div class="row"><label>가스요금 인상</label><div class="slider" data-k="escG" data-min="0" data-max="10" data-step="0.5" data-unit="%/년"></div></div>
+    <div class="row"><label>프로판 단가</label><div class="inl"><input type="text" data-k="gasPrice" inputmode="decimal"> 원/kg</div></div>
+    <div class="row"><label>유지보수비</label><div class="inl">초기 CAPEX의 <input type="text" data-k="omPct" inputmode="decimal"> %/년</div></div>
+    <div class="row"><label>분석 기간</label><div class="slider" data-k="years" data-min="5" data-max="20" data-step="1" data-unit="년"></div></div>
+    <button class="go" id="ok3">▶ 시뮬레이션 실행</button>
+  </div>
+</aside>
+
+<div class="results" id="results">
+  <div class="stale" id="staleNote"></div>
+  <div class="kpis" id="kpis"></div>
+  <div class="grid2">
+    <div class="card">
+      <div class="ct">누적 순이익 <span class="sub">(누적 이득 − 누적 CAPEX)</span></div>
+      <div class="cs">막대 = 연도별 이득과 CAPEX(설치·교체), 선 = 누적 순이익. 선이 0을 넘는 해가 회수 연도.</div>
+      <div class="legend" id="legCum"></div>
+      <div id="chCum" class="chart"></div>
+    </div>
+    <div class="card">
+      <div class="ct">1년 차 월별 에너지 흐름</div>
+      <div class="cs">설치 후 전력 사용량, PV 발전량, 계통 수전·역송 (kWh)</div>
+      <div class="legend" id="legMon"></div>
+      <div id="chMon" class="chart"></div>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <div class="ct">1년 차 월별 에너지 비용 <span class="sub">(전기 + 가스)</span></div>
+      <div class="cs">설치 전(기준안)과 설치 후. 설치 후 매전 수익은 차감.</div>
+      <div class="legend" id="legBill"></div>
+      <div id="chBill" class="chart"></div>
+    </div>
+    <div class="card" id="capexCard">
+      <div class="ct">초기 CAPEX 구성</div>
+      <div class="cs">2단계 확인 시 계산. 단가·보조금은 왼쪽 "단가 · 보조금"에서 수정.</div>
+      <div id="capexList"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ct row2">연도별 CAPEX · OPEX · 연간 이득 <span class="sub" id="unitNote"></span>
+      <button class="btn-o" id="csvBtn">CSV 내보내기</button></div>
+    <div class="tblwrap"><table id="tbl"></table></div>
+    <div class="note" id="tblNote"></div>
+  </div>
+</div>
+</main>
+</section>
+
+<!-- ======================= 1년 데이터 ======================= -->
+<section id="tab-data" class="tab" hidden>
+<div class="dmain">
+  <div class="ctx card" id="dctx"></div>
+  <div class="kpis six" id="dkpis"></div>
+  <div class="dgrid">
+    <div>
+      <div class="card">
+        <div class="ct row2"><span id="heatTitle">연간 시간별 히트맵</span>
+          <span class="seg small" id="heatView"></span></div>
+        <div class="cs">가로 = 날짜(1~12월), 세로 = 시각(0~23시). 색이 진할수록 값이 큼. 마우스를 올리면 값, 클릭하면 오른쪽에 그날 상세.</div>
+        <div id="heat" class="heat"></div>
+      </div>
+      <div class="card">
+        <div class="ct row2">월별 용도별 전력 사용량 <span class="seg small" id="euView"></span></div>
+        <div class="cs">kWh. 냉장고·환기·대기에는 AWHP 대기전력 포함. HEMS 절감 반영 전 값.</div>
+        <div class="legend" id="legEu"></div>
+        <div id="chEu" class="chart"></div>
+      </div>
+      <div class="card">
+        <div class="ct">월별 프로판 사용량 (설치 전 · 가스보일러)</div>
+        <div class="cs">kg. AWHP 도입 시 설치 후 프로판은 0.</div>
+        <div class="legend" id="legGas"></div>
+        <div id="chGas" class="chart"></div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="ct" id="dayTitle">선택일 상세</div>
+        <div class="cs">설치 후 용도별 전력 (kWh/h). 2단계를 확정했으면 PV 발전량을 선으로 표시.</div>
+        <div class="legend" id="legDay"></div>
+        <div id="chDay" class="chart"></div>
+        <div class="ct small">거주자별 일과</div>
+        <div id="chPpl" class="chart"></div>
+        <div class="ct small">외기 · 실내 · 설정 온도 (°C)</div>
+        <div class="legend" id="legTmp"></div>
+        <div id="chTmp" class="chart"></div>
+      </div>
+      <div class="card">
+        <div class="ct" id="occTitle">재실 달력</div>
+        <div class="cs">재실일 우선순위: 토·일·공휴일 → 금·공휴일 전날 → 월·공휴일 다음날 → 평일. 칸을 클릭하면 그날 상세.</div>
+        <div id="occCal" class="occ"></div>
+        <div class="legend"><span><i style="background:var(--s1)"></i>재실</span><span><i style="background:#e3e6ea"></i>비재실 (실내 10°C 유지)</span></div>
+      </div>
+      <button class="btn-o wide" id="csvHour">이 조합의 8,760시간 데이터 CSV 내보내기</button>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ======================= 가정·출처 ======================= -->
+<section id="tab-info" class="tab" hidden>
+<div class="info card" id="infoBody"></div>
+</section>
+
+<div id="tip" class="tip" hidden></div>
+<script src="data/regions.js"></script>
+<script src="engine.js"></script>
+<script src="defaults.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

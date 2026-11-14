@@ -227,3 +227,7 @@ korea/cache/
 */cache/
 *.zip
 
+
+# simulator
+simulator/dist/
+simulator/**/__pycache__/

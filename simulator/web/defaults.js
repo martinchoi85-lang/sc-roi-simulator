@@ -1,0 +1,55 @@
+/* 기본값·프리셋. 모든 금액은 원(KRW). status: V=공식 확인(VERIFIED), U=미검증(UNVERIFIED), P=임시값(PLACEHOLDER), A=가정(ASSUMPTION), I=상사 입력 */
+window.SCDEF = {
+  regions: [
+    { id: 'kr_central', label: '한국 중부 · 춘천', country: 'KR', hemi: 'N' },
+    { id: 'kr_south', label: '한국 남부 · 광주', country: 'KR', hemi: 'N', pending: '광주 기상 파일 대기' },
+    { id: 'us_la', label: '미국 캘리포니아 · LA', country: 'US', hemi: 'N', pending: '데이터 확보 전' },
+    { id: 'au_mel', label: '호주 · 멜버른', country: 'AU', hemi: 'S', pending: '데이터 확보 전' },
+  ],
+  houses: [['MONO Core 54', 'C54', 'Core 54'], ['MONO Core 72', 'C72', 'Core 72'], ['DUO Max 45', 'D45', 'DUO Max 45']],
+  rates: [1.0, 0.7, 0.5, 0.3, 0.1],
+  lifeOptions: [8, 10, 12, 15, 20, 25, 30, 0],
+  init: {
+    house: 'MONO Core 72', occ: 3, rate: 1.0, region: 'kr_central', awhp: true,
+    pvN: 8, essN: 0, pvDeg: 0.5, essDeg: 3.0, pvRepl: 80, essRepl: 70, awhpLife: 15, invLife: 12,
+    hemsOn: false, hemsWinter: 5, hemsSummer: 5, hemsMid: 3, hemsInclude: true,
+    tariff: 'kr_prog', exportMode: 'net', fitPrice: 100, touExportPct: 100, essMode: 'self', gridCharge: false,
+    escE: 3, escG: 2, gasPrice: 2812.26, omPct: 0.5, years: 20,
+  },
+  fixed: { pvModW: 400, essModKwh: 5 },
+  // 단가·보조금 (상사가 고치는 값)
+  costFields: [
+    ['g', '설치 단가'],
+    ['pvPerKw', 'PV 설치 <small>원/kW</small>', 1513667, 'V', '3kW 이하 단가 비례(초과분도 같은 단가 가정). v10 확정값'],
+    ['essPerKwh', 'ESS 설치 <small>원/kWh</small>', 1775200, 'U', 'NREL 2021 미국 벤치마크 $1,268/kWh × 1,400원. 국내 근거 없음(가장 불확실)'],
+    ['awhp', 'AWHP 설치 <small>원</small>', 14000000, 'U', '난방전기화사업 기준 사업비 상한(주요설비 1,200만 + 전기·기타 200만)'],
+    ['hems', 'HEMS 도입비 <small>원</small>', 1000000, 'P', '근거 없음. 상사 입력용 임시값'],
+    ['misc', '부대공사비 <small>원</small>', 0, 'I', '배선·계약전력 증설 등. 기본 0원'],
+    ['g', '교체 단가'],
+    ['pvReplPerKw', 'PV 교체 <small>원/kW</small>', 1513667, 'A', '설치 단가와 동일 가정'],
+    ['essReplPerKwh', 'ESS 팩 교체 <small>원/kWh</small>', 396200, 'U', 'NREL ATB 2030 팩 단가 $283/kWh × 1,400원 (v10 교체 규칙)'],
+    ['awhpRepl', 'AWHP 교체 <small>원</small>', 14000000, 'A', '설치비와 동일 가정'],
+    ['invPerKw', '인버터 교체 <small>원/kW</small>', 250000, 'P', 'v10 임시값'],
+    ['invMin', '인버터 교체 최소 <small>원</small>', 750000, 'P', 'v10 임시값'],
+    ['g', '보조금 (설치 1년 차 차감)'],
+    ['subPV', 'PV 보조금 <small>원</small>', 0, 'I', '참고: 2026 춘천 3kW 기준 265만 원(공단 165만 + 시비 100만, VERIFIED)'],
+    ['subESS', 'ESS 보조금 <small>원</small>', 0, 'I', ''],
+    ['subAWHP', 'AWHP 보조금 <small>원</small>', 0, 'I', '참고: 춘천은 난방전기화사업 대상 아님(v10). 70% 지원 시 980만 원'],
+    ['subHEMS', 'HEMS 보조금 <small>원</small>', 0, 'I', ''],
+    ['g', 'ESS 성능'],
+    ['essRte', 'ESS 왕복효율 <small>0~1</small>', 0.9, 'V', 'LG RESU10H Prime'],
+    ['essCrate', 'ESS 충방전 C-rate <small>1/h</small>', 0.5, 'V', 'v10 장비 설정'],
+  ],
+  tariffs: {
+    kr_prog: { label: '주택용 저압 누진제 (한전)', country: 'KR', type: 'kr_prog',
+      kr: { baseStd: [910, 1600, 7300], baseSummer: [910, 1600, 7300], energyStd: [120, 214.6, 307.3], energySummer: [120, 214.6, 307.3], superKwh: 1000, superRate: 736.2, climate: 9, fuel: 5, vat: 0.1, fund: 0.027 } },
+    kr_tou: { label: '주택용 계시별 (가정값, 편집 가능)', country: 'KR', type: 'tou',
+      tou: { baseFee: 910, addPerKwh: 14, krTax: true, weekendOffpeak: false,
+        // [간절기, 하절기, 동절기] × [경부하, 중간부하, 최대부하]
+        rates: [[120, 170, 170], [120, 170, 276], [120, 170, 204]],
+        hours: [
+          [0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0],
+          [0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,1,1,1,1,1,0,0],
+          [0,0,0,0,0,0,0,0,1,2,2,2,1,1,1,1,1,1,1,1,1,1,0,0]] } },
+  },
+};
