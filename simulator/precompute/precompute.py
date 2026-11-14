@@ -32,7 +32,7 @@ REGIONS = {
                    "weather_src": "Climate.OneBuilding 춘천 471010 TMYx 2009-2023"},
     "kr_south": {"label": "한국 남부 · 광주", "country_dir": "korea",
                  "weather": "korea/source/tmy_gwangju_471560_15min.csv",
-                 "lat": 35.17, "lon": 126.89, "tz": "Asia/Seoul",
+                 "lat": 35.1731, "lon": 126.8917, "tz": "Asia/Seoul",
                  "weather_src": "Climate.OneBuilding 광주 471560 TMYx 2009-2023"},
 }
 HOUSES = ["MONO Core 54", "MONO Core 72", "DUO Max 45"]
