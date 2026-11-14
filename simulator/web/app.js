@@ -90,6 +90,7 @@
   }
   function paintHems() { $('#hemsBox').classList.toggle('off', !S.hemsOn); }
   const CUR_LABEL = { KRW: '원', USD: 'USD', AUD: 'AUD' };
+  const qEditor = (t, cu) => `<div class="inl" style="margin-top:4px">분기 조정요금(IRCA·VEA, ${cu}/kWh) ${['1~3월', '4~6월', '7~9월', '10~12월'].map((q, i) => `${q} <input type="text" data-q="${i}" value="${t.addVarQ[i]}" style="width:56px">`).join(' ')}</div>`;
   function paintL3() {
     const reg = region();
     $('#tariffSel').innerHTML = Object.entries(TARIFF).filter(([, t]) => t.country === reg.country).map(([k, t]) => `<option value="${k}">${t.label}</option>`).join('');
@@ -114,7 +115,7 @@
       const t = T.tou, sn = t.seasonNames || ['간절기', '하절기', '동절기'], pn = t.periodNames || ['경부하', '중간', '최대'], pc = ['#cde2fb', '#6da7ec', '#184f95'];
       h = `<table><tr><th>${cu}/kWh</th>${pn.map(p => `<th>${p}</th>`).join('')}</tr>` +
         sn.map((sname, i) => `<tr><th>${sname}</th>${[0, 1, 2].map(k => `<td>${inp(`data-ts="${i}" data-tp="${k}"`, t.rates[i][k])}</td>`).join('')}</tr>`).join('') + '</table>' +
-        `<div class="inl" style="margin-top:4px">${t.krTax || T.currency === 'KRW' ? `기본요금 ${inp('data-f="baseFee"', t.baseFee)} 원/월` : `월 기본료 ${inp('data-f="baseFee"', t.baseFee, 52)} · 일 기본료 ${inp('data-f="dailyFee"', t.dailyFee, 52)}`} · kWh당 추가 ${inp('data-f="addPerKwh"', t.addPerKwh, 60)}</div>` +
+        `<div class="inl" style="margin-top:4px">${t.krTax || T.currency === 'KRW' ? `기본요금 ${inp('data-f="baseFee"', t.baseFee)} 원/월` : `월 기본료 ${inp('data-f="baseFee"', t.baseFee, 52)} · 일 기본료 ${inp('data-f="dailyFee"', t.dailyFee, 52)}`}${t.addQ ? ` · 고정 조정요금 ${inp('data-f="addFixed"', t.addFixed, 60)}` : ` · kWh당 추가 ${inp('data-f="addPerKwh"', t.addPerKwh, 60)}`}</div>` + (t.addQ ? qEditor(t, cu) : '') +
         sn.map((sname, i) => `<div class="hrs"><b style="font-weight:500">${sname}</b>${t.hours[i].map((k, hh) => `<span style="background:${pc[k]}" title="${hh}시 ${pn[k]}"></span>`).join('')}</div>`).join('') +
         (T.country === 'KR' ? '<div class="warn">원/kWh 세전 단가. 시간대·배율은 2019년 한전 실증사업 일반형(하계 13~17시 2.3배, 동계 9~12시 1.7배)을 바탕으로 한 가정값. 한국 일반 가정에는 아직 전국 시행 요금표가 없음.</div>' : '');
     } else if (T.type === 'tiered') {
@@ -122,18 +123,20 @@
       h = `<table><tr><th>${cu}/kWh</th><th>1구간 ~${inp('data-lim="0"', t.limits[0], 44)}</th><th>2구간 ~${inp('data-lim="1"', t.limits[1], 44)}</th><th>3구간</th></tr>` +
         t.seasonNames.map((sname, i) => `<tr><th>${sname}</th>${[0, 1, 2].map(k => `<td>${inp(`data-ts="${i}" data-tp="${k}"`, t.rates[i][k])}</td>`).join('')}</tr>`).join('') +
         `<tr><th>월 정액(구간별)</th>${[0, 1, 2].map(k => `<td>${inp(`data-pac="${k}"`, t.pac[k])}</td>`).join('')}</tr></table>` +
-        `<div class="inl" style="margin-top:4px">최소요금 ${inp('data-f="minCharge"', t.minCharge, 44)} ${cu}/월 · 고정 조정요금 ${inp('data-f="addFixed"', t.addFixed, 60)} · 분기 조정요금 ${inp('data-f="addVar"', t.addVar, 52)} ${cu}/kWh</div>`;
+        `<div class="inl" style="margin-top:4px">최소요금 ${inp('data-f="minCharge"', t.minCharge, 44)} ${cu}/월 · 고정 조정요금(ECA·ESA·RCA) ${inp('data-f="addFixed"', t.addFixed, 60)} ${cu}/kWh</div>` + qEditor(t, cu);
     } else if (T.type === 'flat') {
       const t = T.flat;
       h = `<div class="inl">일 기본료 ${inp('data-f="dailyFee"', t.dailyFee, 60)} ${cu}/일 · 사용 단가 ${inp('data-f="rate"', t.rate, 60)} ${cu}/kWh</div>`;
     }
-    if (T.src) h += `<div class="warn" style="color:var(--sub)">출처: ${T.src}${T.country === 'US' ? '. 분기 조정요금(VEA·CRPSEA·VRPSEA·IRCA)은 문서에 값이 없어 임시값 — 현재 값 확인 필요' : ''}${T.country === 'AU' ? '. GST 포함. 매전(FiT)은 소매사가 정함 → 직접 입력' : ''}</div>`;
+    if (T.src) h += `<div class="warn" style="color:var(--sub)">출처: ${T.src}${T.country === 'US' ? '. 세금(공공요금세 등) 제외' : ''}${T.country === 'AU' ? '. GST 포함. 매전(FiT)은 소매사가 정함 → 직접 입력' : ''}</div>`;
     box.innerHTML = h;
     const tt = T.tou || T.tiered || T.flat;
     box.querySelectorAll('input[data-ts]').forEach(el => el.onchange = () => { tt.rates[+el.dataset.ts][+el.dataset.tp] = num(el.value); changed(); });
     box.querySelectorAll('input[data-lim]').forEach(el => el.onchange = () => { tt.limits[+el.dataset.lim] = num(el.value); changed(); });
     box.querySelectorAll('input[data-pac]').forEach(el => el.onchange = () => { tt.pac[+el.dataset.pac] = num(el.value); changed(); });
-    box.querySelectorAll('input[data-f]').forEach(el => el.onchange = () => { tt[el.dataset.f] = num(el.value); if ('addFixed' in tt) tt.addPerKwh = (tt.addFixed || 0) + (tt.addVar || 0); changed(); });
+    const syncAdd = () => { if (tt.addVarQ) tt.addQ = tt.addVarQ.map(v => (tt.addFixed || 0) + v); };
+    box.querySelectorAll('input[data-f]').forEach(el => el.onchange = () => { tt[el.dataset.f] = num(el.value); syncAdd(); changed(); });
+    box.querySelectorAll('input[data-q]').forEach(el => el.onchange = () => { tt.addVarQ[+el.dataset.q] = num(el.value); syncAdd(); changed(); });
     // HEMS 계절 이름(남반구는 반대)
     const hb = $$('#hemsBox > div'); const S_ = reg.hemi === 'S';
     hb[0].firstChild.textContent = S_ ? '동절기 6~8월' : '동절기 12~2월'; hb[1].firstChild.textContent = S_ ? '하절기 12~2월' : '하절기 6~8월';
@@ -511,7 +514,7 @@
 <li><b>호주(멜버른)</b>: ABS 2024 생활시간조사 공개표에는 시간대별 자료가 근무뿐이라, 근무 시간대는 ABS 값을, 나머지 활동은 캘리포니아 곡선 모양에 ABS 하루 평균 시간을 맞춰 썼습니다. 평일 출근 비율 남 83%·여 75%, 주말 근무 22%(취업자 비율 남 69%·여 61%로 환산).</li>
 <li>가전 구성·효율은 한국 SC와 같다고 가정했습니다(연간 사용량 보정값 동일). 사용 시간대만 현지 통계를 따릅니다.</li>
 <li>기상은 현지 표준시 기준이고 서머타임은 반영하지 않았습니다(여름철 생활 시각이 1시간 어긋날 수 있음).</li>
-<li>LADWP 요금은 2019-07-01 요금 요약 기준이며, 분기마다 바뀌는 조정요금(VEA 등)은 임시값입니다. 지방 공공요금세 등 세금은 제외. LADWP 상계는 남은 발전량을 이후 요금에서 차감(현금 환급 없음)하는 방식이라 월 상계·무기한 이월로 계산합니다.</li>
+<li>LADWP 기본 단가는 2019-07-01 요금 요약(현재 최신본), 조정요금은 2026년 분기별 값(ECA·ESA·RCA·IRCA·VEA)을 씁니다. 공공요금세 등 세금은 제외. LADWP 상계는 남은 발전량을 이후 요금에서 차감(현금 환급 없음)하는 방식이라 월 상계·무기한 이월로 계산합니다.</li>
 <li>빅토리아는 2026-27 VDO(GST 포함)를 썼습니다. 매전 단가(FiT)는 2025년 7월부터 규제 최저가가 없어져 소매사가 정하므로 직접 입력합니다.</li>
 </ul>
 <h2>입력값과 근거 수준</h2>

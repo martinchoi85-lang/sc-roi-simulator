@@ -1,0 +1,355 @@
+{
+ "note": "v10(run_id 20261113T143553_d6a8cda) Step2 캐시에서 추출한 연간 합계. passive=None, country_params=None 일 때 엔진이 같은 값을 내야 함.",
+ "combos": [
+  {
+   "house": "MONO Core 54",
+   "occ": 1,
+   "rate": 1.0,
+   "base_elec_kwh": 2812.652,
+   "propane_kg": 287.4,
+   "awhp_total_elec_kwh": 4131.728,
+   "occupied_days": 365,
+   "t_indoor_max_base": 50.209
+  },
+  {
+   "house": "MONO Core 54",
+   "occ": 1,
+   "rate": 0.7,
+   "base_elec_kwh": 2384.234,
+   "propane_kg": 240.8,
+   "awhp_total_elec_kwh": 3544.086,
+   "occupied_days": 255,
+   "t_indoor_max_base": 48.394
+  },
+  {
+   "house": "MONO Core 54",
+   "occ": 1,
+   "rate": 0.5,
+   "base_elec_kwh": 2044.59,
+   "propane_kg": 198.1,
+   "awhp_total_elec_kwh": 3036.715,
+   "occupied_days": 182,
+   "t_indoor_max_base": 47.944
+  },
+  {
+   "house": "MONO Core 54",
+   "occ": 1,
+   "rate": 0.3,
+   "base_elec_kwh": 1715.797,
+   "propane_kg": 155.3,
+   "awhp_total_elec_kwh": 2542.648,
+   "occupied_days": 110,
+   "t_indoor_max_base": 47.921
+  },
+  {
+   "house": "MONO Core 54",
+   "occ": 1,
+   "rate": 0.15,
+   "base_elec_kwh": 1460.24,
+   "propane_kg": 122.4,
+   "awhp_total_elec_kwh": 2140.139,
+   "occupied_days": 55,
+   "t_indoor_max_base": 47.655
+  },
+  {
+   "house": "MONO Core 54",
+   "occ": 2,
+   "rate": 1.0,
+   "base_elec_kwh": 3194.732,
+   "propane_kg": 403.4,
+   "awhp_total_elec_kwh": 4973.817,
+   "occupied_days": 365,
+   "t_indoor_max_base": 50.536
+  },
+  {
+   "house": "MONO Core 54",
+   "occ": 2,
+   "rate": 0.7,
+   "base_elec_kwh": 2662.745,
+   "propane_kg": 324.9,
+   "awhp_total_elec_kwh": 4161.768,
+   "occupied_days": 255,
+   "t_indoor_max_base": 48.377
+  },
+  {
+   "house": "MONO Core 54",
+   "occ": 2,
+   "rate": 0.5,
+   "base_elec_kwh": 2249.327,
+   "propane_kg": 260.0,
+   "awhp_total_elec_kwh": 3486.667,
+   "occupied_days": 182,
+   "t_indoor_max_base": 48.108
+  },
+  {
+   "house": "MONO Core 54",
+   "occ": 2,
+   "rate": 0.3,
+   "base_elec_kwh": 1842.063,
+   "propane_kg": 191.2,
+   "awhp_total_elec_kwh": 2803.538,
+   "occupied_days": 110,
+   "t_indoor_max_base": 48.005
+  },
+  {
+   "house": "MONO Core 54",
+   "occ": 2,
+   "rate": 0.15,
+   "base_elec_kwh": 1533.658,
+   "propane_kg": 141.0,
+   "awhp_total_elec_kwh": 2285.805,
+   "occupied_days": 55,
+   "t_indoor_max_base": 47.671
+  },
+  {
+   "house": "MONO Core 72",
+   "occ": 1,
+   "rate": 1.0,
+   "base_elec_kwh": 3437.599,
+   "propane_kg": 321.8,
+   "awhp_total_elec_kwh": 4925.988,
+   "occupied_days": 365,
+   "t_indoor_max_base": 49.291
+  },
+  {
+   "house": "MONO Core 72",
+   "occ": 1,
+   "rate": 0.7,
+   "base_elec_kwh": 2840.012,
+   "propane_kg": 276.4,
+   "awhp_total_elec_kwh": 4181.658,
+   "occupied_days": 255,
+   "t_indoor_max_base": 47.268
+  },
+  {
+   "house": "MONO Core 72",
+   "occ": 1,
+   "rate": 0.5,
+   "base_elec_kwh": 2377.985,
+   "propane_kg": 230.4,
+   "awhp_total_elec_kwh": 3537.488,
+   "occupied_days": 182,
+   "t_indoor_max_base": 46.884
+  },
+  {
+   "house": "MONO Core 72",
+   "occ": 1,
+   "rate": 0.3,
+   "base_elec_kwh": 1929.525,
+   "propane_kg": 184.7,
+   "awhp_total_elec_kwh": 2910.341,
+   "occupied_days": 110,
+   "t_indoor_max_base": 46.698
+  },
+  {
+   "house": "MONO Core 72",
+   "occ": 1,
+   "rate": 0.15,
+   "base_elec_kwh": 1579.18,
+   "propane_kg": 149.5,
+   "awhp_total_elec_kwh": 2401.788,
+   "occupied_days": 55,
+   "t_indoor_max_base": 46.359
+  },
+  {
+   "house": "MONO Core 72",
+   "occ": 2,
+   "rate": 1.0,
+   "base_elec_kwh": 3826.305,
+   "propane_kg": 440.3,
+   "awhp_total_elec_kwh": 5787.099,
+   "occupied_days": 365,
+   "t_indoor_max_base": 49.56
+  },
+  {
+   "house": "MONO Core 72",
+   "occ": 2,
+   "rate": 0.7,
+   "base_elec_kwh": 3126.059,
+   "propane_kg": 362.7,
+   "awhp_total_elec_kwh": 4816.809,
+   "occupied_days": 255,
+   "t_indoor_max_base": 47.258
+  },
+  {
+   "house": "MONO Core 72",
+   "occ": 2,
+   "rate": 0.5,
+   "base_elec_kwh": 2590.928,
+   "propane_kg": 294.8,
+   "awhp_total_elec_kwh": 4012.025,
+   "occupied_days": 182,
+   "t_indoor_max_base": 47.092
+  },
+  {
+   "house": "MONO Core 72",
+   "occ": 2,
+   "rate": 0.3,
+   "base_elec_kwh": 2060.255,
+   "propane_kg": 221.9,
+   "awhp_total_elec_kwh": 3181.496,
+   "occupied_days": 110,
+   "t_indoor_max_base": 46.776
+  },
+  {
+   "house": "MONO Core 72",
+   "occ": 2,
+   "rate": 0.15,
+   "base_elec_kwh": 1658.639,
+   "propane_kg": 168.9,
+   "awhp_total_elec_kwh": 2559.186,
+   "occupied_days": 55,
+   "t_indoor_max_base": 46.374
+  },
+  {
+   "house": "MONO Core 72",
+   "occ": 3,
+   "rate": 1.0,
+   "base_elec_kwh": 4205.111,
+   "propane_kg": 552.9,
+   "awhp_total_elec_kwh": 6598.958,
+   "occupied_days": 365,
+   "t_indoor_max_base": 49.847
+  },
+  {
+   "house": "MONO Core 72",
+   "occ": 3,
+   "rate": 0.7,
+   "base_elec_kwh": 3375.389,
+   "propane_kg": 441.3,
+   "awhp_total_elec_kwh": 5376.837,
+   "occupied_days": 255,
+   "t_indoor_max_base": 47.434
+  },
+  {
+   "house": "MONO Core 72",
+   "occ": 3,
+   "rate": 0.5,
+   "base_elec_kwh": 2775.494,
+   "propane_kg": 350.2,
+   "awhp_total_elec_kwh": 4403.515,
+   "occupied_days": 182,
+   "t_indoor_max_base": 47.028
+  },
+  {
+   "house": "MONO Core 72",
+   "occ": 3,
+   "rate": 0.3,
+   "base_elec_kwh": 2167.544,
+   "propane_kg": 258.1,
+   "awhp_total_elec_kwh": 3448.511,
+   "occupied_days": 110,
+   "t_indoor_max_base": 46.78
+  },
+  {
+   "house": "MONO Core 72",
+   "occ": 3,
+   "rate": 0.15,
+   "base_elec_kwh": 1706.409,
+   "propane_kg": 186.8,
+   "awhp_total_elec_kwh": 2686.233,
+   "occupied_days": 55,
+   "t_indoor_max_base": 46.412
+  },
+  {
+   "house": "DUO Max 45",
+   "occ": 1,
+   "rate": 1.0,
+   "base_elec_kwh": 3131.144,
+   "propane_kg": 286.0,
+   "awhp_total_elec_kwh": 4438.467,
+   "occupied_days": 365,
+   "t_indoor_max_base": 50.424
+  },
+  {
+   "house": "DUO Max 45",
+   "occ": 1,
+   "rate": 0.7,
+   "base_elec_kwh": 2596.489,
+   "propane_kg": 237.7,
+   "awhp_total_elec_kwh": 3738.737,
+   "occupied_days": 255,
+   "t_indoor_max_base": 48.418
+  },
+  {
+   "house": "DUO Max 45",
+   "occ": 1,
+   "rate": 0.5,
+   "base_elec_kwh": 2189.07,
+   "propane_kg": 196.1,
+   "awhp_total_elec_kwh": 3163.656,
+   "occupied_days": 182,
+   "t_indoor_max_base": 47.997
+  },
+  {
+   "house": "DUO Max 45",
+   "occ": 1,
+   "rate": 0.3,
+   "base_elec_kwh": 1793.628,
+   "propane_kg": 153.6,
+   "awhp_total_elec_kwh": 2604.999,
+   "occupied_days": 110,
+   "t_indoor_max_base": 47.984
+  },
+  {
+   "house": "DUO Max 45",
+   "occ": 1,
+   "rate": 0.15,
+   "base_elec_kwh": 1491.075,
+   "propane_kg": 121.4,
+   "awhp_total_elec_kwh": 2157.833,
+   "occupied_days": 55,
+   "t_indoor_max_base": 47.765
+  },
+  {
+   "house": "DUO Max 45",
+   "occ": 2,
+   "rate": 1.0,
+   "base_elec_kwh": 3514.541,
+   "propane_kg": 402.0,
+   "awhp_total_elec_kwh": 5281.728,
+   "occupied_days": 365,
+   "t_indoor_max_base": 50.75
+  },
+  {
+   "house": "DUO Max 45",
+   "occ": 2,
+   "rate": 0.7,
+   "base_elec_kwh": 2875.306,
+   "propane_kg": 322.0,
+   "awhp_total_elec_kwh": 4356.254,
+   "occupied_days": 255,
+   "t_indoor_max_base": 48.394
+  },
+  {
+   "house": "DUO Max 45",
+   "occ": 2,
+   "rate": 0.5,
+   "base_elec_kwh": 2393.394,
+   "propane_kg": 257.5,
+   "awhp_total_elec_kwh": 3613.312,
+   "occupied_days": 182,
+   "t_indoor_max_base": 48.073
+  },
+  {
+   "house": "DUO Max 45",
+   "occ": 2,
+   "rate": 0.3,
+   "base_elec_kwh": 1920.007,
+   "propane_kg": 189.6,
+   "awhp_total_elec_kwh": 2866.495,
+   "occupied_days": 110,
+   "t_indoor_max_base": 48.054
+  },
+  {
+   "house": "DUO Max 45",
+   "occ": 2,
+   "rate": 0.15,
+   "base_elec_kwh": 1562.756,
+   "propane_kg": 139.6,
+   "awhp_total_elec_kwh": 2303.416,
+   "occupied_days": 55,
+   "t_indoor_max_base": 47.777
+  }
+ ]
+}

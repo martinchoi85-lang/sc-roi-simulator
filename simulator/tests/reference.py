@@ -56,7 +56,8 @@ def bill(imp, exp, P, T, K, st):
                 e += q * r[i]
                 if q > 0: tier = i
                 prev = lims[i]
-            tot += (max(e + t['pac'][tier], t['minCharge']) + k * t['addPerKwh']) * fx
+            add = t['addQ'][m // 3] if t.get('addQ') else t['addPerKwh']
+            tot += (max(e + t['pac'][tier], t['minCharge']) + k * add) * fx
     elif T['type'] == 'flat':
         f = T['flat']
         for m in range(12):
@@ -71,7 +72,8 @@ def bill(imp, exp, P, T, K, st):
                 sel = (MONTH == m+1) & (per == k)
                 b = netm(imp[sel].sum(), exp[sel].sum(), st, f'p{k}') if net else imp[sel].sum()
                 en += b * tou['rates'][sm][k]; kw += b
-            sub = tou.get('baseFee', 0) + tou.get('dailyFee', 0) * MD[m] + en + kw * tou.get('addPerKwh', 0)
+            add = tou['addQ'][m // 3] if tou.get('addQ') else tou.get('addPerKwh', 0)
+            sub = tou.get('baseFee', 0) + tou.get('dailyFee', 0) * MD[m] + en + kw * add
             tot += math.floor((sub + round(sub*0.1) + math.floor(sub*0.027/10)*10)/10)*10 if tou.get('krTax') else sub * fx
     if P['exportMode'] == 'fit': inc = exp.sum() * P['fitPrice'] * fx
     elif P['exportMode'] == 'tou': inc = (exp * price).sum() * P['touExportRatio'] * fx

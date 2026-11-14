@@ -144,7 +144,8 @@
           e += q * r[i]; rest -= q; if (q > 0) tier = i; prev = lim;
         }
         const usage = e + (t.pac ? t.pac[tier] : 0);
-        const b = (Math.max(usage, t.minCharge || 0) + k * (t.addPerKwh || 0)) * fx;
+        const add = t.addQ ? t.addQ[Math.floor(m / 3)] : (t.addPerKwh || 0); // 분기별 조정요금
+        const b = (Math.max(usage, t.minCharge || 0) + k * add) * fx;
         res.monthBill[m] = b; res.bill += b; res.billedKwh += k;
       }
     } else if (T.type === 'flat') { // 호주식: 하루 기본료 + 단일 단가
@@ -163,7 +164,7 @@
           const billed = net ? netMonth(pi[m][k], pe[m][k], state, 'carryP' + k) : pi[m][k];
           energy += billed * t.rates[s][k]; kwh += billed;
         }
-        const sub = (t.baseFee || 0) + (t.dailyFee || 0) * MDAYS[m] + energy + kwh * (t.addPerKwh || 0);
+        const sub = (t.baseFee || 0) + (t.dailyFee || 0) * MDAYS[m] + energy + kwh * (t.addQ ? t.addQ[Math.floor(m / 3)] : (t.addPerKwh || 0));
         const b = t.krTax ? Math.floor((sub + pyRound(sub * 0.1) + Math.floor(sub * 0.027 / 10) * 10) / 10) * 10 : sub * fx;
         res.monthBill[m] = b; res.bill += b; res.billedKwh += kwh;
       }

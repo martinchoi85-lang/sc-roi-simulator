@@ -57,14 +57,15 @@ window.SCDEF = {
           [0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0],
           [0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,1,1,1,1,1,0,0],
           [0,0,0,0,0,0,0,0,1,2,2,2,1,1,1,1,1,1,1,1,1,1,0,0]] } },
-    // LADWP R-1(A) Standard, Zone 1(LA 해안·시내). 2019-07-01 요금 요약(Capped+Incremental 합계). 분기 조정요금은 문서에 값 없음 → 입력
-    ladwp_r1a: { label: 'LADWP R-1A 표준 (구간 누진, Zone 1)', country: 'US', type: 'tiered', currency: 'USD', src: 'LADWP Electric Rate Summary effective 2019-07-01',
+    // LADWP R-1(A) Standard, Zone 1(LA 해안·시내). 기본 단가 = 2019-07-01 요금 요약(Capped+Incremental 합계, 현재 최신본).
+    // 조정요금 2026: 고정 ECA 0.05690+ESA 0.00147+RCA 0.00300, 분기 IRCA(0.05505,0.05505,0.06934,0.06934)+VEA(0.00781,0.00503,0.01071,0.01590) $/kWh
+    ladwp_r1a: { label: 'LADWP R-1A 표준 (구간 누진, Zone 1)', country: 'US', type: 'tiered', currency: 'USD', src: 'LADWP Electric Rate Summary effective 2019-07-01(최신본) + Residential Adjustment Billing Factors 2026',
       tiered: { seasonMonths: [1,1,1,1,1,0,0,0,0,1,1,1], seasonNames: ['고수요(6~9월)', '저수요(10~5월)'], limits: [350, 1050],
         rates: [[0.07142, 0.13001, 0.21702], [0.07142, 0.13001, 0.13001]], pac: [2.30, 7.90, 22.70], minCharge: 10.0,
-        addFixed: 0.06137, addVar: 0.07, addPerKwh: 0.13137 } },
-    ladwp_r1b: { label: 'LADWP R-1B 시간대별 (TOU)', country: 'US', type: 'tou', currency: 'USD', src: 'LADWP Electric Rate Summary effective 2019-07-01',
+        addFixed: 0.06137, addVarQ: [0.06286, 0.06008, 0.08005, 0.08524], addQ: [0.12423, 0.12145, 0.14142, 0.14661], addPerKwh: 0.13343 } },
+    ladwp_r1b: { label: 'LADWP R-1B 시간대별 (TOU)', country: 'US', type: 'tou', currency: 'USD', src: 'LADWP Electric Rate Summary effective 2019-07-01(최신본) + Residential Adjustment Billing Factors 2026',
       tou: { seasonMonths: [1,1,1,1,1,0,0,0,0,1,1,1], seasonNames: ['고수요(6~9월)', '저수요(10~5월)'], periodNames: ['기본', '중간 피크', '최고 피크'],
-        baseFee: 12.0, dailyFee: 0, addFixed: 0.06137, addVar: 0.07, addPerKwh: 0.13137, krTax: false,
+        baseFee: 12.0, dailyFee: 0, addFixed: 0.06137, addVarQ: [0.06286, 0.06008, 0.08005, 0.08524], addQ: [0.12423, 0.12145, 0.14142, 0.14661], addPerKwh: 0.13343, krTax: false,
         rates: [[0.07274, 0.10018, 0.15858], [0.07664, 0.10018, 0.10018]],
         hours: [[0,0,0,0,0,0,0,0,0,0,1,1,1,2,2,2,2,1,1,1,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,2,2,2,2,1,1,1,0,0,0,0]],
         hoursWe: [[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]] } },

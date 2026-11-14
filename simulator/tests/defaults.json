@@ -175,7 +175,7 @@
    "country": "US",
    "type": "tiered",
    "currency": "USD",
-   "src": "LADWP Electric Rate Summary effective 2019-07-01",
+   "src": "LADWP Electric Rate Summary effective 2019-07-01(최신본) + Residential Adjustment Billing Factors 2026",
    "tiered": {
     "seasonMonths": [
      1,
@@ -218,8 +218,19 @@
     ],
     "minCharge": 10,
     "addFixed": 0.06137,
-    "addVar": 0.07,
-    "addPerKwh": 0.13137
+    "addVarQ": [
+     0.06286,
+     0.06008,
+     0.08005,
+     0.08524
+    ],
+    "addQ": [
+     0.12423,
+     0.12145,
+     0.14142,
+     0.14661
+    ],
+    "addPerKwh": 0.13343
    }
   },
   "ladwp_r1b": {
@@ -227,7 +238,7 @@
    "country": "US",
    "type": "tou",
    "currency": "USD",
-   "src": "LADWP Electric Rate Summary effective 2019-07-01",
+   "src": "LADWP Electric Rate Summary effective 2019-07-01(최신본) + Residential Adjustment Billing Factors 2026",
    "tou": {
     "seasonMonths": [
      1,
@@ -255,8 +266,19 @@
     "baseFee": 12,
     "dailyFee": 0,
     "addFixed": 0.06137,
-    "addVar": 0.07,
-    "addPerKwh": 0.13137,
+    "addVarQ": [
+     0.06286,
+     0.06008,
+     0.08005,
+     0.08524
+    ],
+    "addQ": [
+     0.12423,
+     0.12145,
+     0.14142,
+     0.14661
+    ],
+    "addPerKwh": 0.13343,
     "krTax": false,
     "rates": [
      [
