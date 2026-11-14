@@ -75,12 +75,14 @@
     return Math.floor((sub + vat + fund) / 10) * 10;
   }
   // TOU 가격 배열 (원/kWh, 세전 에너지 단가)
+  // TOU: tou.seasonMonths(12개월 → 계절 번호)가 있으면 그것을, 없으면 한국식 3계절(간/하/동). 주말은 hoursWe 또는 weekendOffpeak
+  function touSeason(tou, month, hemi) { return tou.seasonMonths ? tou.seasonMonths[month - 1] : seasonOf(month, hemi); }
   function touPriceArray(tou, hemi) {
     const p = new Float64Array(H), per = new Uint8Array(H);
     for (let h = 0; h < H; h++) {
-      const s = seasonOf(MONTH[h], hemi);
+      const s = touSeason(tou, MONTH[h], hemi);
       const wkend = (DOW[h] === 0 || DOW[h] === 6);
-      const k = (tou.weekendOffpeak && wkend) ? 0 : tou.hours[s][HOD[h]];
+      const k = wkend && tou.hoursWe ? tou.hoursWe[s][HOD[h]] : (tou.weekendOffpeak && wkend) ? 0 : tou.hours[s][HOD[h]];
       per[h] = k; p[h] = tou.rates[s][k];
     }
     return { price: p, period: per };
@@ -116,40 +118,58 @@
   function sum(a) { let s = 0; for (let i = 0; i < a.length; i++) s += a[i]; return s; }
 
   // 연간 전기요금 (에스컬레이션 전, 매전 수익 별도). state.carry: 상계 이월 (kWh 또는 기간별)
+  // 연간 전기요금(원). 요금표는 자기 통화(T.currency)로 계산한 뒤 P.fx(원/현지통화)를 곱한다.
+  function netMonth(imp, exp, state, key) { // kWh 상계, 잉여는 무기한 이월
+    const cred = exp + (state[key] || 0);
+    if (imp >= cred) { state[key] = 0; return imp - cred; }
+    state[key] = cred - imp; return 0;
+  }
   function annualElecBill(imp, exp, P, state) {
     const res = { bill: 0, exportIncome: 0, monthBill: new Float64Array(12), billedKwh: 0 };
-    const T = P.tariff;
+    const T = P.tariff, fx = P.fx || 1, net = P.exportMode === 'net';
+    const mi = sumMonthly(imp), me = sumMonthly(exp);
     if (T.type === 'kr_prog') {
-      const mi = sumMonthly(imp), me = sumMonthly(exp);
       for (let m = 0; m < 12; m++) {
-        let billed = mi[m];
-        if (P.exportMode === 'net') { const cred = me[m] + state.carry; if (mi[m] >= cred) { billed = mi[m] - cred; state.carry = 0; } else { billed = 0; state.carry = cred - mi[m]; } }
+        const billed = net ? netMonth(mi[m], me[m], state, 'carry') : mi[m];
         const b = krMonthBill(billed, m + 1, T.kr); res.monthBill[m] = b; res.bill += b; res.billedKwh += billed;
       }
-    } else { // TOU
-      const pr = P.touArr.price, per = P.touArr.period;
-      const mi = Array.from({ length: 12 }, () => [0, 0, 0]), me = Array.from({ length: 12 }, () => [0, 0, 0]);
-      for (let h = 0; h < H; h++) { mi[MONTH[h] - 1][per[h]] += imp[h]; me[MONTH[h] - 1][per[h]] += exp[h]; }
-      if (!state.carryP) state.carryP = [0, 0, 0];
+    } else if (T.type === 'tiered') { // 미국식 월 누진(LADWP R-1A 등)
+      const t = T.tiered;
       for (let m = 0; m < 12; m++) {
-        let energy = 0, kwh = 0;
-        for (let k = 0; k < 3; k++) {
-          let billed = mi[m][k];
-          if (P.exportMode === 'net') { const cred = me[m][k] + state.carryP[k]; if (billed >= cred) { billed -= cred; state.carryP[k] = 0; } else { state.carryP[k] = cred - billed; billed = 0; } }
-          // 기간 단가: 해당 월 대표 계절 단가
-          const s = seasonOf(m + 1, P.hemi); energy += billed * T.tou.rates[s][k]; kwh += billed;
+        const k = net ? netMonth(mi[m], me[m], state, 'carry') : mi[m];
+        const s = t.seasonMonths[m], r = t.rates[s];
+        let e = 0, rest = k, prev = 0, tier = 0;
+        for (let i = 0; i < r.length; i++) {
+          const lim = i < t.limits.length ? t.limits[i] : Infinity, q = Math.max(0, Math.min(rest, lim - prev));
+          e += q * r[i]; rest -= q; if (q > 0) tier = i; prev = lim;
         }
-        const sub = T.tou.baseFee + energy + kwh * (T.tou.addPerKwh || 0);
-        const b = T.tou.krTax ? Math.floor((sub + pyRound(sub * 0.1) + Math.floor(sub * 0.027 / 10) * 10) / 10) * 10 : sub;
+        const usage = e + (t.pac ? t.pac[tier] : 0);
+        const b = (Math.max(usage, t.minCharge || 0) + k * (t.addPerKwh || 0)) * fx;
+        res.monthBill[m] = b; res.bill += b; res.billedKwh += k;
+      }
+    } else if (T.type === 'flat') { // 호주식: 하루 기본료 + 단일 단가
+      const f = T.flat;
+      for (let m = 0; m < 12; m++) {
+        const k = net ? netMonth(mi[m], me[m], state, 'carry') : mi[m];
+        const b = (f.dailyFee * MDAYS[m] + k * f.rate) * fx; res.monthBill[m] = b; res.bill += b; res.billedKwh += k;
+      }
+    } else { // TOU
+      const per = P.touArr.period, t = T.tou;
+      const pi = Array.from({ length: 12 }, () => [0, 0, 0]), pe = Array.from({ length: 12 }, () => [0, 0, 0]);
+      for (let h = 0; h < H; h++) { pi[MONTH[h] - 1][per[h]] += imp[h]; pe[MONTH[h] - 1][per[h]] += exp[h]; }
+      for (let m = 0; m < 12; m++) {
+        let energy = 0, kwh = 0; const s = touSeason(t, m + 1, P.hemi);
+        for (let k = 0; k < 3; k++) {
+          const billed = net ? netMonth(pi[m][k], pe[m][k], state, 'carryP' + k) : pi[m][k];
+          energy += billed * t.rates[s][k]; kwh += billed;
+        }
+        const sub = (t.baseFee || 0) + (t.dailyFee || 0) * MDAYS[m] + energy + kwh * (t.addPerKwh || 0);
+        const b = t.krTax ? Math.floor((sub + pyRound(sub * 0.1) + Math.floor(sub * 0.027 / 10) * 10) / 10) * 10 : sub * fx;
         res.monthBill[m] = b; res.bill += b; res.billedKwh += kwh;
       }
     }
-    if (P.exportMode === 'fit') res.exportIncome = sum(exp) * P.fitPrice;
-    else if (P.exportMode === 'tou') {
-      const pr = P.touArr ? P.touArr.price : null;
-      if (pr) { for (let h = 0; h < H; h++) res.exportIncome += exp[h] * pr[h] * P.touExportRatio; }
-      else res.exportIncome = sum(exp) * P.fitPrice; // 누진제 + TOU매전: 정의 불가 → FIT 단가 사용 (UI에서 막음)
-    }
+    if (P.exportMode === 'fit') res.exportIncome = sum(exp) * P.fitPrice * fx;
+    else if (P.exportMode === 'tou' && P.touArr) { const pr = P.touArr.price; for (let h = 0; h < H; h++) res.exportIncome += exp[h] * pr[h] * P.touExportRatio * fx; }
     return res;
   }
 

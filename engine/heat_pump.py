@@ -439,7 +439,7 @@ def simulate_awhp_space_heating_with_capacity_bound(
         t_set_heat = float(heat_setpoint_schedule[i]) if heat_setpoint_schedule is not None else (20.0 if is_occ else 10.0)
 
         # Cooling
-        is_cooling_season = (151 <= d_idx <= 272)
+        is_cooling_season = (151 <= d_idx <= 272) if (passive is None or passive.get('cooling_doy') is None) else bool(passive['cooling_doy'][d_idx])
         allow_cooling = False
         t_set_cool = 40.0
 

@@ -32,6 +32,16 @@ REGIONS = {
                    "weather": "korea/source/tmy_chuncheon_471010_15min.csv",
                    "lat": 37.9025, "lon": 127.7358, "tz": "Asia/Seoul",
                    "weather_src": "Climate.OneBuilding 춘천 471010 TMYx 2009-2023"},
+    "us_la": {"label": "미국 캘리포니아 · LA", "country_dir": "korea",
+              "weather": "california/source/tmy_la_722950_15min.csv", "lat": 33.938, "lon": -118.389, "tz": "Etc/GMT+8",
+              "weather_src": "Climate.OneBuilding Los Angeles Intl AP 722950 TMYx 2009-2023",
+              "kosis_dir": "california/source/tus_kosis", "holidays": ("US", "CA"), "cooling_months": [6, 7, 8, 9, 10],
+              "tus_src": "BLS ATUS 캘리포니아 15세 이상(2015-2019, 2022-2025)"},
+    "au_mel": {"label": "호주 · 멜버른", "country_dir": "korea",
+               "weather": "australia/source/tmy_melbourne_948660_15min.csv", "lat": -37.6656, "lon": 144.8322, "tz": "Etc/GMT-10",
+               "weather_src": "Climate.OneBuilding Melbourne Intl AP 948660 TMYx 2009-2023",
+               "kosis_dir": "australia/source/tus_kosis", "holidays": ("AU", "VIC"), "cooling_months": [12, 1, 2, 3],
+               "tus_src": "ATUS 캘리포니아 시간대 모양 + ABS TUS 2024 하루 총량·근무 시간대"},
     "kr_south": {"label": "한국 남부 · 광주", "country_dir": "korea",
                  "weather": "korea/source/tmy_gwangju_471560_15min.csv",
                  "lat": 35.1731, "lon": 126.8917, "tz": "Asia/Seoul",
@@ -71,15 +81,25 @@ def run_combo(args):
     reg = REGIONS[region]
     cfg = load_country_config(ROOT / reg["country_dir"]).values
     weather_df = load_weather_data(ROOT / reg["weather"])
-    kosis_dir = ROOT / reg["country_dir"] / "source" / "kosis"
+    kosis_dir = ROOT / reg.get("kosis_dir", reg["country_dir"] + "/source/kosis")
+    cparams = None
+    if "kosis_dir" in reg:
+        import holidays as _hol
+        cparams = json.loads((kosis_dir / "country_params.json").read_text(encoding="utf-8"))
+        hc, sub = reg["holidays"]; cparams["holidays"] = getattr(_hol, hc)(subdiv=sub, years=2026)
     h_cfg = cfg["houses"][h_name]
     equip = cfg["equipment"]; tariff = cfg["tariff"]
     t0 = time.perf_counter()
-    pas = passive_climate.make_passive(weather_df, reg["lat"], reg["lon"], reg["tz"]) if USE_PASSIVE else None
+    # 남반구는 적도(북쪽)를 향하도록 창 방향 비율을 뒤집는다
+    shares = {0: 0.5, 90: 0.2, 270: 0.2, 180: 0.1} if reg["lat"] < 0 else None
+    pas = passive_climate.make_passive(weather_df, reg["lat"], reg["lon"], reg["tz"], **({"orient_shares": shares} if shares else {})) if USE_PASSIVE else None
+    if pas is not None and "cooling_months" in reg:
+        mon = pd.date_range("2026-01-01", periods=365, freq="D").month
+        pas["cooling_doy"] = np.isin(mon, reg["cooling_months"])
 
     # ---- Step1 (pipeline.run_step1_load 와 동일) ----
     model = OccupancyTUSModel(kosis_dir=kosis_dir, load_config=cfg["load"], house_config=h_cfg,
-                              weather_df=weather_df, occupants=occ, seed=42)
+                              weather_df=weather_df, occupants=occ, seed=42, country_params=cparams)
     tus = model.simulate_year(occupancy_rate=rate)
     q_occ_w = tus["occupants_active_15min"] * 80.0
     sleeping = (np.array(tus["persons_state_15min"]) == 2).sum(axis=0).astype(float)
@@ -184,7 +204,7 @@ def write_meta(region):
     reg = REGIONS[region]
     cfg = load_country_config(ROOT / reg["country_dir"]).values
     w = load_weather_data(ROOT / reg["weather"])
-    pv1 = simulate_pv_generation_1kwp(w, reg["lat"], reg["lon"], tilt=25.0, azimuth=180.0,
+    pv1 = simulate_pv_generation_1kwp(w, reg["lat"], reg["lon"], tilt=25.0, azimuth=(0.0 if reg["lat"] < 0 else 180.0),
                                       timezone=reg["tz"], pv_equipment_config=cfg["equipment"]["pv_system"])
     meta = {"region": region, "label": reg["label"], "weather_src": reg["weather_src"],
             "channels": CHANNELS,
@@ -192,7 +212,7 @@ def write_meta(region):
             "temp_out": [round(x, 2) for x in hourly_mean(w["temp_air"].values)],
             "ghi_wh": [round(x, 1) for x in hourly_mean(w["ghi"].values)],
             "pv1kw_annual": round(float(hourly_sum(pv1).sum()), 1),
-            "year_start": "2026-01-01", "thermal": ("v2 수동형 제어: " + json.dumps({k: v for k, v in passive_climate.DEFAULT.items()}, ensure_ascii=False)) if USE_PASSIVE else "v10"}
+            "year_start": "2026-01-01", "tus_src": reg.get("tus_src", "KOSIS 2024 생활시간조사"), "cooling_months": reg.get("cooling_months", [6, 7, 8, 9]), "thermal": ("v2 수동형 제어: " + json.dumps({k: v for k, v in passive_climate.DEFAULT.items()}, ensure_ascii=False)) if USE_PASSIVE else "v10"}
     out = ROOT / "simulator" / "data" / region
     out.mkdir(parents=True, exist_ok=True)
     (out / "meta.js").write_text("SCDATA.meta(" + json.dumps(meta, ensure_ascii=False) + ");\n", encoding="utf-8")

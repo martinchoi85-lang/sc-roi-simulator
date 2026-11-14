@@ -1,8 +1,465 @@
-{"pvModW":400,"essModKwh":5,"essRte":0.9,"essCrate":0.5,"gasPrice":2812.26,"fitPrice":100,"touExportRatio":1.0,"essMode":"self","gridCharge":false,"hemi":"N",
- "cost":{"pvPerKw":1513667,"pvReplPerKw":1513667,"essPerKwh":1775200,"essReplPerKwh":396200,"awhp":14000000,"awhpRepl":14000000,"invPerKw":250000,"invMin":750000,"hems":1000000,"hemsInclude":true,"misc":0,"subPV":2650000,"subESS":0,"subAWHP":0,"subHEMS":0},
- "tariffs":{
-  "kr_prog":{"type":"kr_prog","kr":{"baseStd":[910,1600,7300],"baseSummer":[910,1600,7300],"energyStd":[120,214.6,307.3],"energySummer":[120,214.6,307.3],"superKwh":1000,"superRate":736.2,"climate":9,"fuel":5,"vat":0.1,"fund":0.027}},
-  "kr_tou":{"type":"tou","tou":{"baseFee":910,"addPerKwh":14,"krTax":true,"weekendOffpeak":false,
-     "rates":[[120,170,170],[120,170,276],[120,170,204]],
-     "hours":[[0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0],[0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,2,1,1,1,1,1,0,0],[0,0,0,0,0,0,0,0,1,2,2,2,1,1,1,1,1,1,1,1,1,1,0,0]]}}
- }}
+{
+ "pvModW": 400,
+ "essModKwh": 5,
+ "essRte": 0.9,
+ "essCrate": 0.5,
+ "gasPrice": 2812.26,
+ "fitPrice": 100,
+ "touExportRatio": 1.0,
+ "essMode": "self",
+ "gridCharge": false,
+ "hemi": "N",
+ "cost": {
+  "pvPerKw": 1513667,
+  "pvReplPerKw": 1513667,
+  "essPerKwh": 1775200,
+  "essReplPerKwh": 396200,
+  "awhp": 14000000,
+  "awhpRepl": 14000000,
+  "invPerKw": 250000,
+  "invMin": 750000,
+  "hems": 1000000,
+  "hemsInclude": true,
+  "misc": 0,
+  "subPV": 2650000,
+  "subESS": 0,
+  "subAWHP": 0,
+  "subHEMS": 0
+ },
+ "tariffs": {
+  "kr_prog": {
+   "label": "주택용 저압 누진제 (한전)",
+   "country": "KR",
+   "type": "kr_prog",
+   "currency": "KRW",
+   "kr": {
+    "baseStd": [
+     910,
+     1600,
+     7300
+    ],
+    "baseSummer": [
+     910,
+     1600,
+     7300
+    ],
+    "energyStd": [
+     120,
+     214.6,
+     307.3
+    ],
+    "energySummer": [
+     120,
+     214.6,
+     307.3
+    ],
+    "superKwh": 1000,
+    "superRate": 736.2,
+    "climate": 9,
+    "fuel": 5,
+    "vat": 0.1,
+    "fund": 0.027
+   }
+  },
+  "kr_tou": {
+   "label": "주택용 계시별 (가정값, 편집 가능)",
+   "country": "KR",
+   "type": "tou",
+   "currency": "KRW",
+   "tou": {
+    "baseFee": 910,
+    "addPerKwh": 14,
+    "krTax": true,
+    "weekendOffpeak": false,
+    "rates": [
+     [
+      120,
+      170,
+      170
+     ],
+     [
+      120,
+      170,
+      276
+     ],
+     [
+      120,
+      170,
+      204
+     ]
+    ],
+    "hours": [
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      2,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      2,
+      2,
+      2,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0
+     ]
+    ]
+   }
+  },
+  "ladwp_r1a": {
+   "label": "LADWP R-1A 표준 (구간 누진, Zone 1)",
+   "country": "US",
+   "type": "tiered",
+   "currency": "USD",
+   "src": "LADWP Electric Rate Summary effective 2019-07-01",
+   "tiered": {
+    "seasonMonths": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     1
+    ],
+    "seasonNames": [
+     "고수요(6~9월)",
+     "저수요(10~5월)"
+    ],
+    "limits": [
+     350,
+     1050
+    ],
+    "rates": [
+     [
+      0.07142,
+      0.13001,
+      0.21702
+     ],
+     [
+      0.07142,
+      0.13001,
+      0.13001
+     ]
+    ],
+    "pac": [
+     2.3,
+     7.9,
+     22.7
+    ],
+    "minCharge": 10,
+    "addFixed": 0.06137,
+    "addVar": 0.07,
+    "addPerKwh": 0.13137
+   }
+  },
+  "ladwp_r1b": {
+   "label": "LADWP R-1B 시간대별 (TOU)",
+   "country": "US",
+   "type": "tou",
+   "currency": "USD",
+   "src": "LADWP Electric Rate Summary effective 2019-07-01",
+   "tou": {
+    "seasonMonths": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     1
+    ],
+    "seasonNames": [
+     "고수요(6~9월)",
+     "저수요(10~5월)"
+    ],
+    "periodNames": [
+     "기본",
+     "중간 피크",
+     "최고 피크"
+    ],
+    "baseFee": 12,
+    "dailyFee": 0,
+    "addFixed": 0.06137,
+    "addVar": 0.07,
+    "addPerKwh": 0.13137,
+    "krTax": false,
+    "rates": [
+     [
+      0.07274,
+      0.10018,
+      0.15858
+     ],
+     [
+      0.07664,
+      0.10018,
+      0.10018
+     ]
+    ],
+    "hours": [
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      2,
+      1,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      2,
+      1,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0
+     ]
+    ],
+    "hoursWe": [
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    ]
+   }
+  },
+  "vdo_jemena_flat": {
+   "label": "VDO 2026-27 단일요금 (Jemena)",
+   "country": "AU",
+   "type": "flat",
+   "currency": "AUD",
+   "src": "ESC Victorian Default Offer Price Determination 2026-27, Schedule 1",
+   "flat": {
+    "dailyFee": 1.2713,
+    "rate": 0.2747
+   }
+  },
+  "vdo_jemena_tou": {
+   "label": "VDO 2026-27 3구간 TOU (Jemena)",
+   "country": "AU",
+   "type": "tou",
+   "currency": "AUD",
+   "src": "ESC Victorian Default Offer Price Determination 2026-27, Schedule 3",
+   "tou": {
+    "seasonMonths": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "seasonNames": [
+     "연중"
+    ],
+    "periodNames": [
+     "솔라 소크(11~16시)",
+     "오프피크",
+     "피크(16~21시)"
+    ],
+    "baseFee": 0,
+    "dailyFee": 1.2712,
+    "addPerKwh": 0,
+    "krTax": false,
+    "rates": [
+     [
+      0.1765,
+      0.2176,
+      0.3757
+     ]
+    ],
+    "hours": [
+     [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      2,
+      2,
+      2,
+      2,
+      1,
+      1,
+      1
+     ]
+    ]
+   }
+  }
+ }
+}

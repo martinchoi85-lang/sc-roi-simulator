@@ -25,6 +25,7 @@ class OccupancyTUSModel:
         seed: int = 42,
         kappa: float = 0.5,
         lambda_mix: Optional[float] = None,
+        country_params: Optional[Dict[str, Any]] = None,
     ):
         self.kosis_dir = Path(kosis_dir)
         self.load_config = load_config
@@ -34,6 +35,12 @@ class OccupancyTUSModel:
         self.seed = seed
         self.kappa = kappa
         self.lambda_mix = None  # λ 혼합 방식 삭제: tus.lambda = null (SPEC 6절 대체)
+        # 국가별 상수 (기본값 = 한국 KOSIS 2024, v10과 동일). 시뮬레이터에서 미국·호주 값을 넘긴다.
+        cp = country_params or {}
+        self.cp_w_part = cp.get("w_part_rate", {"남자": 0.924, "여자": 0.887})
+        self.cp_c_part = cp.get("c_part_rate", {"남자": 0.888, "여자": 0.834})
+        self.cp_p_work_weekend = cp.get("p_work_weekend", {"saturday": 0.486, "sunday": 0.353})
+        self.cp_holidays = cp.get("holidays")  # None = 한국 공휴일
 
         # Check mode: new standardized KOSIS files or legacy tus2024_activity_share
         self.kosis_m_path = self.kosis_dir / "M_2024.csv"
@@ -182,7 +189,7 @@ class OccupancyTUSModel:
                 elif dt in ("saturday", "sunday"):
                     p_away_tgt[23:26] = np.maximum(p_away_tgt[23:26], np.linspace(p_away_tgt[22], p_away_tgt[26], 3))
                     # Requirement 1-(a): Weekend employed target = p_work * weekday_away + (1 - p_work) * off_away
-                    p_work_weekend = 0.486 if dt == "saturday" else 0.353
+                    p_work_weekend = self.cp_p_work_weekend[dt]
                     p_away_wd = self._routine_dist_cache[("weekday", g)]["p_away_tgt"]
                     p_away_tgt = p_work_weekend * p_away_wd + (1.0 - p_work_weekend) * p_away_tgt
                     p_home_tgt = np.maximum(0.0, 1.0 - p_away_tgt - p_sleep_tgt)
@@ -201,7 +208,7 @@ class OccupancyTUSModel:
 
                 # Employment status work probability (KOSIS participant rates):
                 # Weekdays: 1.0 (all employed commute), Saturday: 0.486, Sunday: 0.353
-                p_work = 1.0 if dt == "weekday" else (0.486 if dt == "saturday" else 0.353)
+                p_work = 1.0 if dt == "weekday" else self.cp_p_work_weekend[dt]
 
                 self._routine_dist_cache[(dt, g)] = {
                     "prof": prof,
@@ -658,7 +665,7 @@ class OccupancyTUSModel:
         ]
 
         if d_name == "평일":
-            w_part_rate = 0.924 if g_name == "남자" else 0.887
+            w_part_rate = self.cp_w_part[g_name]
             w = np.clip(w_t1 / w_part_rate, 0.0, 1.0)
         else:
             w = np.zeros(48)
@@ -671,7 +678,7 @@ class OccupancyTUSModel:
 
         # 2. 일 관련 이동 C = T2 합계 (평일은 취업자 성별 행위자비율로 스케일링: 남 0.888, 여 0.834)
         c_raw = get_s(self.df_t2, "92")
-        c_part_rate = 0.888 if g_name == "남자" else 0.834
+        c_part_rate = self.cp_c_part[g_name]
         c = np.clip(c_raw / c_part_rate, 0.0, 1.0) if d_name == "평일" else c_raw
 
         # 3. 여가 L = T3 대분류 8, 미디어 이용 L_media = T3 중분류 82
@@ -1173,7 +1180,7 @@ class OccupancyTUSModel:
 
         # 1. Occupancy calendar
         is_occupied_day_365, is_occupied_15min, day_types_365 = generate_occupancy_calendar(
-            occupancy_rate=occupancy_rate
+            occupancy_rate=occupancy_rate, holiday_calendar=self.cp_holidays
         )
 
         steps_per_day_10min = 144

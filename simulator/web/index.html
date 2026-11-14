@@ -57,7 +57,7 @@
       <label class="chk"><input type="checkbox" data-k="hemsInclude"> HEMS 비용을 CAPEX에 포함</label>
     </div>
     <details class="adv" id="advCost">
-      <summary>단가 · 보조금 (상사 입력값, 원)</summary>
+      <summary>단가 · 보조금 (입력값, 원)</summary>
       <div class="advgrid" id="costGrid"></div>
     </details>
     
@@ -68,13 +68,13 @@
     <div class="row"><label>전기요금제</label><select id="tariffSel"></select></div>
     <div id="touBox" class="toubox"></div>
     <div class="row"><label>매전 방식</label><div class="seg" data-k="exportMode"></div></div>
-    <div class="row" id="fitRow"><label>FIT 단가</label><div class="inl"><input type="text" data-k="fitPrice" inputmode="decimal"> 원/kWh <span class="hint">고정, 인상률 미적용</span></div></div>
+    <div class="row" id="fitRow"><label>FIT 단가</label><div class="inl"><input type="text" data-k="fitPrice" inputmode="decimal"> <span id="fitUnit">원/kWh</span> <span class="hint">고정, 인상률 미적용</span></div></div>
     <div class="row" id="touExpRow"><label>TOU 매전 단가</label><div class="inl">해당 시간대 수전 단가의 <input type="text" data-k="touExportPct" inputmode="decimal"> %</div></div>
     <div class="row" id="essModeRow"><label>ESS 운전</label><div class="seg" data-k="essMode"></div></div>
     <div class="row" id="gridChgRow"><label></label><label class="chk"><input type="checkbox" data-k="gridCharge"> 경부하 시간 계통 충전 허용</label></div>
     <div class="row"><label>전기요금 인상</label><div class="slider" data-k="escE" data-min="0" data-max="10" data-step="0.5" data-unit="%/년"></div></div>
     <div class="row"><label>가스요금 인상</label><div class="slider" data-k="escG" data-min="0" data-max="10" data-step="0.5" data-unit="%/년"></div></div>
-    <div class="row"><label>가스 단가</label><div class="inl"><input type="text" data-k="gasPrice" inputmode="decimal"><select id="gasUnit" class="unitsel"></select></div></div>
+    <div class="row"><label>가스 단가</label><div class="inl"><input type="text" data-k="gasPrice" inputmode="decimal"><select id="gasUnit" class="unitsel"></select><span class="hint" id="gasHint"></span></div></div>
     <div class="row"><label>유지보수비</label><div class="inl">초기 CAPEX의 <input type="text" data-k="omPct" inputmode="decimal"> %/년</div></div>
     <div class="row"><label>분석 기간</label><div class="slider" data-k="years" data-min="5" data-max="20" data-step="1" data-unit="년"></div></div>
     

@@ -60,6 +60,7 @@ def select_evenly_spaced(items: List[int], k: int) -> List[int]:
 def generate_occupancy_calendar(
     occupancy_rate: float,
     dates: Optional[pd.DatetimeIndex] = None,
+    holiday_calendar=None,
 ) -> Tuple[np.ndarray, np.ndarray, List[str]]:
     """Generates a 365-day boolean array and profile types.
 
@@ -75,7 +76,8 @@ def generate_occupancy_calendar(
     total_days = len(daily_dates)  # 365
     target_occupied_days = int(round(total_days * occupancy_rate))
 
-    kr_holidays = get_korea_2026_holidays()
+    # holiday_calendar: None = 한국 공휴일(v10). 그 외 holidays 라이브러리 객체(예: holidays.US(subdiv='CA', years=2026))
+    kr_holidays = get_korea_2026_holidays() if holiday_calendar is None else holiday_calendar
 
     # Determine day types for each day
     day_types = []

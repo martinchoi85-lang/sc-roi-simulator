@@ -34,7 +34,7 @@
   const KWH_PER_KG = 12.861; // 데이터의 가스 소비는 LPG kg 기준으로 저장(순발열량 46.3MJ/kg) → 연료 열량 kWh로 표시
   const GAS_UNITS = { kwh: ['원/kWh (열량)', 1], kg: ['원/kg (LPG)', 12.861], m3: ['원/m³ (도시가스, 약 10.8kWh/m³)', 10.8] };
   const gasPerKwh = () => S.gasPrice / GAS_UNITS[S.gasUnit][1];
-  const snap3 = () => JSON.stringify([S.tariff, S.exportMode, S.fitPrice, S.touExportPct, S.essMode, S.gridCharge, S.escE, S.escG, S.gasPrice, S.gasUnit, S.omPct, S.years, TARIFF]);
+  const snap3 = () => JSON.stringify([$('#fxUSD').value, $('#fxAUD').value, S.tariff, S.exportMode, S.fitPrice, S.touExportPct, S.essMode, S.gridCharge, S.escE, S.escG, S.gasPrice, S.gasUnit, S.omPct, S.years, TARIFF]);
   const region = () => D.regions.find(r => r.id === S.region);
   const houseKey = h => D.houses.find(x => x[0] === h)[1];
 
@@ -51,7 +51,7 @@
     seg($('[data-k=rate]'), D.rates.map(r => [r, Math.round(r * 100) + '%']), () => S.rate, v => S.rate = +v);
     seg($('[data-k=awhp]'), [['false', '가스보일러 유지'], ['true', 'AWHP 도입']], () => S.awhp, v => S.awhp = v === 'true');
     $('#region').innerHTML = D.regions.map(r => { const ok = AVAIL[r.id]; return `<option value="${r.id}" ${ok ? '' : 'disabled'}>${r.label}${ok ? '' : ' — ' + (r.pending || '준비 중')}</option>`; }).join('');
-    $('#region').value = S.region; $('#region').onchange = e => { S.region = e.target.value; changed(); };
+    $('#region').value = S.region; $('#region').onchange = e => { const prev = region().country; S.region = e.target.value; const c = region().country; if (c !== prev) { const d = D.countryDefaults[c]; S.tariff = d.tariff; S.exportMode = d.exportMode; S.fitPrice = d.fitPrice; $('[data-k=fitPrice]').value = S.fitPrice; } paintL3(); changed(); };
     $$('.stepper').forEach(el => {
       const k = el.dataset.k, mn = +el.dataset.min, mx = +el.dataset.max;
       el.innerHTML = `<button data-d="-1">−</button><input type="text" value="${S[k]}"><button data-d="1">+</button><span class="u"></span>`;
@@ -86,34 +86,57 @@
     const gu = $('#gasUnit'); gu.innerHTML = Object.entries(GAS_UNITS).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join(''); gu.value = S.gasUnit;
     gu.onchange = () => { const perKwh = gasPerKwh(); S.gasUnit = gu.value; S.gasPrice = Math.round(perKwh * GAS_UNITS[S.gasUnit][1] * 100) / 100; $('[data-k=gasPrice]').value = S.gasPrice; changed(); };
     paintHems(); paintL3();
-    ['#curSel', '#fxUSD', '#fxAUD'].forEach(s => $(s).addEventListener('change', () => { $('#fxUSD').value = num($('#fxUSD').value).toLocaleString('ko-KR'); $('#fxAUD').value = num($('#fxAUD').value).toLocaleString('ko-KR'); renderAll(); }));
+    ['#curSel', '#fxUSD', '#fxAUD'].forEach(s => $(s).addEventListener('change', () => { $('#fxUSD').value = num($('#fxUSD').value).toLocaleString('ko-KR'); $('#fxAUD').value = num($('#fxAUD').value).toLocaleString('ko-KR'); changed(); }));
   }
   function paintHems() { $('#hemsBox').classList.toggle('off', !S.hemsOn); }
+  const CUR_LABEL = { KRW: '원', USD: 'USD', AUD: 'AUD' };
   function paintL3() {
     const reg = region();
     $('#tariffSel').innerHTML = Object.entries(TARIFF).filter(([, t]) => t.country === reg.country).map(([k, t]) => `<option value="${k}">${t.label}</option>`).join('');
+    if (!TARIFF[S.tariff] || TARIFF[S.tariff].country !== reg.country) S.tariff = D.countryDefaults[reg.country].tariff;
     $('#tariffSel').value = S.tariff;
-    const T = TARIFF[S.tariff], isTou = T.type === 'tou';
+    const T = TARIFF[S.tariff], isTou = T.type === 'tou', cu = CUR_LABEL[T.currency || 'KRW'];
     const eb = $('[data-k=exportMode]'); eb.querySelector('[data-v=tou]').disabled = !isTou;
-    eb.querySelector('[data-v=tou]').title = isTou ? '' : '누진제에는 시간대 단가가 없어 TOU 매전을 쓸 수 없습니다';
+    eb.querySelector('[data-v=tou]').title = isTou ? '' : '시간대 단가가 없는 요금제에는 TOU 매전을 쓸 수 없습니다';
+    if (!isTou && S.exportMode === 'tou') S.exportMode = 'net';
     eb._paint();
+    $('#fitUnit').textContent = cu + '/kWh';
     $('#fitRow').style.display = S.exportMode === 'fit' ? '' : 'none';
     $('#touExpRow').style.display = S.exportMode === 'tou' ? '' : 'none';
     $('#essModeRow').style.display = isTou ? '' : 'none';
     $('#gridChgRow').style.display = isTou && S.essMode === 'tou' ? '' : 'none';
     $('[data-k=essMode]')._paint && $('[data-k=essMode]')._paint();
-    const box = $('#touBox'); box.classList.toggle('show', isTou);
-    if (isTou) {
-      const t = T.tou, sn = ['간절기', '하절기', '동절기'], pn = ['경부하', '중간', '최대'], pc = ['#cde2fb', '#6da7ec', '#184f95'];
-      box.innerHTML = `<table><tr><th></th>${pn.map(p => `<th>${p}</th>`).join('')}</tr>` +
-        sn.map((s, i) => `<tr><th>${s}</th>${[0, 1, 2].map(k => `<td><input type="text" data-ts="${i}" data-tp="${k}" value="${t.rates[i][k]}"></td>`).join('')}</tr>`).join('') +
-        `</table><div class="inl" style="margin-top:4px">기본요금 <input type="text" data-tb value="${t.baseFee}"> 원/월 · 기후·연료 <input type="text" data-ta value="${t.addPerKwh}"> 원/kWh</div>` +
-        sn.map((s, i) => `<div class="hrs"><b style="font-weight:500">${s}</b>${t.hours[i].map((k, h) => `<span style="background:${pc[k]}" title="${h}시 ${pn[k]}"></span>`).join('')}</div>`).join('') +
-        `<div class="warn">원/kWh 세전 단가. 시간대·배율은 2019년 한전 실증사업 일반형(하계 13~17시 2.3배, 동계 9~12시 1.7배)을 바탕으로 한 가정값. 한국 일반 가정에는 아직 전국 시행 요금표가 없음.</div>`;
-      box.querySelectorAll('input[data-ts]').forEach(el => el.onchange = () => { t.rates[+el.dataset.ts][+el.dataset.tp] = num(el.value); changed(); });
-      box.querySelector('[data-tb]').onchange = e => { t.baseFee = num(e.target.value); changed(); };
-      box.querySelector('[data-ta]').onchange = e => { t.addPerKwh = num(e.target.value); changed(); };
+    $('#gasHint').textContent = reg.country === 'KR' ? '' : '현지 가스 단가를 입력하세요(기본값은 한국 LPG 환산값).';
+    const box = $('#touBox'); box.classList.toggle('show', T.type !== 'kr_prog');
+    const inp = (attr, v, w) => `<input type="text" ${attr} value="${v}"${w ? ` style="width:${w}px"` : ''}>`;
+    let h = '';
+    if (T.type === 'tou') {
+      const t = T.tou, sn = t.seasonNames || ['간절기', '하절기', '동절기'], pn = t.periodNames || ['경부하', '중간', '최대'], pc = ['#cde2fb', '#6da7ec', '#184f95'];
+      h = `<table><tr><th>${cu}/kWh</th>${pn.map(p => `<th>${p}</th>`).join('')}</tr>` +
+        sn.map((sname, i) => `<tr><th>${sname}</th>${[0, 1, 2].map(k => `<td>${inp(`data-ts="${i}" data-tp="${k}"`, t.rates[i][k])}</td>`).join('')}</tr>`).join('') + '</table>' +
+        `<div class="inl" style="margin-top:4px">${t.krTax || T.currency === 'KRW' ? `기본요금 ${inp('data-f="baseFee"', t.baseFee)} 원/월` : `월 기본료 ${inp('data-f="baseFee"', t.baseFee, 52)} · 일 기본료 ${inp('data-f="dailyFee"', t.dailyFee, 52)}`} · kWh당 추가 ${inp('data-f="addPerKwh"', t.addPerKwh, 60)}</div>` +
+        sn.map((sname, i) => `<div class="hrs"><b style="font-weight:500">${sname}</b>${t.hours[i].map((k, hh) => `<span style="background:${pc[k]}" title="${hh}시 ${pn[k]}"></span>`).join('')}</div>`).join('') +
+        (T.country === 'KR' ? '<div class="warn">원/kWh 세전 단가. 시간대·배율은 2019년 한전 실증사업 일반형(하계 13~17시 2.3배, 동계 9~12시 1.7배)을 바탕으로 한 가정값. 한국 일반 가정에는 아직 전국 시행 요금표가 없음.</div>' : '');
+    } else if (T.type === 'tiered') {
+      const t = T.tiered;
+      h = `<table><tr><th>${cu}/kWh</th><th>1구간 ~${inp('data-lim="0"', t.limits[0], 44)}</th><th>2구간 ~${inp('data-lim="1"', t.limits[1], 44)}</th><th>3구간</th></tr>` +
+        t.seasonNames.map((sname, i) => `<tr><th>${sname}</th>${[0, 1, 2].map(k => `<td>${inp(`data-ts="${i}" data-tp="${k}"`, t.rates[i][k])}</td>`).join('')}</tr>`).join('') +
+        `<tr><th>월 정액(구간별)</th>${[0, 1, 2].map(k => `<td>${inp(`data-pac="${k}"`, t.pac[k])}</td>`).join('')}</tr></table>` +
+        `<div class="inl" style="margin-top:4px">최소요금 ${inp('data-f="minCharge"', t.minCharge, 44)} ${cu}/월 · 고정 조정요금 ${inp('data-f="addFixed"', t.addFixed, 60)} · 분기 조정요금 ${inp('data-f="addVar"', t.addVar, 52)} ${cu}/kWh</div>`;
+    } else if (T.type === 'flat') {
+      const t = T.flat;
+      h = `<div class="inl">일 기본료 ${inp('data-f="dailyFee"', t.dailyFee, 60)} ${cu}/일 · 사용 단가 ${inp('data-f="rate"', t.rate, 60)} ${cu}/kWh</div>`;
     }
+    if (T.src) h += `<div class="warn" style="color:var(--sub)">출처: ${T.src}${T.country === 'US' ? '. 분기 조정요금(VEA·CRPSEA·VRPSEA·IRCA)은 문서에 값이 없어 임시값 — 현재 값 확인 필요' : ''}${T.country === 'AU' ? '. GST 포함. 매전(FiT)은 소매사가 정함 → 직접 입력' : ''}</div>`;
+    box.innerHTML = h;
+    const tt = T.tou || T.tiered || T.flat;
+    box.querySelectorAll('input[data-ts]').forEach(el => el.onchange = () => { tt.rates[+el.dataset.ts][+el.dataset.tp] = num(el.value); changed(); });
+    box.querySelectorAll('input[data-lim]').forEach(el => el.onchange = () => { tt.limits[+el.dataset.lim] = num(el.value); changed(); });
+    box.querySelectorAll('input[data-pac]').forEach(el => el.onchange = () => { tt.pac[+el.dataset.pac] = num(el.value); changed(); });
+    box.querySelectorAll('input[data-f]').forEach(el => el.onchange = () => { tt[el.dataset.f] = num(el.value); if ('addFixed' in tt) tt.addPerKwh = (tt.addFixed || 0) + (tt.addVar || 0); changed(); });
+    // HEMS 계절 이름(남반구는 반대)
+    const hb = $$('#hemsBox > div'); const S_ = reg.hemi === 'S';
+    hb[0].firstChild.textContent = S_ ? '동절기 6~8월' : '동절기 12~2월'; hb[1].firstChild.textContent = S_ ? '하절기 12~2월' : '하절기 6~8월';
   }
 
   // ---------------- 상태 표시 ----------------
@@ -141,6 +164,7 @@
       cost: Object.assign({}, COST, { hemsInclude: S.hemsInclude }),
     };
     if (T.type === 'tou') P.touArr = E.touPriceArray(T.tou, reg.hemi);
+    P.fx = T.currency === 'USD' ? num($('#fxUSD').value) : T.currency === 'AUD' ? num($('#fxAUD').value) : 1;
     return P;
   }
   async function run(level) {
@@ -458,7 +482,7 @@
 
   // ---------------- 가정·출처 ----------------
   function renderInfo() {
-    const st = s => `<span class="st ${s}">${{ V: '공식 확인', U: '미검증', P: '임시값', A: '가정', I: '상사 입력' }[s]}</span>`;
+    const st = s => `<span class="st ${s}">${{ V: '공식 확인', U: '미검증', P: '임시값', A: '가정', I: '입력' }[s]}</span>`;
     $('#infoBody').innerHTML = `
 <h2>이 시뮬레이터가 계산하는 방법</h2>
 <ul>
@@ -474,6 +498,22 @@
 <li>매년 같은 기상(TMY)과 같은 생활 패턴이 반복된다고 봅니다. 15분 계산 결과를 1시간 단위로 합쳐 씁니다.</li>
 <li>계산 검증: 2·3단계 계산(JS)은 별도로 작성한 Python 기준 구현과 4개 시나리오 × 20년에서 0.000001원 이내로 일치합니다.</li>
 </ul>
+<h2>현재 지역의 데이터</h2>
+<table><tr><th>항목</th><th>내용</th></tr>
+<tr><td>지역</td><td>${region().label}</td></tr>
+<tr><td>기상</td><td>${META.weather_src || ''} · PV 1kW 연간 ${f0(E.sum(META.pv1kw_kwh || [0]))}kWh (경사 25°, ${region().hemi === 'S' ? '북향' : '남향'})</td></tr>
+<tr><td>생활시간 통계</td><td>${META.tus_src || 'KOSIS 2024 생활시간조사'}</td></tr>
+<tr><td>냉방 기간</td><td>${(META.cooling_months || [6, 7, 8, 9]).join('·')}월, 재실 시 26/27°C</td></tr>
+<tr><td>요금제</td><td>${Object.values(TARIFF).filter(t => t.country === region().country).map(t => t.label + (t.src ? ' — ' + t.src : '')).join('<br>')}</td></tr>
+</table>
+<ul>
+<li><b>미국(LA)</b>: 생활 패턴은 BLS ATUS 원자료(캘리포니아 15세 이상 7,524명, 취업자 4,382명, 2015~2019·2022~2025년)를 KOSIS 표와 같은 형식으로 변환해 같은 엔진으로 만들었습니다. 평일 출근 비율 남 86%·여 80%, 토·일 근무 비율 33%·24%. 검증: 주말 '집 밖' 비율이 ATUS 장소 기록과 3~4%p 차이. 평일 낮은 모든 거주자가 출근한다는 가정 때문에 ATUS 평균(재택근무·휴무 포함)보다 높습니다.</li>
+<li><b>호주(멜버른)</b>: ABS 2024 생활시간조사 공개표에는 시간대별 자료가 근무뿐이라, 근무 시간대는 ABS 값을, 나머지 활동은 캘리포니아 곡선 모양에 ABS 하루 평균 시간을 맞춰 썼습니다. 평일 출근 비율 남 83%·여 75%, 주말 근무 22%(취업자 비율 남 69%·여 61%로 환산).</li>
+<li>가전 구성·효율은 한국 SC와 같다고 가정했습니다(연간 사용량 보정값 동일). 사용 시간대만 현지 통계를 따릅니다.</li>
+<li>기상은 현지 표준시 기준이고 서머타임은 반영하지 않았습니다(여름철 생활 시각이 1시간 어긋날 수 있음).</li>
+<li>LADWP 요금은 2019-07-01 요금 요약 기준이며, 분기마다 바뀌는 조정요금(VEA 등)은 임시값입니다. 지방 공공요금세 등 세금은 제외. LADWP 상계는 남은 발전량을 이후 요금에서 차감(현금 환급 없음)하는 방식이라 월 상계·무기한 이월로 계산합니다.</li>
+<li>빅토리아는 2026-27 VDO(GST 포함)를 썼습니다. 매전 단가(FiT)는 2025년 7월부터 규제 최저가가 없어져 소매사가 정하므로 직접 입력합니다.</li>
+</ul>
 <h2>입력값과 근거 수준</h2>
 <table><tr><th>항목</th><th>값</th><th>근거</th><th>수준</th></tr>
 <tr><td>기상</td><td>${META.weather_src || ''}</td><td>15분 보간, 연간 PV 1kW 발전 ${f0(E.sum(META.pv1kw_kwh || [0]))}kWh (경사 25°, 정남, 시스템 손실 14%, 인버터 97%)</td><td>${st('V')}</td></tr>
@@ -486,7 +526,7 @@
 <tr><td>한전 누진제</td><td>기본 910/1,600/7,300원, 120/214.6/307.3원/kWh, 하계 7~8월 300/450kWh, 기후 9·연료 5원, VAT 10%, 기금 2.7%</td><td>한전 요금표</td><td>${st('V')}</td></tr>
 <tr><td>주택용 계시별(TOU)</td><td>편집 가능</td><td>2019 한전 실증사업 시간대·배율 기반 가정. 한국 일반 가정 전국 요금표 없음</td><td>${st('A')}</td></tr>
 ${D.costFields.filter(f => f[0] !== 'g').map(f => `<tr><td>${f[1].replace(/<[^>]+>/g, '')}</td><td>${(+f[2]).toLocaleString('ko-KR')}</td><td>${f[4]}</td><td>${st(f[3])}</td></tr>`).join('')}
-<tr><td>전기·가스 인상률, 유지보수비, FIT 단가</td><td>기본 ${D.init.escE}% · ${D.init.escG}% · ${D.init.omPct}% · ${D.init.fitPrice}원/kWh</td><td>근거 없는 출발값. 상사 입력용</td><td>${st('I')}</td></tr>
+<tr><td>전기·가스 인상률, 유지보수비, FIT 단가</td><td>기본 ${D.init.escE}% · ${D.init.escG}% · ${D.init.omPct}% · ${D.init.fitPrice}원/kWh</td><td>근거 없는 출발값. 직접 입력</td><td>${st('I')}</td></tr>
 <tr><td>환율</td><td>USD 1,400원 · AUD 900원 (기본)</td><td>표시용. 상단에서 직접 입력</td><td>${st('I')}</td></tr>
 </table>
 <h2>한계</h2>
@@ -505,7 +545,7 @@ ${D.costFields.filter(f => f[0] !== 'g').map(f => `<tr><td>${f[1].replace(/<[^>]
   document.addEventListener('mousemove', e => { const t = e.target.closest && e.target.closest('[data-tip]'); if (t) showTip(e, t.getAttribute('data-tip')); else if (!e.target.closest('canvas')) hideTip(); });
 
   // ---------------- 시작 ----------------
-  function renderAll() { renderSim(); if (!$('#tab-data').hidden) renderData(); renderInfo(); }
+  function renderAll() { renderSim(); if (!$('#tab-data').hidden) renderData(); try { renderInfo(); } catch (e) { console.error(e); } }
   function boot() {
     buildInputs();
     $$('#tabs a').forEach(a => a.onclick = () => { $$('#tabs a').forEach(x => x.classList.toggle('on', x === a)); $$('.tab').forEach(t => t.hidden = t.id !== 'tab-' + a.dataset.tab); if (a.dataset.tab === 'data') renderData(); scrollTo(0, 0); });

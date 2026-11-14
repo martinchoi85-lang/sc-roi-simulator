@@ -126,7 +126,7 @@ def simulate_thermal_5r1c(
             t_set_heat = setpoint_heat_occ if is_occ else setpoint_freeze
 
         # Cooling setpoint & allowance: only 6/1 ~ 9/30 (days 151 to 272 inclusive)
-        is_cooling_season = (151 <= d_idx <= 272)
+        is_cooling_season = (151 <= d_idx <= 272) if (passive is None or passive.get('cooling_doy') is None) else bool(passive['cooling_doy'][d_idx])
         allow_cooling = False
         t_set_cool = 40.0
 
