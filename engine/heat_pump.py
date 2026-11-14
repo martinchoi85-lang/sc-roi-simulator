@@ -320,6 +320,7 @@ def simulate_awhp_space_heating_with_capacity_bound(
     occupants_sleeping: np.ndarray,
     awhp_cfg: Dict[str, Any],
     dt_sec: float = 900.0,
+    passive: Dict[str, Any] = None,
 ) -> Dict[str, Any]:
     """Simulates 5R1C space heating with HM091HF maximum capacity bound and 3kW backup heater.
 
@@ -393,36 +394,44 @@ def simulate_awhp_space_heating_with_capacity_bound(
     # to establish realistic winter dynamic thermal equilibrium at start of year (Jan 1 00:00).
     dec_start_idx = 334 * 96
     t_curr = 20.0
+    if passive is not None:
+        from engine import passive_climate as _pc
+        _sol_full = passive["window_irr"] * window_area * shgc * f_frame
+        _q_nosol = q_gains - q_sol
+        _home = (occupants_active + occupants_sleeping) > 0
+
+    def _free(i, t_curr):
+        if passive is None:
+            t_inf = temp_air[i] + q_gains[i] / h_tot
+            return t_inf + (t_curr - t_inf) * decay, heat_gain_factor
+        return _pc.step(passive, i, t_curr, temp_air[i], _q_nosol[i], _sol_full[i], _home[i], h_tot, room_volume, c_m, dt_sec)
+
     for i in range(dec_start_idx, n):
         t_amb = temp_air[i]
-        q_g = q_gains[i]
-        t_inf = t_amb + q_g / h_tot
-        t_free = t_inf + (t_curr - t_inf) * decay
+        t_free, hgf = _free(i, t_curr)
         d_idx = day_indices[i]
         is_occ = day_occupied_15min[i]
         t_set_heat = float(heat_setpoint_schedule[i]) if heat_setpoint_schedule is not None else (20.0 if is_occ else 10.0)
 
         if t_free < t_set_heat:
-            q_needed_w = (t_set_heat - t_free) * heat_gain_factor
+            q_needed_w = (t_set_heat - t_free) * hgf
             q_needed_kw = max(0.0, q_needed_w / 1000.0)
             cap_awhp = max_cap_heat_kw[i]
             q_awhp = min(q_needed_kw, cap_awhp)
-            t_temp = t_free + (q_awhp * 1000.0) / heat_gain_factor
+            t_temp = t_free + (q_awhp * 1000.0) / hgf
             if t_temp < (t_set_heat - 1.5):
                 q_deficit = q_needed_kw - q_awhp
                 q_backup = min(q_deficit, max_backup_kw)
             else:
                 q_backup = 0.0
             q_actual_kw = q_awhp + q_backup
-            t_curr = t_free + (q_actual_kw * 1000.0) / heat_gain_factor
+            t_curr = t_free + (q_actual_kw * 1000.0) / hgf
         else:
             t_curr = t_free
 
     for i in range(n):
         t_amb = temp_air[i]
-        q_g = q_gains[i]
-        t_inf = t_amb + q_g / h_tot
-        t_free = t_inf + (t_curr - t_inf) * decay
+        t_free, hgf = _free(i, t_curr)
 
         d_idx = day_indices[i]
         is_occ = day_occupied_15min[i]
@@ -447,7 +456,7 @@ def simulate_awhp_space_heating_with_capacity_bound(
         # Heating demand
         if t_free < t_set_heat:
             t_set[i] = t_set_heat
-            q_needed_w = (t_set_heat - t_free) * heat_gain_factor
+            q_needed_w = (t_set_heat - t_free) * hgf
             q_needed_kw = max(0.0, q_needed_w / 1000.0)
 
             # AWHP Compressor
@@ -455,7 +464,7 @@ def simulate_awhp_space_heating_with_capacity_bound(
             q_awhp = min(q_needed_kw, cap_awhp)
 
             # Temp achieved with AWHP alone
-            t_temp = t_free + (q_awhp * 1000.0) / heat_gain_factor
+            t_temp = t_free + (q_awhp * 1000.0) / hgf
 
             # Backup heater rule: operates ONLY when indoor temp < (setpoint - 1.5°C)
             if t_temp < (t_set_heat - 1.5):
@@ -465,7 +474,7 @@ def simulate_awhp_space_heating_with_capacity_bound(
                 q_backup = 0.0
 
             q_actual_kw = q_awhp + q_backup
-            t_curr = t_free + (q_actual_kw * 1000.0) / heat_gain_factor
+            t_curr = t_free + (q_actual_kw * 1000.0) / hgf
 
             # Track unmet heating hours
             if t_curr < (t_set_heat - 0.1):
@@ -478,11 +487,11 @@ def simulate_awhp_space_heating_with_capacity_bound(
 
         elif allow_cooling and (t_free > t_set_cool):
             t_set[i] = t_set_cool
-            q_needed_w = (t_free - t_set_cool) * heat_gain_factor
+            q_needed_w = (t_free - t_set_cool) * hgf
             q_actual_w = min(q_needed_w, 8000.0)
             q_cool_kw[i] = q_actual_w / 1000.0
             p_cool_kw[i] = q_cool_kw[i] / cop_cool_std
-            t_curr = t_free - (q_actual_w / heat_gain_factor)
+            t_curr = t_free - (q_actual_w / hgf)
 
         else:
             t_curr = t_free

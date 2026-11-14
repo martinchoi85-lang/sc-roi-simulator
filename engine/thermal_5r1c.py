@@ -26,6 +26,7 @@ def simulate_thermal_5r1c(
     heat_setpoint_schedule: np.ndarray = None,
     occupants_active: np.ndarray = None,
     occupants_sleeping: np.ndarray = None,
+    passive: Dict = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Simulates 15-minute building thermal dynamics over 35,040 timesteps.
 
@@ -100,11 +101,20 @@ def simulate_thermal_5r1c(
 
     t_curr = 20.0
 
+    if passive is not None:
+        from engine import passive_climate as _pc
+        _sol_full = passive["window_irr"] * window_area * shgc * f_frame
+        _q_nosol = q_gains - q_sol
+        _home = ((occupants_active if occupants_active is not None else occupant_presence) + (occupants_sleeping if occupants_sleeping is not None else 0)) > 0
+
     for i in range(n):
         t_amb = temp_air[i]
-        q_g = q_gains[i]
-        t_inf = t_amb + q_g / h_tot
-        t_free = t_inf + (t_curr - t_inf) * decay
+        if passive is None:
+            q_g = q_gains[i]
+            t_inf = t_amb + q_g / h_tot
+            t_free = t_inf + (t_curr - t_inf) * decay
+        else:
+            t_free, heat_gain_factor = _pc.step(passive, i, t_curr, t_amb, _q_nosol[i], _sol_full[i], _home[i], h_tot, room_volume, c_m, dt_sec)
 
         d_idx = day_indices[i]
         is_occ = day_occupied_15min[i]

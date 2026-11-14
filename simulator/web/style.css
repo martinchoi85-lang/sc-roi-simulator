@@ -157,3 +157,4 @@ table#tbl{border-collapse:separate;border-spacing:0;font-size:12px;min-width:100
 .wrapseg button{border:1px solid var(--line)!important;border-radius:14px;padding:3px 11px}
 .autonote{font-size:11px;color:var(--muted);margin:-4px 0 8px;text-align:right}
 .cs b{font-weight:500;color:var(--ink)}
+.unitsel{border:1px solid var(--line);border-radius:5px;padding:3px 4px;font-size:11.5px;max-width:190px}

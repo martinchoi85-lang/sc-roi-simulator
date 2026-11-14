@@ -14,7 +14,7 @@ window.SCDEF = {
     pvN: 8, essN: 0, pvDeg: 0.5, essDeg: 3.0, pvRepl: 80, essRepl: 70, awhpLife: 15, invLife: 12,
     hemsOn: false, hemsWinter: 5, hemsSummer: 5, hemsMid: 3, hemsInclude: true,
     tariff: 'kr_prog', exportMode: 'net', fitPrice: 100, touExportPct: 100, essMode: 'self', gridCharge: false,
-    escE: 3, escG: 2, gasPrice: 2812.26, omPct: 0.5, years: 20,
+    escE: 3, escG: 2, gasPrice: 218.66, gasUnit: 'kwh', omPct: 0.5, years: 20,
   },
   fixed: { pvModW: 400, essModKwh: 5 },
   // 단가·보조금 (상사가 고치는 값)

@@ -31,7 +31,10 @@
   function loadScript(src) { return new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => no(new Error('불러오기 실패: ' + src)); document.head.appendChild(s); }); }
   const snap1 = () => JSON.stringify([S.house, S.occ, S.rate, S.region, S.awhp]);
   const snap2 = () => JSON.stringify([S.pvN, S.essN, S.pvDeg, S.essDeg, S.pvRepl, S.essRepl, S.awhpLife, S.invLife, S.hemsOn, S.hemsWinter, S.hemsSummer, S.hemsMid, S.hemsInclude, COST]);
-  const snap3 = () => JSON.stringify([S.tariff, S.exportMode, S.fitPrice, S.touExportPct, S.essMode, S.gridCharge, S.escE, S.escG, S.gasPrice, S.omPct, S.years, TARIFF]);
+  const KWH_PER_KG = 12.861; // 데이터의 가스 소비는 LPG kg 기준으로 저장(순발열량 46.3MJ/kg) → 연료 열량 kWh로 표시
+  const GAS_UNITS = { kwh: ['원/kWh (열량)', 1], kg: ['원/kg (LPG)', 12.861], m3: ['원/m³ (도시가스, 약 10.8kWh/m³)', 10.8] };
+  const gasPerKwh = () => S.gasPrice / GAS_UNITS[S.gasUnit][1];
+  const snap3 = () => JSON.stringify([S.tariff, S.exportMode, S.fitPrice, S.touExportPct, S.essMode, S.gridCharge, S.escE, S.escG, S.gasPrice, S.gasUnit, S.omPct, S.years, TARIFF]);
   const region = () => D.regions.find(r => r.id === S.region);
   const houseKey = h => D.houses.find(x => x[0] === h)[1];
 
@@ -80,6 +83,8 @@
     $('#tariffSel').onchange = e => { S.tariff = e.target.value; if (TARIFF[S.tariff].type === 'kr_prog' && S.exportMode === 'tou') S.exportMode = 'net'; paintL3(); changed(); };
     seg($('[data-k=exportMode]'), [['net', '월 상계'], ['fit', 'FIT'], ['tou', 'TOU']], () => S.exportMode, v => { S.exportMode = v; paintL3(); });
     seg($('[data-k=essMode]'), [['self', '자가소비 우선'], ['tou', 'TOU 피크 방전']], () => S.essMode, v => { S.essMode = v; paintL3(); });
+    const gu = $('#gasUnit'); gu.innerHTML = Object.entries(GAS_UNITS).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join(''); gu.value = S.gasUnit;
+    gu.onchange = () => { const perKwh = gasPerKwh(); S.gasUnit = gu.value; S.gasPrice = Math.round(perKwh * GAS_UNITS[S.gasUnit][1] * 100) / 100; $('[data-k=gasPrice]').value = S.gasPrice; changed(); };
     paintHems(); paintL3();
     ['#curSel', '#fxUSD', '#fxAUD'].forEach(s => $(s).addEventListener('change', () => { $('#fxUSD').value = num($('#fxUSD').value).toLocaleString('ko-KR'); $('#fxAUD').value = num($('#fxAUD').value).toLocaleString('ko-KR'); renderAll(); }));
   }
@@ -132,7 +137,7 @@
       awhpLife: S.awhpLife, invLife: S.invLife, essRte: COST.essRte, essCrate: COST.essCrate,
       hems: { on: S.hemsOn, winter: S.hemsWinter, summer: S.hemsSummer, mid: S.hemsMid }, hemi: reg.hemi,
       tariff: T, exportMode: S.exportMode, fitPrice: S.fitPrice, touExportRatio: S.touExportPct / 100, essMode: S.essMode, gridCharge: S.gridCharge,
-      escE: S.escE, escG: S.escG, gasPrice: S.gasPrice, omPct: S.omPct, years: S.years,
+      escE: S.escE, escG: S.escG, gasPrice: gasPerKwh() * KWH_PER_KG, omPct: S.omPct, years: S.years,
       cost: Object.assign({}, COST, { hemsInclude: S.hemsInclude }),
     };
     if (T.type === 'tou') P.touArr = E.touPriceArray(T.tou, reg.hemi);
@@ -231,7 +236,7 @@
     groupedBars('#chMon', MON, [{ name: '전력 사용', color: COL.s1, values: Array.from(y1.monthUse) }, { name: 'PV 발전', color: COL.s4, values: Array.from(y1.monthPv) },
       { name: '계통 수전', color: COL.s7, values: Array.from(y1.monthImp) }, { name: '역송', color: COL.s3, values: Array.from(y1.monthExp) }], { unit: 'kWh', h: 240 });
     // 월별 비용
-    const gp = S.gasPrice, { fx, c } = cur(), dv = c === 'KRW' ? 1e4 : fx;
+    const gp = gasPerKwh() * KWH_PER_KG, { fx, c } = cur(), dv = c === 'KRW' ? 1e4 : fx;
     const bB = y1.monthBillBefore.map((v, m) => (v + y1.monthGasBefore[m] * gp) / dv);
     const expInc = R3.years[0].after.exportIncome, expM = Array.from(y1.monthExp), expT = expM.reduce((a, b) => a + b, 0) || 1;
     const bA = y1.monthBillAfter.map((v, m) => (v + y1.monthGasAfter[m] * gp - expInc * expM[m] / expT) / dv);
@@ -281,8 +286,8 @@
     const rows = [
       ['CAPEX', 'PV', r => r.cap.pv, 'gstart'], ['', 'ESS', r => r.cap.ess], ['', 'AWHP', r => r.cap.awhp], ['', '인버터', r => r.cap.inv], ['', 'HEMS', r => r.cap.hems], ['', '부대공사비', r => r.cap.misc], ['', '보조금 (−)', r => r.cap.sub],
       ['', '합계', r => r.capT, 'sum'], ['', '누적', r => r.cumC, 'sum'],
-      ['OPEX (설치 전)', '전기', r => r.before.elec, 'gstart'], ['', '가스 (프로판)', r => r.before.gas], ['', '합계', r => r.before.total, 'sum'],
-      ['OPEX (설치 후)', '전기', r => r.after.elec, 'gstart'], ['', '매전 수익 (−)', r => -r.after.exportIncome], ['', '가스 (프로판)', r => r.after.gas], ['', '유지보수비', r => r.after.om], ['', '합계', r => r.after.total, 'sum'],
+      ['OPEX (설치 전)', '전기', r => r.before.elec, 'gstart'], ['', '가스', r => r.before.gas], ['', '합계', r => r.before.total, 'sum'],
+      ['OPEX (설치 후)', '전기', r => r.after.elec, 'gstart'], ['', '매전 수익 (−)', r => -r.after.exportIncome], ['', '가스', r => r.after.gas], ['', '유지보수비', r => r.after.om], ['', '합계', r => r.after.total, 'sum'],
       ['연간 이득', '설치 전 − 설치 후', r => r.benefit, 'gstart'], ['', '누적', r => r.cumB, 'sum'],
       ['누적 순이익', '누적 이득 − 누적 CAPEX', r => r.net, 'net gstart'],
     ];
@@ -298,7 +303,7 @@
     $('#tbl').innerHTML = h + '</tbody>';
     $('#unitNote').textContent = `단위: ${unitLabel()} · 좌우 스크롤`;
     const T = TARIFF[S.tariff];
-    $('#tblNote').innerHTML = `설치 전 = 가스보일러(프로판) + 계통 전력, PV·ESS·AWHP·HEMS 없음. 설치 후 = ${aw ? 'AWHP(난방·급탕)' : '가스보일러 유지'}${R3.kpi.pvKw ? ` + PV ${R3.kpi.pvKw.toFixed(1)}kW` : ''}${R3.kpi.essKwh ? ` + ESS ${R3.kpi.essKwh}kWh` : ''}${S.hemsOn ? ' + HEMS' : ''}.
+    $('#tblNote').innerHTML = `설치 전 = 가스보일러 + 계통 전력, PV·ESS·AWHP·HEMS 없음. 설치 후 = ${aw ? 'AWHP(난방·급탕)' : '가스보일러 유지'}${R3.kpi.pvKw ? ` + PV ${R3.kpi.pvKw.toFixed(1)}kW` : ''}${R3.kpi.essKwh ? ` + ESS ${R3.kpi.essKwh}kWh` : ''}${S.hemsOn ? ' + HEMS' : ''}.
       요금제 ${T.label}, 매전 ${{ net: '월 상계(잉여 kWh 무기한 이월)', fit: `FIT ${f0(S.fitPrice)}원/kWh 고정`, tou: `TOU 수전 단가의 ${S.touExportPct}%` }[S.exportMode]}.
       전기요금 ${S.escE}%/년·가스 ${S.escG}%/년 인상, 할인율 없음. 회수 연도는 테두리, 교체가 있는 해는 노란 칸. 매년 같은 기상(TMY)·같은 생활 패턴이 반복된다고 가정.`;
   }
@@ -320,7 +325,7 @@
     before: '기준안 = 지금 상태(가스보일러 난방·급탕, PV·ESS 없음)의 시간별 전력 소비. 가전·조명·냉방만 전기를 씁니다.',
     after: '도입안 = 1단계에서 고른 난방 방식의 시간별 전력 소비. AWHP 도입이면 AWHP 난방·급탕 전력이 더해집니다. PV 발전·HEMS 절감을 빼기 전 값.',
     heat: '난방이 켜진 시간만 색칠(회색 = 꺼짐). 색이 진할수록 그 시간 난방에 쓴 에너지가 큼.',
-    gas: '기준안(가스보일러)의 시간별 프로판 소비. 난방 + 급탕.',
+    gas: '기준안(가스보일러)의 시간별 가스 소비(연료 열량 kWh). 난방 + 급탕.',
     pv: '현재 PV 용량 기준 1년 차 시간별 발전량.', tin: '도입안 기준 실내 온도(난방·냉방 운전 결과).', tout: 'TMY 외기 온도.', occ: '집에 있는 인원(수면 포함).',
   };
   function heatSeries(mode) {
@@ -332,7 +337,7 @@
         if (L1.awhp) return { a: c.aw_heat.map((v, h) => v + c.aw_backup[h]), unit: 'kWh', name: '난방 가동 · AWHP 난방 전력 (보조히터 포함)', ramp: ORANGE, offZero: true };
         return { a: c.heat_th_base, unit: 'kWh열', name: '난방 가동 · 가스보일러 난방 열량', ramp: ORANGE, offZero: true };
       }
-      case 'gas': return { a: L1.before.gas, unit: 'kg', name: '프로판 (설치 전)' };
+      case 'gas': return { a: L1.before.gas.map(v => v * KWH_PER_KG), unit: 'kWh', name: '가스 소비 (기준안 · 가스보일러)' };
       case 'pv': { const kw = (R3 ? R3.kpi.pvKw : S.pvN * 0.4) || 1; return { a: META.pv1kw_kwh.map(v => v * kw), unit: 'kWh', name: `PV 발전 (${kw.toFixed(1)} kW, 1년 차)` }; }
       case 'tin': return { a: S.awhp ? c.t_in_aw : c.t_in_base, unit: '°C', name: '실내 온도', temp: true };
       case 'tout': return { a: META.temp_out, unit: '°C', name: '외기 온도', temp: true };
@@ -346,18 +351,18 @@
     const ue = E.sum(L1.after.elec), ub = E.sum(L1.before.elec), g = E.sum(L1.before.gas);
     let pk = 0, pkH = 0; L1.after.elec.forEach((v, h) => { if (v > pk) { pk = v; pkH = h; } });
     $('#dkpis').innerHTML = kpiHTML('전력 사용 (설치 후)', f0(ue), 'kWh', 'HEMS 절감 전') + kpiHTML('전력 사용 (설치 전)', f0(ub), 'kWh', '기준안: 가스보일러') +
-      kpiHTML('프로판 (설치 전)', f0(g), 'kg', `난방 ${f0(sm.gas_heat_kg)} · 급탕 ${f0(sm.gas_dhw_kg)} kg`) + kpiHTML('최대 시간 부하', pk.toFixed(1), 'kWh/h', dateLabel(Math.floor(pkH / 24)) + ` ${pkH % 24}시`) +
+      kpiHTML('가스 (설치 전)', f0(g * KWH_PER_KG), 'kWh', `난방 ${f0(sm.gas_heat_kg * KWH_PER_KG)} · 급탕 ${f0(sm.gas_dhw_kg * KWH_PER_KG)} kWh (연료 열량)`) + kpiHTML('최대 시간 부하', pk.toFixed(1), 'kWh/h', dateLabel(Math.floor(pkH / 24)) + ` ${pkH % 24}시`) +
       kpiHTML('재실일', rec.occupied_days, '일', `이용률 ${Math.round(S.rate * 100)}%`) + kpiHTML('PV 1kW 연간 발전', f0(E.sum(META.pv1kw_kwh)), 'kWh/kW', '경사 25°, 정남향');
     // 히트맵 보기 전환
     const hv = $('#heatView');
-    if (!hv._built) { seg(hv, [['before', '기준안 전력'], ['after', '도입안 전력'], ['heat', '난방 가동'], ['gas', '프로판'], ['pv', 'PV 발전'], ['tin', '실내 온도'], ['tout', '외기 온도'], ['occ', '재택 인원']], () => heatMode, v => { heatMode = v; }); hv.addEventListener('click', () => drawHeat()); hv._built = 1; }
+    if (!hv._built) { seg(hv, [['before', '기준안 전력'], ['after', '도입안 전력'], ['heat', '난방 가동'], ['gas', '가스'], ['pv', 'PV 발전'], ['tin', '실내 온도'], ['tout', '외기 온도'], ['occ', '재택 인원']], () => heatMode, v => { heatMode = v; }); hv.addEventListener('click', () => drawHeat()); hv._built = 1; }
     const ev = $('#euView');
     if (!ev._built) { seg(ev, [['after', '도입안'], ['before', '기준안']], () => euMode, v => { euMode = v; }); ev.addEventListener('click', () => drawEU()); ev._built = 1; }
     drawHeat(); drawEU();
     // 가스
-    const gm = E.sumMonthly(combo.ch.gas_heat_kg), dm = E.sumMonthly(combo.ch.gas_dhw_kg);
+    const gm = E.sumMonthly(combo.ch.gas_heat_kg).map(v => v * KWH_PER_KG), dm = E.sumMonthly(combo.ch.gas_dhw_kg).map(v => v * KWH_PER_KG);
     legend('#legGas', [['급탕', COL.s3], ['난방', COL.s8]]);
-    stackedBars('#chGas', MON, [{ name: '급탕', color: COL.s3, values: Array.from(dm) }, { name: '난방', color: COL.s8, values: Array.from(gm) }], { unit: 'kg', h: 170 });
+    stackedBars('#chGas', MON, [{ name: '급탕', color: COL.s3, values: Array.from(dm) }, { name: '난방', color: COL.s8, values: Array.from(gm) }], { unit: 'kWh', h: 170 });
     drawOcc(); drawDay();
   }
   function dateLabel(d) { const dt = new Date(2026, 0, 1 + d); return `${dt.getMonth() + 1}월 ${dt.getDate()}일(${'일월화수목금토'[dt.getDay()]})`; }
@@ -442,11 +447,11 @@
     download(`SC_ROI_${houseKey(S.house)}_${S.occ}_${Math.round(S.rate * 100)}.csv`, t);
   }
   function csvHours() {
-    if (!combo) return; const c = combo.ch; let t = '시각,월,재실일,외기온도,PV1kW_kWh,' + META.channels.map(x => x[1]).join(',') + ',전력_설치전_kWh,전력_설치후_kWh,프로판_설치전_kg\n';
+    if (!combo) return; const c = combo.ch; let t = '시각,월,재실일,외기온도,PV1kW_kWh,' + META.channels.map(x => x[1].replace('프로판(kg)', '가스(LPG환산 kg)')).join(',') + ',전력_설치전_kWh,전력_설치후_kWh,가스_설치전_kWh(연료열량)\n';
     for (let h = 0; h < E.H; h++) {
       const d = Math.floor(h / 24), dt = new Date(2026, 0, 1 + d);
       t += `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')} ${String(h % 24).padStart(2, '0')}:00,${E.MONTH[h]},${combo.occDays[d]},${META.temp_out[h]},${META.pv1kw_kwh[h]},` +
-        META.channels.map(x => c[x[0]][h].toFixed(4)).join(',') + `,${L1.before.elec[h].toFixed(4)},${L1.after.elec[h].toFixed(4)},${L1.before.gas[h].toFixed(4)}\n`;
+        META.channels.map(x => c[x[0]][h].toFixed(4)).join(',') + `,${L1.before.elec[h].toFixed(4)},${L1.after.elec[h].toFixed(4)},${(L1.before.gas[h] * KWH_PER_KG).toFixed(4)}\n`;
     }
     download(`SC_8760h_${combo.rec.key}_${S.region}.csv`, t);
   }
@@ -458,24 +463,26 @@
 <h2>이 시뮬레이터가 계산하는 방법</h2>
 <ul>
 <li><b>1단계 (사용량)</b>: 한국 v10 보고서의 엔진을 그대로 사용해 SC 모델 × 거주자 × 이용률 45조합의 1년 시간별 에너지를 미리 계산해 두었습니다. 거주자 일과는 KOSIS 2024 생활시간조사(취업자 30분 행동비율) 기반 확률 표본(고정 시드 42), 가전은 활동 확률 × 보정계수, 난방·냉방은 5R1C 열모델, 급탕은 75L/인·재실일, AWHP는 Therma V 공식 데이터시트 COP입니다. <b>실측이 아닌 통계 기반 시뮬레이션</b>입니다.</li>
-<li>v10 회귀 확인: v10과 겹치는 28조합 모두 기준안 전력·프로판·AWHP 전력이 0.1% 이내로 일치(예: Core 72 3인 100% = 4,205kWh · 552.9kg · 6,599kWh). 3인 Core 54/DUO Max 45와 이용률 10%는 이번에 새로 계산한 조합입니다.</li>
+<li>v10 회귀 확인: v10과 겹치는 28조합 모두 기준안 전력·가스·AWHP 전력이 0.1% 이내로 일치(예: Core 72 3인 100% = 4,205kWh · 가스 552.9kg · 6,599kWh). 이후 아래의 v2 열모델(창 일사·차양·환기) 보정을 적용. 3인 Core 54/DUO Max 45와 이용률 10%는 이번에 새로 계산한 조합입니다.</li>
+<li><b>실내 온도 모델 (v2 보정)</b>: v10은 창 18m²가 수평면 일사를 그대로 받고 창문을 열지 않아 5월 실내가 50°C에 이르렀습니다. 시뮬레이터는 ① 벽면(수직) 창 일사(방향 비율 남 50·동 20·서 20·북 10%, 가정), ② 실내 24°C 초과 시 실내 블라인드(일사 취득 × 0.6), ③ 사람이 집에 있고 실내 23°C 초과·외기가 1°C 이상 낮으면 창문 환기(+2회/h)를 넣었습니다. 이 값은 패시브하우스연구소(PHI) 과열 기준(25°C 초과 시간 ≤ 10%, 권장 &lt; 5%)을 비냉방기(10~5월) 재택 시간에 맞추도록 정했습니다: 춘천 4.5%, 광주 6.6%, 5월 실내 최고 27.7°C(춘천)·28.2°C(광주). 냉방은 v10과 같이 6~9월 재실 시 26/27°C.</li>
 <li><b>2단계 (설비)</b>: PV는 지역별 1kW당 시간 발전량 × 모듈 수 × (1 − 연간 열화 × 경과 연수). ESS는 가용 용량 = 모듈 × 5kWh × SOH, 충방전 효율 √0.9씩, C-rate 0.5의 단순 규칙 운전(자가소비 우선: PV 잉여만 충전, 부족할 때 방전). 최적화 운전(LP)은 하지 않습니다.</li>
-<li><b>에너지 자립률</b>: 대표값 = PV 발전량 ÷ 연간 전력 사용량(생산 기준, 100%를 넘을 수 있음). 보조값 = 자가충족률 = 1 − 계통 수전량 ÷ 연간 전력 사용량. 가스(프로판) 사용분은 포함하지 않습니다. 둘 다 1년 차, 자가소비 우선 운전 기준.</li>
+<li><b>에너지 자립률</b>: 대표값 = PV 발전량 ÷ 연간 전력 사용량(생산 기준, 100%를 넘을 수 있음). 보조값 = 자가충족률 = 1 − 계통 수전량 ÷ 연간 전력 사용량. 가스 사용분은 포함하지 않습니다. 둘 다 1년 차, 자가소비 우선 운전 기준.</li>
 <li><b>HEMS</b>: 실제 제어는 구현하지 않고, 설치 후 전체 전력 사용량에 계절별 절감률을 곱해 줄입니다(가스는 미적용). 동절기 12~2월, 하절기 6~8월, 나머지 간절기(남반구는 반대).</li>
 <li><b>교체</b>: PV·ESS는 "1 − 열화율 × 경과 연수"가 교체 기준 이하가 되는 해 초에 교체(교체 후 새 제품). AWHP·인버터는 선택한 수명이 지난 해 초에 교체("고장 없음"이면 교체 안 함). PV 교체 시 인버터도 새로 봅니다.</li>
 <li><b>3단계 (요금)</b>: 한전 주택용 저압 누진제는 v10 요금 계산기를 그대로 옮겼습니다(51,900개 경우 원 단위 일치, 300kWh = 57,760원). 월 상계는 잉여 kWh가 다음 달로 무기한 이월되며, 20년을 순서대로 계산합니다(1년 차는 이월 0에서 시작). 요금 인상률은 매년 청구액 전체에 곱합니다. FIT 단가는 고정, TOU 매전 단가는 전기요금 인상률을 따릅니다.</li>
-<li><b>연간 이득</b> = 설치 전 총비용(전기 + 프로판) − 설치 후 총비용(전기 − 매전 수익 + 프로판 + 유지보수비). <b>누적 순이익</b> = 누적 이득 − 누적 CAPEX(보조금 차감, 교체 포함). 할인율은 적용하지 않습니다.</li>
+<li><b>연간 이득</b> = 설치 전 총비용(전기 + 가스) − 설치 후 총비용(전기 − 매전 수익 + 가스 + 유지보수비). <b>누적 순이익</b> = 누적 이득 − 누적 CAPEX(보조금 차감, 교체 포함). 할인율은 적용하지 않습니다.</li>
 <li>매년 같은 기상(TMY)과 같은 생활 패턴이 반복된다고 봅니다. 15분 계산 결과를 1시간 단위로 합쳐 씁니다.</li>
 <li>계산 검증: 2·3단계 계산(JS)은 별도로 작성한 Python 기준 구현과 4개 시나리오 × 20년에서 0.000001원 이내로 일치합니다.</li>
 </ul>
 <h2>입력값과 근거 수준</h2>
 <table><tr><th>항목</th><th>값</th><th>근거</th><th>수준</th></tr>
 <tr><td>기상</td><td>${META.weather_src || ''}</td><td>15분 보간, 연간 PV 1kW 발전 ${f0(E.sum(META.pv1kw_kwh || [0]))}kWh (경사 25°, 정남, 시스템 손실 14%, 인버터 97%)</td><td>${st('V')}</td></tr>
+<tr><td>창 방향·차양·창문 환기</td><td>남50/동20/서20/북10%, 블라인드 ×0.6(24°C~), 창 환기 +2회/h(23°C~, 재택 시)</td><td>PHI 과열 빈도 기준에 맞춘 보정값</td><td>${st('A')}</td></tr>
 <tr><td>설정온도</td><td>난방 재택 21 / 수면 18 / 외출 16 / 비재실 10°C, 냉방 6~9월 재택 26 / 수면 27°C</td><td>v10 가정</td><td>${st('A')}</td></tr>
 <tr><td>외피 U값·창 면적</td><td>모델별 houses.yaml</td><td>v10 가정</td><td>${st('A')}</td></tr>
 <tr><td>AWHP COP</td><td>A7/W35 4.7, A2/W35 3.7, A-7/W35 2.7 등</td><td>Therma V HM091HF UB40 데이터시트(A-7 미만 외삽은 미검증)</td><td>${st('V')}</td></tr>
 <tr><td>가스보일러 효율</td><td>90%</td><td>v10</td><td>${st('V')}</td></tr>
-<tr><td>프로판 단가</td><td>${f0(D.init.gasPrice)}원/kg (기본값)</td><td>오피넷 일반프로판 2026-10 4주 전국 평균</td><td>${st('V')}</td></tr>
+<tr><td>가스 단가</td><td>${D.init.gasPrice}원/kWh (기본값)</td><td>LPG 2,812.26원/kg(오피넷 일반프로판 2026-10 4주 전국 평균) ÷ 12.86kWh/kg. 단위는 원/kWh·원/kg·원/m³ 중 선택, 사용자가 직접 입력</td><td>${st('I')}</td></tr>
 <tr><td>한전 누진제</td><td>기본 910/1,600/7,300원, 120/214.6/307.3원/kWh, 하계 7~8월 300/450kWh, 기후 9·연료 5원, VAT 10%, 기금 2.7%</td><td>한전 요금표</td><td>${st('V')}</td></tr>
 <tr><td>주택용 계시별(TOU)</td><td>편집 가능</td><td>2019 한전 실증사업 시간대·배율 기반 가정. 한국 일반 가정 전국 요금표 없음</td><td>${st('A')}</td></tr>
 ${D.costFields.filter(f => f[0] !== 'g').map(f => `<tr><td>${f[1].replace(/<[^>]+>/g, '')}</td><td>${(+f[2]).toLocaleString('ko-KR')}</td><td>${f[4]}</td><td>${st(f[3])}</td></tr>`).join('')}

@@ -24,6 +24,8 @@ from engine.thermal_5r1c import simulate_thermal_5r1c
 from engine.heat_pump import (generate_event_based_dhw, simulate_dhw_tank_reheat,
                               simulate_awhp_space_heating_with_capacity_bound)
 from engine.pv import simulate_pv_generation_1kwp
+from engine import passive_climate
+USE_PASSIVE = True  # v2: 수직창 일사·차양·창문 환기 (engine/passive_climate.py). False면 v10과 동일
 
 REGIONS = {
     "kr_central": {"label": "한국 중부 · 춘천", "country_dir": "korea",
@@ -73,6 +75,7 @@ def run_combo(args):
     h_cfg = cfg["houses"][h_name]
     equip = cfg["equipment"]; tariff = cfg["tariff"]
     t0 = time.perf_counter()
+    pas = passive_climate.make_passive(weather_df, reg["lat"], reg["lon"], reg["tz"]) if USE_PASSIVE else None
 
     # ---- Step1 (pipeline.run_step1_load 와 동일) ----
     model = OccupancyTUSModel(kosis_dir=kosis_dir, load_config=cfg["load"], house_config=h_cfg,
@@ -84,7 +87,7 @@ def run_combo(args):
         house_config=h_cfg, temp_air=weather_df["temp_air"].values, ghi=weather_df["ghi"].values,
         occupant_presence=tus["is_occupied_15min"].astype(float), internal_heat_gain_w=q_occ_w,
         is_occupied_day=tus["is_occupied_day_365"], heat_setpoint_schedule=tus["heat_setpoint_15min"],
-        occupants_active=tus["occupants_active_15min"], occupants_sleeping=sleeping)
+        occupants_active=tus["occupants_active_15min"], occupants_sleeping=sleeping, passive=pas)
 
     # ---- Step2 (pipeline.run_step2_thermal 와 동일) ----
     cop_cool = _v(equip["awhp_system"].get("cop_cool_nominal", 4.4), 4.4)
@@ -105,7 +108,7 @@ def run_combo(args):
         occupant_presence=tus["is_occupied_15min"].astype(float), internal_heat_gain_w=q_occ_w,
         is_occupied_day=tus["is_occupied_day_365"], heat_setpoint_schedule=tus["heat_setpoint_15min"],
         occupants_active=tus["occupants_active_15min"], occupants_sleeping=sleeping,
-        awhp_cfg=equip["awhp_system"], dt_sec=900.0)
+        awhp_cfg=equip["awhp_system"], dt_sec=900.0, passive=pas)
     standby_kw = _v(equip["awhp_system"].get("standby_power_w", 10.0), 10.0) / 1000.0
 
     ap = tus["appliance_15min"]
@@ -189,7 +192,7 @@ def write_meta(region):
             "temp_out": [round(x, 2) for x in hourly_mean(w["temp_air"].values)],
             "ghi_wh": [round(x, 1) for x in hourly_mean(w["ghi"].values)],
             "pv1kw_annual": round(float(hourly_sum(pv1).sum()), 1),
-            "year_start": "2026-01-01"}
+            "year_start": "2026-01-01", "thermal": ("v2 수동형 제어: " + json.dumps({k: v for k, v in passive_climate.DEFAULT.items()}, ensure_ascii=False)) if USE_PASSIVE else "v10"}
     out = ROOT / "simulator" / "data" / region
     out.mkdir(parents=True, exist_ok=True)
     (out / "meta.js").write_text("SCDATA.meta(" + json.dumps(meta, ensure_ascii=False) + ");\n", encoding="utf-8")

@@ -13,23 +13,23 @@
     "plug": 32.85,
     "light": 23.464,
     "fridge": 1115.292,
-    "cool_base": 107.771,
-    "gas_heat_kg": 90.791,
+    "cool_base": 28.644,
+    "gas_heat_kg": 95.884,
     "gas_dhw_kg": 10.849,
-    "heat_th_base": 1050.9,
+    "heat_th_base": 1109.858,
     "dhw_th": 125.58,
-    "aw_heat": 404.113,
-    "aw_backup": 44.25,
+    "aw_heat": 410.213,
+    "aw_backup": 51.75,
     "aw_dhw": 42.643,
-    "aw_cool": 107.771,
+    "aw_cool": 28.644,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1226.606,
     "base_elec_sum": 1226.606,
-    "aw_heat_total": 448.363,
-    "aw_heat_split": 448.363,
-    "unmet_hours": 25.8
+    "aw_heat_total": 461.963,
+    "aw_heat_split": 461.963,
+    "unmet_hours": 29.8
    }
   },
   {
@@ -44,23 +44,23 @@
     "plug": 328.5,
     "light": 234.715,
     "fridge": 1115.292,
-    "cool_base": 584.145,
-    "gas_heat_kg": 177.414,
+    "cool_base": 147.223,
+    "gas_heat_kg": 202.163,
     "gas_dhw_kg": 109.999,
-    "heat_th_base": 2053.563,
+    "heat_th_base": 2340.036,
     "dhw_th": 1273.242,
-    "aw_heat": 721.787,
-    "aw_backup": 83.25,
+    "aw_heat": 791.323,
+    "aw_backup": 93.75,
     "aw_dhw": 426.44,
-    "aw_cool": 584.145,
+    "aw_cool": 147.223,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 2228.507,
     "base_elec_sum": 2228.507,
-    "aw_heat_total": 805.037,
-    "aw_heat_split": 805.037,
-    "unmet_hours": 84.0
+    "aw_heat_total": 885.073,
+    "aw_heat_split": 885.073,
+    "unmet_hours": 97.2
    }
   },
   {
@@ -75,23 +75,23 @@
     "plug": 98.55,
     "light": 70.355,
     "fridge": 1115.292,
-    "cool_base": 266.6,
-    "gas_heat_kg": 122.17,
+    "cool_base": 63.587,
+    "gas_heat_kg": 130.293,
     "gas_dhw_kg": 33.15,
-    "heat_th_base": 1414.119,
+    "heat_th_base": 1508.137,
     "dhw_th": 383.717,
-    "aw_heat": 520.05,
-    "aw_backup": 89.25,
+    "aw_heat": 537.322,
+    "aw_backup": 95.25,
     "aw_dhw": 129.951,
-    "aw_cool": 266.6,
+    "aw_cool": 63.587,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1449.197,
     "base_elec_sum": 1449.197,
-    "aw_heat_total": 609.3,
-    "aw_heat_split": 609.3,
-    "unmet_hours": 52.8
+    "aw_heat_total": 632.572,
+    "aw_heat_split": 632.572,
+    "unmet_hours": 57.5
    }
   },
   {
@@ -106,23 +106,23 @@
     "plug": 164.25,
     "light": 117.334,
     "fridge": 1115.292,
-    "cool_base": 372.714,
-    "gas_heat_kg": 143.254,
+    "cool_base": 91.262,
+    "gas_heat_kg": 156.407,
     "gas_dhw_kg": 54.849,
-    "heat_th_base": 1658.164,
+    "heat_th_base": 1810.415,
     "dhw_th": 634.877,
-    "aw_heat": 587.989,
-    "aw_backup": 101.25,
+    "aw_heat": 618.619,
+    "aw_backup": 114.75,
     "aw_dhw": 215.287,
-    "aw_cool": 372.714,
+    "aw_cool": 91.262,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1671.876,
     "base_elec_sum": 1671.876,
-    "aw_heat_total": 689.239,
-    "aw_heat_split": 689.239,
-    "unmet_hours": 68.5
+    "aw_heat_total": 733.369,
+    "aw_heat_split": 733.369,
+    "unmet_hours": 77.8
    }
   },
   {
@@ -137,23 +137,23 @@
     "plug": 229.95,
     "light": 164.16,
     "fridge": 1115.292,
-    "cool_base": 489.832,
-    "gas_heat_kg": 163.998,
+    "cool_base": 122.114,
+    "gas_heat_kg": 180.716,
     "gas_dhw_kg": 76.849,
-    "heat_th_base": 1898.28,
+    "heat_th_base": 2091.791,
     "dhw_th": 889.525,
-    "aw_heat": 657.844,
-    "aw_backup": 115.5,
+    "aw_heat": 702.262,
+    "aw_backup": 124.5,
     "aw_dhw": 298.907,
-    "aw_cool": 489.832,
+    "aw_cool": 122.114,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1894.402,
     "base_elec_sum": 1894.402,
-    "aw_heat_total": 773.344,
-    "aw_heat_split": 773.344,
-    "unmet_hours": 82.2
+    "aw_heat_total": 826.762,
+    "aw_heat_split": 826.762,
+    "unmet_hours": 93.0
    }
   },
   {
@@ -168,23 +168,23 @@
     "plug": 65.7,
     "light": 23.407,
     "fridge": 1115.292,
-    "cool_base": 128.451,
-    "gas_heat_kg": 93.561,
+    "cool_base": 34.646,
+    "gas_heat_kg": 98.764,
     "gas_dhw_kg": 21.698,
-    "heat_th_base": 1082.963,
+    "heat_th_base": 1143.191,
     "dhw_th": 251.16,
-    "aw_heat": 409.373,
-    "aw_backup": 51.0,
+    "aw_heat": 416.361,
+    "aw_backup": 57.0,
     "aw_dhw": 84.219,
-    "aw_cool": 128.451,
+    "aw_cool": 34.646,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1259.399,
     "base_elec_sum": 1259.399,
-    "aw_heat_total": 460.373,
-    "aw_heat_split": 460.373,
-    "unmet_hours": 26.8
+    "aw_heat_total": 473.361,
+    "aw_heat_split": 473.361,
+    "unmet_hours": 33.0
    }
   },
   {
@@ -199,23 +199,23 @@
     "plug": 657.0,
     "light": 234.664,
     "fridge": 1115.292,
-    "cool_base": 637.776,
-    "gas_heat_kg": 183.356,
+    "cool_base": 172.629,
+    "gas_heat_kg": 214.669,
     "gas_dhw_kg": 219.999,
-    "heat_th_base": 2122.349,
+    "heat_th_base": 2484.798,
     "dhw_th": 2546.483,
-    "aw_heat": 753.429,
-    "aw_backup": 85.5,
+    "aw_heat": 839.904,
+    "aw_backup": 100.5,
     "aw_dhw": 852.556,
-    "aw_cool": 637.776,
+    "aw_cool": 172.629,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 2556.956,
     "base_elec_sum": 2556.956,
-    "aw_heat_total": 838.929,
-    "aw_heat_split": 838.929,
-    "unmet_hours": 85.5
+    "aw_heat_total": 940.404,
+    "aw_heat_split": 940.404,
+    "unmet_hours": 104.0
    }
   },
   {
@@ -230,23 +230,23 @@
     "plug": 197.1,
     "light": 70.265,
     "fridge": 1115.292,
-    "cool_base": 294.406,
-    "gas_heat_kg": 124.944,
+    "cool_base": 74.898,
+    "gas_heat_kg": 135.957,
     "gas_dhw_kg": 66.301,
-    "heat_th_base": 1446.225,
+    "heat_th_base": 1573.698,
     "dhw_th": 767.433,
-    "aw_heat": 529.463,
-    "aw_backup": 85.5,
+    "aw_heat": 553.254,
+    "aw_backup": 96.75,
     "aw_dhw": 258.912,
-    "aw_cool": 294.406,
+    "aw_cool": 74.898,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1547.657,
     "base_elec_sum": 1547.657,
-    "aw_heat_total": 614.963,
-    "aw_heat_split": 614.963,
-    "unmet_hours": 54.8
+    "aw_heat_total": 650.004,
+    "aw_heat_split": 650.004,
+    "unmet_hours": 62.5
    }
   },
   {
@@ -261,23 +261,23 @@
     "plug": 328.5,
     "light": 117.259,
     "fridge": 1115.292,
-    "cool_base": 413.276,
-    "gas_heat_kg": 150.334,
+    "cool_base": 102.841,
+    "gas_heat_kg": 166.119,
     "gas_dhw_kg": 109.698,
-    "heat_th_base": 1740.11,
+    "heat_th_base": 1922.827,
     "dhw_th": 1269.753,
-    "aw_heat": 619.218,
-    "aw_backup": 101.25,
+    "aw_heat": 657.932,
+    "aw_backup": 116.25,
     "aw_dhw": 429.272,
-    "aw_cool": 413.276,
+    "aw_cool": 102.841,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1836.051,
     "base_elec_sum": 1836.051,
-    "aw_heat_total": 720.468,
-    "aw_heat_split": 720.468,
-    "unmet_hours": 70.8
+    "aw_heat_total": 774.182,
+    "aw_heat_split": 774.182,
+    "unmet_hours": 83.0
    }
   },
   {
@@ -292,23 +292,23 @@
     "plug": 459.9,
     "light": 164.128,
     "fridge": 1115.292,
-    "cool_base": 538.424,
-    "gas_heat_kg": 171.203,
+    "cool_base": 139.996,
+    "gas_heat_kg": 195.181,
     "gas_dhw_kg": 153.698,
-    "heat_th_base": 1981.677,
+    "heat_th_base": 2259.222,
     "dhw_th": 1779.05,
-    "aw_heat": 688.337,
-    "aw_backup": 125.25,
+    "aw_heat": 753.924,
+    "aw_backup": 138.75,
     "aw_dhw": 597.836,
-    "aw_cool": 538.424,
+    "aw_cool": 139.996,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 2124.32,
     "base_elec_sum": 2124.32,
-    "aw_heat_total": 813.587,
-    "aw_heat_split": 813.587,
-    "unmet_hours": 92.0
+    "aw_heat_total": 892.674,
+    "aw_heat_split": 892.674,
+    "unmet_hours": 106.8
    }
   },
   {
@@ -323,23 +323,23 @@
     "plug": 98.55,
     "light": 23.434,
     "fridge": 1115.292,
-    "cool_base": 130.284,
-    "gas_heat_kg": 93.393,
+    "cool_base": 37.19,
+    "gas_heat_kg": 98.475,
     "gas_dhw_kg": 32.548,
-    "heat_th_base": 1081.03,
+    "heat_th_base": 1139.852,
     "dhw_th": 376.74,
-    "aw_heat": 409.456,
-    "aw_backup": 51.75,
+    "aw_heat": 416.783,
+    "aw_backup": 57.0,
     "aw_dhw": 127.65,
-    "aw_cool": 130.284,
+    "aw_cool": 37.19,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1292.276,
     "base_elec_sum": 1292.276,
-    "aw_heat_total": 461.206,
-    "aw_heat_split": 461.206,
-    "unmet_hours": 27.0
+    "aw_heat_total": 473.783,
+    "aw_heat_split": 473.783,
+    "unmet_hours": 32.5
    }
   },
   {
@@ -354,23 +354,23 @@
     "plug": 985.5,
     "light": 234.816,
     "fridge": 1115.292,
-    "cool_base": 682.562,
-    "gas_heat_kg": 184.495,
+    "cool_base": 188.321,
+    "gas_heat_kg": 222.278,
     "gas_dhw_kg": 329.998,
-    "heat_th_base": 2135.534,
+    "heat_th_base": 2572.867,
     "dhw_th": 3819.725,
-    "aw_heat": 769.582,
-    "aw_backup": 67.5,
+    "aw_heat": 880.823,
+    "aw_backup": 77.25,
     "aw_dhw": 1283.605,
-    "aw_cool": 682.562,
+    "aw_cool": 188.321,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 2885.608,
     "base_elec_sum": 2885.608,
-    "aw_heat_total": 837.082,
-    "aw_heat_split": 837.082,
-    "unmet_hours": 77.5
+    "aw_heat_total": 958.073,
+    "aw_heat_split": 958.073,
+    "unmet_hours": 96.8
    }
   },
   {
@@ -385,23 +385,23 @@
     "plug": 295.65,
     "light": 70.331,
     "fridge": 1115.292,
-    "cool_base": 302.372,
-    "gas_heat_kg": 127.22,
+    "cool_base": 79.19,
+    "gas_heat_kg": 138.404,
     "gas_dhw_kg": 99.451,
-    "heat_th_base": 1472.568,
+    "heat_th_base": 1602.022,
     "dhw_th": 1151.15,
-    "aw_heat": 541.213,
-    "aw_backup": 97.5,
+    "aw_heat": 565.837,
+    "aw_backup": 109.5,
     "aw_dhw": 390.233,
-    "aw_cool": 302.372,
+    "aw_cool": 79.19,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1646.273,
     "base_elec_sum": 1646.273,
-    "aw_heat_total": 638.713,
-    "aw_heat_split": 638.713,
-    "unmet_hours": 59.5
+    "aw_heat_total": 675.337,
+    "aw_heat_split": 675.337,
+    "unmet_hours": 67.8
    }
   },
   {
@@ -416,23 +416,23 @@
     "plug": 492.75,
     "light": 117.169,
     "fridge": 1115.292,
-    "cool_base": 432.008,
-    "gas_heat_kg": 150.257,
+    "cool_base": 112.56,
+    "gas_heat_kg": 168.588,
     "gas_dhw_kg": 164.547,
-    "heat_th_base": 1739.224,
+    "heat_th_base": 1951.401,
     "dhw_th": 1904.63,
-    "aw_heat": 615.172,
-    "aw_backup": 102.75,
+    "aw_heat": 663.231,
+    "aw_backup": 117.0,
     "aw_dhw": 641.426,
-    "aw_cool": 432.008,
+    "aw_cool": 112.56,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 2000.211,
     "base_elec_sum": 2000.211,
-    "aw_heat_total": 717.922,
-    "aw_heat_split": 717.922,
-    "unmet_hours": 72.5
+    "aw_heat_total": 780.231,
+    "aw_heat_split": 780.231,
+    "unmet_hours": 83.5
    }
   },
   {
@@ -447,23 +447,23 @@
     "plug": 689.85,
     "light": 164.261,
     "fridge": 1115.292,
-    "cool_base": 555.868,
-    "gas_heat_kg": 171.851,
+    "cool_base": 146.141,
+    "gas_heat_kg": 198.776,
     "gas_dhw_kg": 230.546,
-    "heat_th_base": 1989.17,
+    "heat_th_base": 2300.833,
     "dhw_th": 2668.575,
-    "aw_heat": 698.545,
-    "aw_backup": 114.0,
+    "aw_heat": 772.531,
+    "aw_backup": 133.5,
     "aw_dhw": 899.915,
-    "aw_cool": 555.868,
+    "aw_cool": 146.141,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 2354.403,
     "base_elec_sum": 2354.403,
-    "aw_heat_total": 812.545,
-    "aw_heat_split": 812.545,
-    "unmet_hours": 86.5
+    "aw_heat_total": 906.031,
+    "aw_heat_split": 906.031,
+    "unmet_hours": 101.5
    }
   },
   {
@@ -478,23 +478,23 @@
     "plug": 32.85,
     "light": 31.677,
     "fridge": 1115.292,
-    "cool_base": 136.208,
-    "gas_heat_kg": 113.61,
+    "cool_base": 36.121,
+    "gas_heat_kg": 120.07,
     "gas_dhw_kg": 10.849,
-    "heat_th_base": 1315.03,
+    "heat_th_base": 1389.811,
     "dhw_th": 125.58,
-    "aw_heat": 502.079,
-    "aw_backup": 66.0,
+    "aw_heat": 509.312,
+    "aw_backup": 76.5,
     "aw_dhw": 42.643,
-    "aw_cool": 136.208,
+    "aw_cool": 36.121,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1274.819,
     "base_elec_sum": 1274.819,
-    "aw_heat_total": 568.079,
-    "aw_heat_split": 568.079,
-    "unmet_hours": 37.0
+    "aw_heat_total": 585.812,
+    "aw_heat_split": 585.812,
+    "unmet_hours": 43.8
    }
   },
   {
@@ -509,23 +509,23 @@
     "plug": 328.5,
     "light": 316.865,
     "fridge": 1115.292,
-    "cool_base": 726.941,
-    "gas_heat_kg": 211.751,
+    "cool_base": 183.582,
+    "gas_heat_kg": 239.12,
     "gas_dhw_kg": 109.999,
-    "heat_th_base": 2451.022,
+    "heat_th_base": 2767.813,
     "dhw_th": 1273.242,
-    "aw_heat": 849.85,
-    "aw_backup": 124.5,
+    "aw_heat": 926.993,
+    "aw_backup": 135.75,
     "aw_dhw": 426.44,
-    "aw_cool": 726.941,
+    "aw_cool": 183.582,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 2710.657,
     "base_elec_sum": 2710.657,
-    "aw_heat_total": 974.35,
-    "aw_heat_split": 974.35,
-    "unmet_hours": 112.5
+    "aw_heat_total": 1062.743,
+    "aw_heat_split": 1062.743,
+    "unmet_hours": 130.2
    }
   },
   {
@@ -540,23 +540,23 @@
     "plug": 98.55,
     "light": 94.979,
     "fridge": 1115.292,
-    "cool_base": 335.704,
-    "gas_heat_kg": 151.52,
+    "cool_base": 79.625,
+    "gas_heat_kg": 161.587,
     "gas_dhw_kg": 33.15,
-    "heat_th_base": 1753.839,
+    "heat_th_base": 1870.364,
     "dhw_th": 383.717,
-    "aw_heat": 636.515,
-    "aw_backup": 126.75,
+    "aw_heat": 656.731,
+    "aw_backup": 138.0,
     "aw_dhw": 129.951,
-    "aw_cool": 335.704,
+    "aw_cool": 79.625,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1593.821,
     "base_elec_sum": 1593.821,
-    "aw_heat_total": 763.265,
-    "aw_heat_split": 763.265,
-    "unmet_hours": 74.8
+    "aw_heat_total": 794.731,
+    "aw_heat_split": 794.731,
+    "unmet_hours": 82.0
    }
   },
   {
@@ -571,23 +571,23 @@
     "plug": 164.25,
     "light": 158.401,
     "fridge": 1115.292,
-    "cool_base": 465.042,
-    "gas_heat_kg": 175.505,
+    "cool_base": 113.128,
+    "gas_heat_kg": 191.0,
     "gas_dhw_kg": 54.849,
-    "heat_th_base": 2031.468,
+    "heat_th_base": 2210.828,
     "dhw_th": 634.877,
-    "aw_heat": 712.616,
-    "aw_backup": 144.0,
+    "aw_heat": 748.938,
+    "aw_backup": 159.0,
     "aw_dhw": 215.287,
-    "aw_cool": 465.042,
+    "aw_cool": 113.128,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1912.943,
     "base_elec_sum": 1912.943,
-    "aw_heat_total": 856.616,
-    "aw_heat_split": 856.616,
-    "unmet_hours": 92.8
+    "aw_heat_total": 907.938,
+    "aw_heat_split": 907.938,
+    "unmet_hours": 105.0
    }
   },
   {
@@ -602,23 +602,23 @@
     "plug": 229.95,
     "light": 221.617,
     "fridge": 1115.292,
-    "cool_base": 608.154,
-    "gas_heat_kg": 199.575,
+    "cool_base": 151.042,
+    "gas_heat_kg": 218.446,
     "gas_dhw_kg": 76.849,
-    "heat_th_base": 2310.086,
+    "heat_th_base": 2528.518,
     "dhw_th": 889.525,
-    "aw_heat": 789.388,
-    "aw_backup": 165.75,
+    "aw_heat": 838.184,
+    "aw_backup": 178.5,
     "aw_dhw": 298.907,
-    "aw_cool": 608.154,
+    "aw_cool": 151.042,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 2231.859,
     "base_elec_sum": 2231.859,
-    "aw_heat_total": 955.138,
-    "aw_heat_split": 955.138,
-    "unmet_hours": 112.5
+    "aw_heat_total": 1016.684,
+    "aw_heat_split": 1016.684,
+    "unmet_hours": 127.8
    }
   },
   {
@@ -633,23 +633,23 @@
     "plug": 65.7,
     "light": 31.6,
     "fridge": 1115.292,
-    "cool_base": 162.434,
-    "gas_heat_kg": 117.19,
+    "cool_base": 43.35,
+    "gas_heat_kg": 123.67,
     "gas_dhw_kg": 21.698,
-    "heat_th_base": 1356.469,
+    "heat_th_base": 1431.474,
     "dhw_th": 251.16,
-    "aw_heat": 509.862,
-    "aw_backup": 72.75,
+    "aw_heat": 517.725,
+    "aw_backup": 82.5,
     "aw_dhw": 84.219,
-    "aw_cool": 162.434,
+    "aw_cool": 43.35,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1307.592,
     "base_elec_sum": 1307.592,
-    "aw_heat_total": 582.612,
-    "aw_heat_split": 582.612,
-    "unmet_hours": 36.8
+    "aw_heat_total": 600.225,
+    "aw_heat_split": 600.225,
+    "unmet_hours": 45.0
    }
   },
   {
@@ -664,23 +664,23 @@
     "plug": 657.0,
     "light": 316.797,
     "fridge": 1115.292,
-    "cool_base": 787.217,
-    "gas_heat_kg": 220.283,
+    "cool_base": 212.195,
+    "gas_heat_kg": 254.626,
     "gas_dhw_kg": 219.999,
-    "heat_th_base": 2549.778,
+    "heat_th_base": 2947.301,
     "dhw_th": 2546.483,
-    "aw_heat": 896.888,
-    "aw_backup": 123.75,
+    "aw_heat": 990.064,
+    "aw_backup": 144.0,
     "aw_dhw": 852.556,
-    "aw_cool": 787.217,
+    "aw_cool": 212.195,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 3039.089,
     "base_elec_sum": 3039.089,
-    "aw_heat_total": 1020.638,
-    "aw_heat_split": 1020.638,
-    "unmet_hours": 116.8
+    "aw_heat_total": 1134.064,
+    "aw_heat_split": 1134.064,
+    "unmet_hours": 139.2
    }
   },
   {
@@ -695,23 +695,23 @@
     "plug": 197.1,
     "light": 94.858,
     "fridge": 1115.292,
-    "cool_base": 368.005,
-    "gas_heat_kg": 155.581,
+    "cool_base": 91.924,
+    "gas_heat_kg": 168.081,
     "gas_dhw_kg": 66.301,
-    "heat_th_base": 1800.851,
+    "heat_th_base": 1945.532,
     "dhw_th": 767.433,
-    "aw_heat": 650.979,
-    "aw_backup": 123.75,
+    "aw_heat": 675.669,
+    "aw_backup": 141.0,
     "aw_dhw": 258.912,
-    "aw_cool": 368.005,
+    "aw_cool": 91.924,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1692.25,
     "base_elec_sum": 1692.25,
-    "aw_heat_total": 774.729,
-    "aw_heat_split": 774.729,
-    "unmet_hours": 79.2
+    "aw_heat_total": 816.669,
+    "aw_heat_split": 816.669,
+    "unmet_hours": 88.5
    }
   },
   {
@@ -726,23 +726,23 @@
     "plug": 328.5,
     "light": 158.3,
     "fridge": 1115.292,
-    "cool_base": 513.836,
-    "gas_heat_kg": 185.141,
+    "cool_base": 126.417,
+    "gas_heat_kg": 203.773,
     "gas_dhw_kg": 109.698,
-    "heat_th_base": 2143.003,
+    "heat_th_base": 2358.669,
     "dhw_th": 1269.753,
-    "aw_heat": 752.726,
-    "aw_backup": 151.5,
+    "aw_heat": 796.969,
+    "aw_backup": 171.0,
     "aw_dhw": 429.272,
-    "aw_cool": 513.836,
+    "aw_cool": 126.417,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 2077.092,
     "base_elec_sum": 2077.092,
-    "aw_heat_total": 904.226,
-    "aw_heat_split": 904.226,
-    "unmet_hours": 97.0
+    "aw_heat_total": 967.969,
+    "aw_heat_split": 967.969,
+    "unmet_hours": 113.5
    }
   },
   {
@@ -757,23 +757,23 @@
     "plug": 459.9,
     "light": 221.573,
     "fridge": 1115.292,
-    "cool_base": 664.294,
-    "gas_heat_kg": 209.047,
+    "cool_base": 170.993,
+    "gas_heat_kg": 236.112,
     "gas_dhw_kg": 153.698,
-    "heat_th_base": 2419.721,
+    "heat_th_base": 2732.998,
     "dhw_th": 1779.05,
-    "aw_heat": 831.315,
-    "aw_backup": 174.0,
+    "aw_heat": 902.975,
+    "aw_backup": 195.0,
     "aw_dhw": 597.836,
-    "aw_cool": 664.294,
+    "aw_cool": 170.993,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 2461.765,
     "base_elec_sum": 2461.765,
-    "aw_heat_total": 1005.315,
-    "aw_heat_split": 1005.315,
-    "unmet_hours": 126.5
+    "aw_heat_total": 1097.975,
+    "aw_heat_split": 1097.975,
+    "unmet_hours": 142.8
    }
   },
   {
@@ -788,23 +788,23 @@
     "plug": 98.55,
     "light": 31.636,
     "fridge": 1115.292,
-    "cool_base": 164.292,
-    "gas_heat_kg": 117.202,
+    "cool_base": 46.317,
+    "gas_heat_kg": 123.496,
     "gas_dhw_kg": 32.548,
-    "heat_th_base": 1356.617,
+    "heat_th_base": 1429.469,
     "dhw_th": 376.74,
-    "aw_heat": 510.141,
-    "aw_backup": 74.25,
+    "aw_heat": 517.836,
+    "aw_backup": 84.0,
     "aw_dhw": 127.65,
-    "aw_cool": 164.292,
+    "aw_cool": 46.317,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1340.478,
     "base_elec_sum": 1340.478,
-    "aw_heat_total": 584.391,
-    "aw_heat_split": 584.391,
-    "unmet_hours": 39.0
+    "aw_heat_total": 601.836,
+    "aw_heat_split": 601.836,
+    "unmet_hours": 45.2
    }
   },
   {
@@ -819,23 +819,23 @@
     "plug": 985.5,
     "light": 317.002,
     "fridge": 1115.292,
-    "cool_base": 837.317,
-    "gas_heat_kg": 222.872,
+    "cool_base": 227.997,
+    "gas_heat_kg": 264.161,
     "gas_dhw_kg": 329.998,
-    "heat_th_base": 2579.738,
+    "heat_th_base": 3057.666,
     "dhw_th": 3819.725,
-    "aw_heat": 920.642,
-    "aw_backup": 102.0,
+    "aw_heat": 1040.771,
+    "aw_backup": 113.25,
     "aw_dhw": 1283.605,
-    "aw_cool": 837.317,
+    "aw_cool": 227.997,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 3367.794,
     "base_elec_sum": 3367.794,
-    "aw_heat_total": 1022.642,
-    "aw_heat_split": 1022.642,
-    "unmet_hours": 105.2
+    "aw_heat_total": 1154.021,
+    "aw_heat_split": 1154.021,
+    "unmet_hours": 128.5
    }
   },
   {
@@ -850,23 +850,23 @@
     "plug": 295.65,
     "light": 94.946,
     "fridge": 1115.292,
-    "cool_base": 376.656,
-    "gas_heat_kg": 158.641,
+    "cool_base": 96.387,
+    "gas_heat_kg": 171.705,
     "gas_dhw_kg": 99.451,
-    "heat_th_base": 1836.274,
+    "heat_th_base": 1987.49,
     "dhw_th": 1151.15,
-    "aw_heat": 668.134,
-    "aw_backup": 135.0,
+    "aw_heat": 693.876,
+    "aw_backup": 156.0,
     "aw_dhw": 390.233,
-    "aw_cool": 376.656,
+    "aw_cool": 96.387,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1790.888,
     "base_elec_sum": 1790.888,
-    "aw_heat_total": 803.134,
-    "aw_heat_split": 803.134,
-    "unmet_hours": 81.5
+    "aw_heat_total": 849.876,
+    "aw_heat_split": 849.876,
+    "unmet_hours": 93.2
    }
   },
   {
@@ -881,23 +881,23 @@
     "plug": 492.75,
     "light": 158.178,
     "fridge": 1115.292,
-    "cool_base": 534.274,
-    "gas_heat_kg": 185.691,
+    "cool_base": 137.07,
+    "gas_heat_kg": 206.459,
     "gas_dhw_kg": 164.547,
-    "heat_th_base": 2149.375,
+    "heat_th_base": 2389.767,
     "dhw_th": 1904.63,
-    "aw_heat": 750.495,
-    "aw_backup": 148.5,
+    "aw_heat": 803.896,
+    "aw_backup": 167.25,
     "aw_dhw": 641.426,
-    "aw_cool": 534.274,
+    "aw_cool": 137.07,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 2241.22,
     "base_elec_sum": 2241.22,
-    "aw_heat_total": 898.995,
-    "aw_heat_split": 898.995,
-    "unmet_hours": 99.8
+    "aw_heat_total": 971.146,
+    "aw_heat_split": 971.146,
+    "unmet_hours": 116.5
    }
   },
   {
@@ -912,23 +912,23 @@
     "plug": 689.85,
     "light": 221.753,
     "fridge": 1115.292,
-    "cool_base": 683.495,
-    "gas_heat_kg": 210.712,
+    "cool_base": 177.044,
+    "gas_heat_kg": 240.923,
     "gas_dhw_kg": 230.546,
-    "heat_th_base": 2438.995,
+    "heat_th_base": 2788.687,
     "dhw_th": 2668.575,
-    "aw_heat": 845.932,
-    "aw_backup": 168.0,
+    "aw_heat": 927.727,
+    "aw_backup": 191.25,
     "aw_dhw": 899.915,
-    "aw_cool": 683.495,
+    "aw_cool": 177.044,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 2691.895,
     "base_elec_sum": 2691.895,
-    "aw_heat_total": 1013.932,
-    "aw_heat_split": 1013.932,
-    "unmet_hours": 117.2
+    "aw_heat_total": 1118.977,
+    "aw_heat_split": 1118.977,
+    "unmet_hours": 137.0
    }
   },
   {
@@ -943,23 +943,23 @@
     "plug": 32.85,
     "light": 19.727,
     "fridge": 1115.292,
-    "cool_base": 93.035,
-    "gas_heat_kg": 91.378,
+    "cool_base": 25.764,
+    "gas_heat_kg": 96.048,
     "gas_dhw_kg": 10.849,
-    "heat_th_base": 1057.7,
+    "heat_th_base": 1111.754,
     "dhw_th": 125.58,
-    "aw_heat": 407.193,
-    "aw_backup": 39.0,
+    "aw_heat": 413.695,
+    "aw_backup": 43.5,
     "aw_dhw": 42.643,
-    "aw_cool": 93.035,
+    "aw_cool": 25.764,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1262.869,
     "base_elec_sum": 1262.869,
-    "aw_heat_total": 446.193,
-    "aw_heat_split": 446.193,
-    "unmet_hours": 22.0
+    "aw_heat_total": 457.195,
+    "aw_heat_split": 457.195,
+    "unmet_hours": 25.8
    }
   },
   {
@@ -974,23 +974,23 @@
     "plug": 328.5,
     "light": 197.335,
     "fridge": 1115.292,
-    "cool_base": 540.017,
-    "gas_heat_kg": 176.045,
+    "cool_base": 146.415,
+    "gas_heat_kg": 200.258,
     "gas_dhw_kg": 109.999,
-    "heat_th_base": 2037.724,
+    "heat_th_base": 2317.987,
     "dhw_th": 1273.242,
-    "aw_heat": 719.034,
-    "aw_backup": 74.25,
+    "aw_heat": 786.131,
+    "aw_backup": 89.25,
     "aw_dhw": 426.44,
-    "aw_cool": 540.017,
+    "aw_cool": 146.415,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 2591.127,
     "base_elec_sum": 2591.127,
-    "aw_heat_total": 793.284,
-    "aw_heat_split": 793.284,
-    "unmet_hours": 72.2
+    "aw_heat_total": 875.381,
+    "aw_heat_split": 875.381,
+    "unmet_hours": 86.0
    }
   },
   {
@@ -1005,23 +1005,23 @@
     "plug": 98.55,
     "light": 59.15,
     "fridge": 1115.292,
-    "cool_base": 235.636,
-    "gas_heat_kg": 120.414,
+    "cool_base": 59.811,
+    "gas_heat_kg": 128.229,
     "gas_dhw_kg": 33.15,
-    "heat_th_base": 1393.793,
+    "heat_th_base": 1484.247,
     "dhw_th": 383.717,
-    "aw_heat": 515.07,
-    "aw_backup": 78.75,
+    "aw_heat": 531.296,
+    "aw_backup": 86.25,
     "aw_dhw": 129.951,
-    "aw_cool": 235.636,
+    "aw_cool": 59.811,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1557.992,
     "base_elec_sum": 1557.992,
-    "aw_heat_total": 593.82,
-    "aw_heat_split": 593.82,
-    "unmet_hours": 45.0
+    "aw_heat_total": 617.546,
+    "aw_heat_split": 617.546,
+    "unmet_hours": 49.5
    }
   },
   {
@@ -1036,23 +1036,23 @@
     "plug": 164.25,
     "light": 98.647,
     "fridge": 1115.292,
-    "cool_base": 335.88,
-    "gas_heat_kg": 141.236,
+    "cool_base": 87.602,
+    "gas_heat_kg": 153.377,
     "gas_dhw_kg": 54.849,
-    "heat_th_base": 1634.803,
+    "heat_th_base": 1775.338,
     "dhw_th": 634.877,
-    "aw_heat": 582.45,
-    "aw_backup": 89.25,
+    "aw_heat": 611.166,
+    "aw_backup": 100.5,
     "aw_dhw": 215.287,
-    "aw_cool": 335.88,
+    "aw_cool": 87.602,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1853.189,
     "base_elec_sum": 1853.189,
-    "aw_heat_total": 671.7,
-    "aw_heat_split": 671.7,
-    "unmet_hours": 58.5
+    "aw_heat_total": 711.666,
+    "aw_heat_split": 711.666,
+    "unmet_hours": 65.8
    }
   },
   {
@@ -1067,23 +1067,23 @@
     "plug": 229.95,
     "light": 138.016,
     "fridge": 1115.292,
-    "cool_base": 448.231,
-    "gas_heat_kg": 160.898,
+    "cool_base": 119.223,
+    "gas_heat_kg": 177.459,
     "gas_dhw_kg": 76.849,
-    "heat_th_base": 1862.394,
+    "heat_th_base": 2054.089,
     "dhw_th": 889.525,
-    "aw_heat": 648.49,
-    "aw_backup": 107.25,
+    "aw_heat": 693.507,
+    "aw_backup": 114.0,
     "aw_dhw": 298.907,
-    "aw_cool": 448.231,
+    "aw_cool": 119.223,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 2148.258,
     "base_elec_sum": 2148.258,
-    "aw_heat_total": 755.74,
-    "aw_heat_split": 755.74,
-    "unmet_hours": 70.2
+    "aw_heat_total": 807.507,
+    "aw_heat_split": 807.507,
+    "unmet_hours": 81.8
    }
   },
   {
@@ -1098,23 +1098,23 @@
     "plug": 65.7,
     "light": 19.679,
     "fridge": 1115.292,
-    "cool_base": 112.116,
-    "gas_heat_kg": 93.682,
+    "cool_base": 31.657,
+    "gas_heat_kg": 98.713,
     "gas_dhw_kg": 21.698,
-    "heat_th_base": 1084.368,
+    "heat_th_base": 1142.601,
     "dhw_th": 251.16,
-    "aw_heat": 410.829,
-    "aw_backup": 45.0,
+    "aw_heat": 418.694,
+    "aw_backup": 51.0,
     "aw_dhw": 84.219,
-    "aw_cool": 112.116,
+    "aw_cool": 31.657,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1295.671,
     "base_elec_sum": 1295.671,
-    "aw_heat_total": 455.829,
-    "aw_heat_split": 455.829,
-    "unmet_hours": 23.0
+    "aw_heat_total": 469.694,
+    "aw_heat_split": 469.694,
+    "unmet_hours": 28.0
    }
   },
   {
@@ -1129,23 +1129,23 @@
     "plug": 657.0,
     "light": 197.292,
     "fridge": 1115.292,
-    "cool_base": 594.957,
-    "gas_heat_kg": 182.024,
+    "cool_base": 172.529,
+    "gas_heat_kg": 212.439,
     "gas_dhw_kg": 219.999,
-    "heat_th_base": 2106.923,
+    "heat_th_base": 2458.987,
     "dhw_th": 2546.483,
-    "aw_heat": 749.031,
-    "aw_backup": 78.0,
+    "aw_heat": 832.865,
+    "aw_backup": 93.75,
     "aw_dhw": 852.556,
-    "aw_cool": 594.957,
+    "aw_cool": 172.529,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 2919.584,
     "base_elec_sum": 2919.584,
-    "aw_heat_total": 827.031,
-    "aw_heat_split": 827.031,
-    "unmet_hours": 72.5
+    "aw_heat_total": 926.615,
+    "aw_heat_split": 926.615,
+    "unmet_hours": 88.2
    }
   },
   {
@@ -1160,23 +1160,23 @@
     "plug": 197.1,
     "light": 59.075,
     "fridge": 1115.292,
-    "cool_base": 263.54,
-    "gas_heat_kg": 123.262,
+    "cool_base": 71.437,
+    "gas_heat_kg": 133.936,
     "gas_dhw_kg": 66.301,
-    "heat_th_base": 1426.754,
+    "heat_th_base": 1550.314,
     "dhw_th": 767.433,
-    "aw_heat": 524.226,
-    "aw_backup": 75.75,
+    "aw_heat": 547.549,
+    "aw_backup": 87.0,
     "aw_dhw": 258.912,
-    "aw_cool": 263.54,
+    "aw_cool": 71.437,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1656.467,
     "base_elec_sum": 1656.467,
-    "aw_heat_total": 599.976,
-    "aw_heat_split": 599.976,
-    "unmet_hours": 47.2
+    "aw_heat_total": 634.549,
+    "aw_heat_split": 634.549,
+    "unmet_hours": 53.0
    }
   },
   {
@@ -1191,23 +1191,23 @@
     "plug": 328.5,
     "light": 98.584,
     "fridge": 1115.292,
-    "cool_base": 376.017,
-    "gas_heat_kg": 147.776,
+    "cool_base": 99.44,
+    "gas_heat_kg": 162.768,
     "gas_dhw_kg": 109.698,
-    "heat_th_base": 1710.51,
+    "heat_th_base": 1884.038,
     "dhw_th": 1269.753,
-    "aw_heat": 610.046,
-    "aw_backup": 93.0,
+    "aw_heat": 647.66,
+    "aw_backup": 104.25,
     "aw_dhw": 429.272,
-    "aw_cool": 376.017,
+    "aw_cool": 99.44,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 2017.376,
     "base_elec_sum": 2017.376,
-    "aw_heat_total": 703.046,
-    "aw_heat_split": 703.046,
-    "unmet_hours": 58.8
+    "aw_heat_total": 751.91,
+    "aw_heat_split": 751.91,
+    "unmet_hours": 69.8
    }
   },
   {
@@ -1222,23 +1222,23 @@
     "plug": 459.9,
     "light": 137.989,
     "fridge": 1115.292,
-    "cool_base": 497.124,
-    "gas_heat_kg": 168.304,
+    "cool_base": 137.802,
+    "gas_heat_kg": 191.51,
     "gas_dhw_kg": 153.698,
-    "heat_th_base": 1948.114,
+    "heat_th_base": 2216.727,
     "dhw_th": 1779.05,
-    "aw_heat": 678.512,
-    "aw_backup": 117.0,
+    "aw_heat": 741.843,
+    "aw_backup": 129.75,
     "aw_dhw": 597.836,
-    "aw_cool": 497.124,
+    "aw_cool": 137.802,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 2378.181,
     "base_elec_sum": 2378.181,
-    "aw_heat_total": 795.512,
-    "aw_heat_split": 795.512,
-    "unmet_hours": 80.2
+    "aw_heat_total": 871.593,
+    "aw_heat_split": 871.593,
+    "unmet_hours": 91.0
    }
   },
   {
@@ -1253,23 +1253,23 @@
     "plug": 98.55,
     "light": 19.702,
     "fridge": 1115.292,
-    "cool_base": 113.998,
-    "gas_heat_kg": 93.477,
+    "cool_base": 34.122,
+    "gas_heat_kg": 98.502,
     "gas_dhw_kg": 32.548,
-    "heat_th_base": 1082.0,
+    "heat_th_base": 1140.16,
     "dhw_th": 376.74,
-    "aw_heat": 410.626,
-    "aw_backup": 45.75,
+    "aw_heat": 419.152,
+    "aw_backup": 50.25,
     "aw_dhw": 127.65,
-    "aw_cool": 113.998,
+    "aw_cool": 34.122,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1328.544,
     "base_elec_sum": 1328.544,
-    "aw_heat_total": 456.376,
-    "aw_heat_split": 456.376,
-    "unmet_hours": 23.0
+    "aw_heat_total": 469.402,
+    "aw_heat_split": 469.402,
+    "unmet_hours": 27.5
    }
   },
   {
@@ -1284,23 +1284,23 @@
     "plug": 985.5,
     "light": 197.42,
     "fridge": 1115.292,
-    "cool_base": 640.687,
-    "gas_heat_kg": 183.132,
+    "cool_base": 189.564,
+    "gas_heat_kg": 220.129,
     "gas_dhw_kg": 329.998,
-    "heat_th_base": 2119.755,
+    "heat_th_base": 2547.995,
     "dhw_th": 3819.725,
-    "aw_heat": 761.882,
-    "aw_backup": 66.0,
+    "aw_heat": 868.915,
+    "aw_backup": 80.25,
     "aw_dhw": 1283.605,
-    "aw_cool": 640.687,
+    "aw_cool": 189.564,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 3248.212,
     "base_elec_sum": 3248.212,
-    "aw_heat_total": 827.882,
-    "aw_heat_split": 827.882,
-    "unmet_hours": 65.2
+    "aw_heat_total": 949.165,
+    "aw_heat_split": 949.165,
+    "unmet_hours": 82.8
    }
   },
   {
@@ -1315,23 +1315,23 @@
     "plug": 295.65,
     "light": 59.13,
     "fridge": 1115.292,
-    "cool_base": 271.349,
-    "gas_heat_kg": 125.477,
+    "cool_base": 75.856,
+    "gas_heat_kg": 136.083,
     "gas_dhw_kg": 99.451,
-    "heat_th_base": 1452.401,
+    "heat_th_base": 1575.165,
     "dhw_th": 1151.15,
-    "aw_heat": 535.963,
-    "aw_backup": 84.75,
+    "aw_heat": 558.625,
+    "aw_backup": 99.0,
     "aw_dhw": 390.233,
-    "aw_cool": 271.349,
+    "aw_cool": 75.856,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 1755.072,
     "base_elec_sum": 1755.072,
-    "aw_heat_total": 620.713,
-    "aw_heat_split": 620.713,
-    "unmet_hours": 51.0
+    "aw_heat_total": 657.625,
+    "aw_heat_split": 657.625,
+    "unmet_hours": 57.5
    }
   },
   {
@@ -1346,23 +1346,23 @@
     "plug": 492.75,
     "light": 98.508,
     "fridge": 1115.292,
-    "cool_base": 395.159,
-    "gas_heat_kg": 147.782,
+    "cool_base": 109.733,
+    "gas_heat_kg": 165.259,
     "gas_dhw_kg": 164.547,
-    "heat_th_base": 1710.577,
+    "heat_th_base": 1912.867,
     "dhw_th": 1904.63,
-    "aw_heat": 606.388,
-    "aw_backup": 95.25,
+    "aw_heat": 652.165,
+    "aw_backup": 108.0,
     "aw_dhw": 641.426,
-    "aw_cool": 395.159,
+    "aw_cool": 109.733,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 2181.55,
     "base_elec_sum": 2181.55,
-    "aw_heat_total": 701.638,
-    "aw_heat_split": 701.638,
-    "unmet_hours": 61.0
+    "aw_heat_total": 760.165,
+    "aw_heat_split": 760.165,
+    "unmet_hours": 71.0
    }
   },
   {
@@ -1377,23 +1377,23 @@
     "plug": 689.85,
     "light": 138.101,
     "fridge": 1115.292,
-    "cool_base": 514.555,
-    "gas_heat_kg": 169.119,
+    "cool_base": 144.393,
+    "gas_heat_kg": 194.912,
     "gas_dhw_kg": 230.546,
-    "heat_th_base": 1957.557,
+    "heat_th_base": 2256.109,
     "dhw_th": 2668.575,
-    "aw_heat": 686.047,
-    "aw_backup": 111.75,
+    "aw_heat": 757.51,
+    "aw_backup": 127.5,
     "aw_dhw": 899.915,
-    "aw_cool": 514.555,
+    "aw_cool": 144.393,
     "aw_standby": 87.6
    },
    "check": {
     "app_sum": 2608.243,
     "base_elec_sum": 2608.243,
-    "aw_heat_total": 797.797,
-    "aw_heat_split": 797.797,
-    "unmet_hours": 74.5
+    "aw_heat_total": 885.01,
+    "aw_heat_split": 885.01,
+    "unmet_hours": 86.0
    }
   }
  ]

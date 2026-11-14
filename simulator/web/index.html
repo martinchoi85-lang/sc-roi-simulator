@@ -74,7 +74,7 @@
     <div class="row" id="gridChgRow"><label></label><label class="chk"><input type="checkbox" data-k="gridCharge"> 경부하 시간 계통 충전 허용</label></div>
     <div class="row"><label>전기요금 인상</label><div class="slider" data-k="escE" data-min="0" data-max="10" data-step="0.5" data-unit="%/년"></div></div>
     <div class="row"><label>가스요금 인상</label><div class="slider" data-k="escG" data-min="0" data-max="10" data-step="0.5" data-unit="%/년"></div></div>
-    <div class="row"><label>프로판 단가</label><div class="inl"><input type="text" data-k="gasPrice" inputmode="decimal"> 원/kg</div></div>
+    <div class="row"><label>가스 단가</label><div class="inl"><input type="text" data-k="gasPrice" inputmode="decimal"><select id="gasUnit" class="unitsel"></select></div></div>
     <div class="row"><label>유지보수비</label><div class="inl">초기 CAPEX의 <input type="text" data-k="omPct" inputmode="decimal"> %/년</div></div>
     <div class="row"><label>분석 기간</label><div class="slider" data-k="years" data-min="5" data-max="20" data-step="1" data-unit="년"></div></div>
     
@@ -142,8 +142,8 @@
         <div id="chEu" class="chart"></div>
       </div>
       <div class="card">
-        <div class="ct">월별 프로판 사용량 (설치 전 · 가스보일러)</div>
-        <div class="cs">kg. AWHP 도입 시 설치 후 프로판은 0.</div>
+        <div class="ct">월별 가스 사용량 (기준안 · 가스보일러)</div>
+        <div class="cs">연료 열량 kWh. AWHP 도입 시 도입안의 가스 사용은 0.</div>
         <div class="legend" id="legGas"></div>
         <div id="chGas" class="chart"></div>
       </div>
