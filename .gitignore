@@ -10,7 +10,6 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -229,7 +228,7 @@ korea/cache/
 
 
 # simulator
-simulator/dist/
+# simulator/dist/
 simulator/**/__pycache__/
 # 대용량 원자료(재다운로드 가능, SOURCE.md 참조)
 california/source/atus/*.zip
