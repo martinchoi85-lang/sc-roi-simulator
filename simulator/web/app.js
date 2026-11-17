@@ -9,7 +9,7 @@
 
   // ---------------- 상태 ----------------
   const S = Object.assign({}, D.init);
-  const COST = {}; D.costFields.forEach(f => { if (f[0] !== 'g') COST[f[0]] = f[2]; });
+  const COST = {}; D.costFields.forEach(f => { if (f[0] !== 'g' && f[0] !== 'ref') COST[f[0]] = f[2]; });
   const TARIFF = JSON.parse(JSON.stringify(D.tariffs));
   const conf = { l1: null, l2: null, l3: null };   // 확정 시점 입력 스냅샷(JSON)
   let combo = null, L1 = null, META = {}, R2 = null, R3 = null, selDay = 17;
@@ -76,8 +76,9 @@
     $$('input[type=checkbox][data-k]').forEach(el => { const k = el.dataset.k; el.checked = !!S[k]; el.onchange = () => { S[k] = el.checked; paintHems(); changed(); }; });
     $$('input[type=text][data-k]').forEach(el => { const k = el.dataset.k; if (el.closest('.slider') || el.closest('.stepper')) return; el.value = S[k]; el.onchange = () => { S[k] = num(el.value); el.value = S[k]; changed(); }; });
     // 단가·보조금
-    $('#costGrid').innerHTML = D.costFields.map(f => f[0] === 'g' ? `<div class="gh">${f[1]}</div>` :
+    $('#costGrid').innerHTML = D.costFields.map(f => f[0] === 'g' ? `<div class="gh">${f[1]}</div>` : f[0] === 'ref' ? '<div class="subref" id="subRef"></div>' :
       `<label title="${f[4]}">${f[1]}</label><input type="text" data-c="${f[0]}" value="${(+f[2]).toLocaleString('ko-KR')}" title="${f[4]}">`).join('');
+    renderSubRef();
     $$('#costGrid input').forEach(el => el.onchange = () => { COST[el.dataset.c] = num(el.value); el.value = COST[el.dataset.c].toLocaleString('ko-KR'); changed(); });
     // 요금제
     $('#tariffSel').onchange = e => { S.tariff = e.target.value; const T = TARIFF[S.tariff]; if (T.exportDefault) S.exportMode = T.exportDefault; if (T.type !== 'tou' && S.exportMode === 'tou') S.exportMode = 'net'; paintL3(); changed(); };
@@ -87,6 +88,15 @@
     gu.onchange = () => { const perKwh = gasPerKwh(); S.gasUnit = gu.value; S.gasPrice = Math.round(perKwh * GAS_UNITS[S.gasUnit][1] * 100) / 100; $('[data-k=gasPrice]').value = S.gasPrice; changed(); };
     paintHems(); paintL3();
     ['#curSel', '#fxUSD', '#fxAUD'].forEach(s => $(s).addEventListener('change', () => { $('#fxUSD').value = num($('#fxUSD').value).toLocaleString('ko-KR'); $('#fxAUD').value = num($('#fxAUD').value).toLocaleString('ko-KR'); changed(); }));
+  }
+  const REF_LV = { V: ['공식 원문 확인', 'ok'], U: ['언론·업계 보도', 'u'], N: ['확인 안 됨', 'n'] };
+  function subRefRows() { const R = D.subsidyRef, reg = region(); return (reg.country === 'KR' ? R._kr_pv : []).concat(R[reg.id] || []); }
+  function subRefHTML(rows, full) {
+    return rows.map(([k, v, lv, src]) => `<div class="sr"><b>${k}</b> ${v} <span class="lv ${REF_LV[lv][1]}">${REF_LV[lv][0]}</span>${src && full ? `<div class="src">${src}</div>` : ''}</div>`).join('');
+  }
+  function renderSubRef() {
+    const el = $('#subRef'); if (!el) return;
+    el.innerHTML = `<details><summary>${region().label} 보조금 참고 (2026-11 기준, 현지 통화)</summary>${subRefHTML(subRefRows(), true)}<div class="src">참고용입니다. 금액은 위 입력칸에 직접 넣으세요(원). 자격·예산 소진 여부는 신청 시점에 다시 확인.</div></details>`;
   }
   function paintHems() { $('#hemsBox').classList.toggle('off', !S.hemsOn); }
   const CUR_LABEL = { KRW: '원', USD: 'USD', AUD: 'AUD' };
@@ -143,6 +153,7 @@
     const syncAdd = () => { if (tt.addVarQ) tt.addQ = tt.addVarQ.map(v => (tt.addFixed || 0) + v); };
     box.querySelectorAll('input[data-f]').forEach(el => el.onchange = () => { tt[el.dataset.f] = num(el.value); syncAdd(); changed(); });
     box.querySelectorAll('input[data-q]').forEach(el => el.onchange = () => { tt.addVarQ[+el.dataset.q] = num(el.value); syncAdd(); changed(); });
+    renderSubRef();
     // HEMS 계절 이름(남반구는 반대)
     const hb = $$('#hemsBox > div'); const S_ = reg.hemi === 'S';
     hb[0].firstChild.textContent = S_ ? '동절기 6~8월' : '동절기 12~2월'; hb[1].firstChild.textContent = S_ ? '하절기 12~2월' : '하절기 6~8월';
@@ -527,6 +538,7 @@
 
   // ---------------- 가정·출처 ----------------
   function renderInfo() {
+    if (!META || !META.pv1kw_kwh) return;
     const st = s => `<span class="st ${s}">${{ V: '공식 확인', U: '미검증', P: '임시값', A: '가정', I: '입력' }[s]}</span>`;
     $('#infoBody').innerHTML = `
 <h2>이 시뮬레이터가 계산하는 방법</h2>
@@ -563,6 +575,9 @@
 <li>SCE TOU-D-PRIME은 LA 시(LADWP)가 아닌 LA 카운티 SCE 공급 지역용입니다. 히트펌프·가정용 배터리·EV가 있는 가구만 가입할 수 있습니다. 단가는 SCE 웹 게시값(¢ 반올림, 2026-11-17 확인), 공휴일은 평일로 계산합니다. 신규 태양광은 Solar Billing Plan(시간별 수출 단가)이라 월 상계가 아니므로 기본 매전 방식을 FIT로 두었습니다(단가는 직접 입력).</li>
 <li>빅토리아는 2026-27 VDO(GST 포함)를 썼습니다. 매전 단가(FiT)는 2025년 7월부터 규제 최저가가 없어져 소매사가 정하므로 직접 입력합니다. Midday Power Saver(2026-10~)는 11~14시 무료(하루 24kWh 한도, 초과분은 솔라 소크 단가)이며, 이 시간에 계통에서 ESS를 충전하려면 ESS 운전 "TOU 피크 방전" + "경부하 시간 계통 충전 허용"을 고르세요. 운전 규칙은 한도를 모르고 충전하므로, 한도 초과분은 요금 계산에서만 반영됩니다.</li>
 </ul>
+<h2>보조금 참고 (${region().label}, 2026-11-17 확인)</h2>
+<table><tr><th>구분</th><th>내용</th><th>근거 수준</th><th>출처</th></tr>${subRefRows().map(([k, v, lv, src]) => `<tr><td>${k}</td><td>${v}</td><td>${REF_LV[lv][0]}</td><td>${src}</td></tr>`).join('')}</table>
+<p class="hint">시뮬레이터의 보조금 기본값은 0원입니다. 위 내용을 참고해 단가·보조금 입력칸에 직접 넣으세요.</p>
 <h2>입력값과 근거 수준</h2>
 <table><tr><th>항목</th><th>값</th><th>근거</th><th>수준</th></tr>
 <tr><td>기상</td><td>${META.weather_src || ''}</td><td>15분 보간, 연간 PV 1kW 발전 ${f0(E.sum(META.pv1kw_kwh || [0]))}kWh (경사 25°, 정남, 시스템 손실 14%, 인버터 97%)</td><td>${st('V')}</td></tr>
@@ -574,7 +589,7 @@
 <tr><td>가스 단가</td><td>${D.init.gasPrice}원/kWh (기본값)</td><td>LPG 2,812.26원/kg(오피넷 일반프로판 2026-10 4주 전국 평균) ÷ 12.86kWh/kg. 단위는 원/kWh·원/kg·원/m³ 중 선택, 사용자가 직접 입력</td><td>${st('I')}</td></tr>
 <tr><td>한전 누진제</td><td>기본 910/1,600/7,300원, 120/214.6/307.3원/kWh, 하계 7~8월 300/450kWh, 기후 9·연료 5원, VAT 10%, 기금 2.7%</td><td>한전 요금표</td><td>${st('V')}</td></tr>
 <tr><td>주택용 계시별(TOU)</td><td>편집 가능</td><td>2019 한전 실증사업 시간대·배율 기반 가정. 한국 일반 가정 전국 요금표 없음</td><td>${st('A')}</td></tr>
-${D.costFields.filter(f => f[0] !== 'g').map(f => `<tr><td>${f[1].replace(/<[^>]+>/g, '')}</td><td>${(+f[2]).toLocaleString('ko-KR')}</td><td>${f[4]}</td><td>${st(f[3])}</td></tr>`).join('')}
+${D.costFields.filter(f => f[0] !== 'g' && f[0] !== 'ref').map(f => `<tr><td>${f[1].replace(/<[^>]+>/g, '')}</td><td>${(+f[2]).toLocaleString('ko-KR')}</td><td>${f[4]}</td><td>${st(f[3])}</td></tr>`).join('')}
 <tr><td>전기·가스 인상률, 유지보수비, FIT 단가</td><td>기본 ${D.init.escE}% · ${D.init.escG}% · ${D.init.omPct}% · ${D.init.fitPrice}원/kWh</td><td>근거 없는 출발값. 직접 입력</td><td>${st('I')}</td></tr>
 <tr><td>환율</td><td>USD 1,400원 · AUD 900원 (기본)</td><td>표시용. 상단에서 직접 입력</td><td>${st('I')}</td></tr>
 </table>

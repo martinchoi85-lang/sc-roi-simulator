@@ -232,3 +232,6 @@ korea/cache/
 simulator/**/__pycache__/
 # 대용량 원자료(재다운로드 가능, SOURCE.md 참조)
 california/source/atus/*.zip
+
+# 참고 원문(보조금 공고 등, 저장소 제외)
+_ref/
