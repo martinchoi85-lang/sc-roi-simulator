@@ -77,7 +77,7 @@
     $$('input[type=text][data-k]').forEach(el => { const k = el.dataset.k; if (el.closest('.slider') || el.closest('.stepper')) return; el.value = S[k]; el.onchange = () => { S[k] = num(el.value); el.value = S[k]; changed(); }; });
     // 단가·보조금
     $('#costGrid').innerHTML = D.costFields.map(f => f[0] === 'g' ? `<div class="gh">${f[1]}</div>` :
-      `<label title="${f[4]}">${f[1]} <span class="st ${f[3]}">${{ V: '확인', U: '미검증', P: '임시', A: '가정', I: '입력' }[f[3]]}</span></label><input type="text" data-c="${f[0]}" value="${(+f[2]).toLocaleString('ko-KR')}" title="${f[4]}">`).join('');
+      `<label title="${f[4]}">${f[1]}</label><input type="text" data-c="${f[0]}" value="${(+f[2]).toLocaleString('ko-KR')}" title="${f[4]}">`).join('');
     $$('#costGrid input').forEach(el => el.onchange = () => { COST[el.dataset.c] = num(el.value); el.value = COST[el.dataset.c].toLocaleString('ko-KR'); changed(); });
     // 요금제
     $('#tariffSel').onchange = e => { S.tariff = e.target.value; const T = TARIFF[S.tariff]; if (T.exportDefault) S.exportMode = T.exportDefault; if (T.type !== 'tou' && S.exportMode === 'tou') S.exportMode = 'net'; paintL3(); changed(); };
