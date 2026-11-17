@@ -42,7 +42,7 @@
   <div class="card lv" id="lv2">
     <div class="lvh"><div class="num">2</div><h3>설비 구성<small>에너지 자립률 · CAPEX</small></h3></div>
     <div class="row"><label>PV 모듈 <em>400W</em></label><div class="stepper" data-k="pvN" data-min="0" data-max="60"></div></div>
-    <div class="row"><label>ESS 모듈 <em>5kWh</em></label><div class="stepper" data-k="essN" data-min="0" data-max="12"></div></div>
+    <div class="row"><label>ESS 모듈 <em>5kWh</em></label><div class="stepper" data-k="essN" data-min="0" data-max="40"></div></div>
     <div class="row"><label>PV 열화</label><div class="slider" data-k="pvDeg" data-min="0" data-max="10" data-step="0.1" data-unit="%/년"></div></div>
     <div class="row"><label>ESS 열화</label><div class="slider" data-k="essDeg" data-min="0" data-max="10" data-step="0.1" data-unit="%/년"></div></div>
     <div class="row"><label>PV 교체 기준</label><div class="slider" data-k="pvRepl" data-min="50" data-max="99" data-step="1" data-unit="% 출력"></div></div>
@@ -69,6 +69,7 @@
     <div id="touBox" class="toubox"></div>
     <div class="row"><label>매전 방식</label><div class="seg" data-k="exportMode"></div></div>
     <div class="row" id="fitRow"><label>FIT 단가</label><div class="inl"><input type="text" data-k="fitPrice" inputmode="decimal"> <span id="fitUnit">원/kWh</span> <span class="hint">고정, 인상률 미적용</span></div></div>
+    <div class="row" id="noneRow"><label></label><div class="hint">역송 불가: ESS를 채우고 남은 PV는 버림(상계·매전 수익 없음)</div></div>
     <div class="row" id="touExpRow"><label>TOU 매전 단가</label><div class="inl">해당 시간대 수전 단가의 <input type="text" data-k="touExportPct" inputmode="decimal"> %</div></div>
     <div class="row" id="essModeRow"><label>ESS 운전</label><div class="seg" data-k="essMode"></div></div>
     <div class="row" id="gridChgRow"><label></label><label class="chk"><input type="checkbox" data-k="gridCharge"> 경부하 시간 계통 충전 허용</label></div>
@@ -85,6 +86,7 @@
   <div class="stale" id="staleNote"></div>
   <div class="autonote">조건을 바꾸면 바로 다시 계산됩니다.</div>
   <div class="kpis" id="kpis"></div>
+  <div class="badges" id="badges"></div>
   <div class="grid2">
     <div class="card">
       <div class="ct">누적 순이익 <span class="sub">(누적 이득 − 누적 CAPEX)</span></div>
@@ -94,7 +96,7 @@
     </div>
     <div class="card">
       <div class="ct">1년 차 월별 에너지 흐름</div>
-      <div class="cs">설치 후 전력 사용량, PV 발전량, 계통 수전·역송 (kWh)</div>
+      <div class="cs" id="monSub">설치 후 전력 사용량, PV 발전량, 계통 수전·역송 (kWh)</div>
       <div class="legend" id="legMon"></div>
       <div id="chMon" class="chart"></div>
     </div>

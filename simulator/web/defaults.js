@@ -69,6 +69,14 @@ window.SCDEF = {
         rates: [[0.07274, 0.10018, 0.15858], [0.07664, 0.10018, 0.10018]],
         hours: [[0,0,0,0,0,0,0,0,0,0,1,1,1,2,2,2,2,1,1,1,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,2,2,2,2,1,1,1,0,0,0,0]],
         hoursWe: [[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]] } },
+    // SCE TOU-D-PRIME: LA 카운티 중 SCE 공급 지역(LA 시는 LADWP). 히트펌프·가정용 배터리·EV 보유 가구용. 단가 = SCE 웹 게시값(센트 반올림, 배전+발전, 2026-11-17 확인)
+    sce_prime: { label: 'SCE TOU-D-PRIME (LA 카운티 SCE 지역, 히트펌프·ESS 가구)', country: 'US', type: 'tou', currency: 'USD', exportDefault: 'fit',
+      src: 'SCE Time-Of-Use Plans 웹페이지 TOU-D-PRIME(2026-11-17 확인, ¢ 단위 반올림 게시값). 공휴일은 평일로 계산. 신규 태양광은 Solar Billing Plan(시간별 수출 단가) 대상이라 기본 매전 방식 = FIT 근사',
+      tou: { seasonMonths: [1,1,1,1,1,0,0,0,0,1,1,1], seasonNames: ['여름(6~9월)', '겨울(10~5월)'], periodNames: ['슈퍼 오프피크', '오프피크', '미드피크', '온피크'],
+        baseFee: 0, dailyFee: 0.79, addPerKwh: 0, krTax: false,
+        rates: [[0.26, 0.26, 0.39, 0.61], [0.24, 0.30, 0.45, 0.45]],
+        hours: [[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,3,3,3,3,3,1,1,1],[1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,2,2,2,2,2,1,1,1]],
+        hoursWe: [[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,1,1,1],[1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,2,2,2,2,2,1,1,1]] } },
     // 빅토리아 기본요금(VDO) 2026-27, Jemena 배전구역(멜버른 공항 일대), GST 포함
     vdo_jemena_flat: { label: 'VDO 2026-27 단일요금 (Jemena)', country: 'AU', type: 'flat', currency: 'AUD', src: 'ESC Victorian Default Offer Price Determination 2026-27, Schedule 1',
       flat: { dailyFee: 1.2713, rate: 0.2747 } },
@@ -76,5 +84,12 @@ window.SCDEF = {
       tou: { seasonMonths: [0,0,0,0,0,0,0,0,0,0,0,0], seasonNames: ['연중'], periodNames: ['솔라 소크(11~16시)', '오프피크', '피크(16~21시)'],
         baseFee: 0, dailyFee: 1.2712, addPerKwh: 0, krTax: false, rates: [[0.1765, 0.2176, 0.3757]],
         hours: [[1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,2,2,2,2,2,1,1,1]] } },
+    // 빅토리아 Midday Power Saver(2026-10-01~2027-06-30), Jemena, GST 포함. 11~14시 무료(하루 24kWh 한도, 초과분은 솔라 소크 단가)
+    vdo_jemena_mps: { label: 'Midday Power Saver 2026-27 (Jemena, 11~14시 무료)', country: 'AU', type: 'tou', currency: 'AUD',
+      src: 'ESC Victorian Midday Power Saver Schedule 1 (2026-10-01~2027-06-30) + Technical Paper(2026-05-22: 무료 구간 하루 24kWh 한도, 초과분 솔라 소크 단가, 매일·서머타임에도 11~14시 고정). 연중 같은 단가로 가정',
+      tou: { seasonMonths: [0,0,0,0,0,0,0,0,0,0,0,0], seasonNames: ['연중'], periodNames: ['무료(11~14시)', '솔라 소크(14~16시)', '오프피크(21~11시)', '피크(16~21시)'],
+        baseFee: 0, dailyFee: 1.2712, addPerKwh: 0, krTax: false, cap: { period: 0, kwh: 24, overPeriod: 1 },
+        rates: [[0, 0.1983, 0.2394, 0.3975]],
+        hours: [[2,2,2,2,2,2,2,2,2,2,2,0,0,0,1,1,3,3,3,3,3,2,2,2]] } },
   },
 };

@@ -72,9 +72,9 @@ details.adv summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--su
 .toubox{display:none;margin:4px 0 8px;border:1px solid var(--line);border-radius:7px;padding:8px;background:#fafbfc;font-size:11px}
 .toubox.show{display:block}
 .toubox table{width:100%;border-collapse:collapse}
-.toubox td,.toubox th{padding:2px 3px;text-align:center;border:0;font-size:11px}
+.toubox td,.toubox th{padding:2px 3px;text-align:center;border:0;font-size:11px;font-weight:600;line-height:1.25}
 .toubox input{width:52px;border:1px solid var(--line);border-radius:4px;padding:2px 4px;text-align:right}
-.toubox .hrs{display:grid;grid-template-columns:52px repeat(24,1fr);gap:1px;margin-top:6px;align-items:center}
+.toubox .hrs{display:grid;grid-template-columns:64px repeat(24,1fr);gap:1px;margin-top:6px;align-items:center}
 .toubox .hrs span{height:12px;border-radius:2px}
 .toubox .warn{color:#8a5a00;margin-top:5px}
 .go{margin-top:10px;width:100%;background:var(--red);color:#fff;border:0;border-radius:7px;padding:9px;font-weight:700;font-size:13px}
@@ -158,3 +158,11 @@ table#tbl{border-collapse:separate;border-spacing:0;font-size:12px;min-width:100
 .autonote{font-size:11px;color:var(--muted);margin:-4px 0 8px;text-align:right}
 .cs b{font-weight:500;color:var(--ink)}
 .unitsel{border:1px solid var(--line);border-radius:5px;padding:3px 4px;font-size:11.5px;max-width:190px}
+.badges{display:flex;gap:12px;margin:-4px 0 14px}.badges>.zb{flex:1 1 0;min-width:0}
+.zb{background:#fff;border:1px solid var(--line);border-left:4px solid var(--muted);border-radius:10px;padding:9px 13px;font-size:12px;color:var(--sub);line-height:1.5}
+.zb .zt{display:flex;align-items:center;gap:8px;margin-bottom:2px}.zb .zt b{color:var(--ink);font-size:13px}
+.zb .zt span{font-size:11px;font-weight:700;border-radius:10px;padding:1px 8px;background:#eef0f2;color:var(--sub)}
+.zb.ok{border-left-color:var(--good)}.zb.ok .zt span{background:#e5f3ee;color:var(--good)}
+.zb.no{border-left-color:#c9ced6}.zb.no .zt span{background:#f6e7e8;color:var(--bad)}
+.zb.cut{border-left-color:var(--s8)}.zb.cut .zt span{background:#fdeee6;color:#9e3b14}
+.zb b{color:var(--ink)}.zb .mine{margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.zb .mine .btn-o{padding:3px 9px}

@@ -9,7 +9,7 @@ Supports:
 - Strict separation of Base Fees vs Variable Charges.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 import numpy as np
 import pandas as pd
 from engine.tariffs.base import BaseTariffCalculator

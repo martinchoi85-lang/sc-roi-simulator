@@ -32,6 +32,7 @@
 
   // ---------- 1단계: 사용량 ----------
   const APP = ['cook', 'laundry', 'plug', 'light', 'fridge'];
+  const ZERO_KWH = 0.001, ZERO_WON = 0.5; // Zero Energy / Zero Bill 판정 허용 오차
   function seasonOf(month, hemi) { // 0=간절기 1=하절기 2=동절기
     const s = (hemi === 'S') ? ((month >= 12 || month <= 2) ? 1 : (month >= 6 && month <= 8) ? 2 : 0)
       : ((month >= 6 && month <= 8) ? 1 : (month >= 12 || month <= 2) ? 2 : 0);
@@ -77,6 +78,7 @@
   // TOU 가격 배열 (원/kWh, 세전 에너지 단가)
   // TOU: tou.seasonMonths(12개월 → 계절 번호)가 있으면 그것을, 없으면 한국식 3계절(간/하/동). 주말은 hoursWe 또는 weekendOffpeak
   function touSeason(tou, month, hemi) { return tou.seasonMonths ? tou.seasonMonths[month - 1] : seasonOf(month, hemi); }
+  function touNP(tou) { let n = 0; for (const r of tou.rates) n = Math.max(n, r.length); return n; }
   function touPriceArray(tou, hemi) {
     const p = new Float64Array(H), per = new Uint8Array(H);
     for (let h = 0; h < H; h++) {
@@ -155,12 +157,19 @@
         const b = (f.dailyFee * MDAYS[m] + k * f.rate) * fx; res.monthBill[m] = b; res.bill += b; res.billedKwh += k;
       }
     } else { // TOU
-      const per = P.touArr.period, t = T.tou;
-      const pi = Array.from({ length: 12 }, () => [0, 0, 0]), pe = Array.from({ length: 12 }, () => [0, 0, 0]);
+      const per = P.touArr.period, t = T.tou, nP = touNP(t);
+      const pi = Array.from({ length: 12 }, () => new Float64Array(nP)), pe = Array.from({ length: 12 }, () => new Float64Array(nP));
       for (let h = 0; h < H; h++) { pi[MONTH[h] - 1][per[h]] += imp[h]; pe[MONTH[h] - 1][per[h]] += exp[h]; }
+      if (t.cap) { // 하루 한도(예: Midday Power Saver 무료 구간 24kWh/일): 초과분은 overPeriod 단가로 청구
+        res.capOverKwh = 0;
+        for (let d = 0; d < 365; d++) {
+          let s = 0; for (let k = 0; k < 24; k++) { const h = d * 24 + k; if (per[h] === t.cap.period) s += imp[h]; }
+          const over = s - t.cap.kwh; if (over > 0) { const m = MONTH[d * 24] - 1; pi[m][t.cap.period] -= over; pi[m][t.cap.overPeriod] += over; res.capOverKwh += over; }
+        }
+      }
       for (let m = 0; m < 12; m++) {
         let energy = 0, kwh = 0; const s = touSeason(t, m + 1, P.hemi);
-        for (let k = 0; k < 3; k++) {
+        for (let k = 0; k < nP; k++) {
           const billed = net ? netMonth(pi[m][k], pe[m][k], state, 'carryP' + k) : pi[m][k];
           energy += billed * t.rates[s][k]; kwh += billed;
         }
@@ -198,8 +207,14 @@
     // 설치 전(기준안): 계통만
     const zero = new Float64Array(H);
     const stB = { carry: 0 }; const billB1 = annualElecBill(L1.before.elec, zero, P, stB);
+    const fixedBill = annualElecBill(zero, zero, P, { carry: 0 }).bill; // 사용량 0일 때의 연간 요금(기본요금·최소요금)
+    const noExport = P.exportMode === 'none';
     // 상태
     let pvAge = 0, essAge = 0, invAge = 0, awAge = 0, soc = 0;
+    if (essKwh > 0) { // 시작 SOC = 1년 차 조건으로 한 해를 미리 돌린 연말 SOC(정상 상태). 1월 1일 0시 빈 배터리로 시작하는 왜곡 방지
+      const pv0 = new Float64Array(H); for (let h = 0; h < H; h++) pv0[h] = pv1[h] * pvKw;
+      soc = dispatchYear(loadA, pv0, { cap: essKwh, pmax: essKwh * P.essCrate, rte: P.essRte }, 0, opt).soc;
+    }
     const stA = { carry: 0 };
     const C = P.cost;
     const pvInit = pvKw * C.pvPerKw, essInit = essKwh * C.essPerKwh, awInit = L1.awhp ? C.awhp : 0, hemsInit = (P.hems.on && C.hemsInclude) ? C.hems : 0;
@@ -222,7 +237,8 @@
       const pvArr = new Float64Array(H); for (let h = 0; h < H; h++) pvArr[h] = pv1[h] * pvKw * pvH;
       const ess = { cap: essKwh * soh, pmax: essKwh * soh * P.essCrate, rte: P.essRte };
       const d = dispatchYear(loadA, pvArr, ess, soc, opt); soc = d.soc;
-      const billA = annualElecBill(d.imp, d.exp, P, stA);
+      const curtA = noExport ? d.exp : zero, expA = noExport ? zero : d.exp; // 매전 없음: 남는 PV는 버림
+      const billA = annualElecBill(d.imp, expA, P, stA);
       const escE = Math.pow(1 + P.escE / 100, y - 1), escG = Math.pow(1 + P.escG / 100, y - 1);
       const expEsc = P.exportMode === 'fit' ? 1 : escE;
       const before = { elec: billB1.bill * escE, gas: gasBeforeKg * P.gasPrice * escG };
@@ -233,21 +249,28 @@
       const benefit = before.total - after.total;
       cumB += benefit; cumC += capT;
       const net = cumB - cumC; if (payback === null && net >= 0 && y >= 1) payback = y;
-      const pvGen = sum(pvArr), imp = sum(d.imp), exp = sum(d.exp);
+      const pvGen = sum(pvArr), imp = sum(d.imp), exp = sum(expA), curt = sum(curtA);
       out.years.push({ y, cap, capT, cumC, before, after, benefit, cumB, net, ev,
-        energy: { use: useAfter, pv: pvGen, imp, exp, selfUse: d.selfUse, chg: d.chg, dis: d.dis, pvHealth: pvH, soh },
+        energy: { use: useAfter, pv: pvGen, imp, exp, curt, selfUse: d.selfUse, chg: d.chg, dis: d.dis, pvHealth: pvH, soh },
         monthBillAfter: billA.monthBill.map(v => v * escE), carry: stA.carry });
       if (y === 1) {
-        out.y1 = { monthUse: sumMonthly(loadA), monthPv: sumMonthly(pvArr), monthImp: sumMonthly(d.imp), monthExp: sumMonthly(d.exp),
+        let impDays = 0; for (let dd = 0; dd < 365; dd++) { let s = 0; for (let k = 0; k < 24; k++) s += d.imp[dd * 24 + k]; if (s > ZERO_KWH) impDays++; }
+        out.y1 = { monthUse: sumMonthly(loadA), monthPv: sumMonthly(pvArr), monthImp: sumMonthly(d.imp), monthExp: sumMonthly(expA), monthCurt: sumMonthly(curtA),
+          hourImp: d.imp, hourExp: expA, hourCurt: curtA, hourLoad: loadA, impDays,
+          billVar: billA.bill - fixedBill - billA.exportIncome, fixedBill, capOverKwh: billA.capOverKwh || 0,
           monthBillBefore: billB1.monthBill, monthBillAfter: billA.monthBill,
           monthGasBefore: sumMonthly(L1.before.gas), monthGasAfter: sumMonthly(L1.after.gas) };
       }
       pvAge++; essAge++; invAge++; awAge++;
     }
-    const y1 = out.years[0].energy;
+    const y1 = out.years[0].energy, Y1 = out.y1;
     out.kpi = {
-      selfSuffProd: useAfter > 0 ? y1.pv / useAfter : 0,          // 대표: 생산 기준 = PV 발전량 / 전력 사용량
-      selfSuffSupply: useAfter > 0 ? 1 - y1.imp / useAfter : 0,  // 자가충족 = 1 − 계통 수전 / 전력 사용량
+      selfSuff: useAfter > 0 ? 1 - y1.imp / useAfter : 0,        // 대표: 에너지 자립률(실시간) = 1 − 계통 수전 / 전력 사용량
+      pvOffset: useAfter > 0 ? y1.pv / useAfter : 0,             // 보조: 연간 발전 상쇄율 = PV 발전량 / 전력 사용량 (100% 초과 가능)
+      pvOffsetUsed: useAfter > 0 ? (y1.pv - y1.curt) / useAfter : 0, // 버려진 PV 제외
+      curt: y1.curt, curtRatio: y1.pv > 0 ? y1.curt / y1.pv : 0,
+      zeroEnergy: { ok: y1.imp <= ZERO_KWH, impKwh: y1.imp, impDays: Y1.impDays },
+      zeroBill: { ok: Y1.billVar <= ZERO_WON, varBill: Y1.billVar, fixedBill: Y1.fixedBill },
       capexGross: grossInit, subsidy, capexNet: grossInit - subsidy,
       benefit1: out.years[0].benefit, cumNet: out.years[N - 1].net, payback,
       useBefore, useAfter, gasBeforeKg, gasAfterKg, pvKw, essKwh,
@@ -262,9 +285,26 @@
     const pv = new Float64Array(H); for (let h = 0; h < H; h++) pv[h] = pv1[h] * pvKw;
     const d = dispatchYear(load, pv, { cap: essKwh, pmax: essKwh * P.essCrate, rte: P.essRte }, 0, null);
     const use = sum(load), g = sum(pv), imp = sum(d.imp);
-    return { use, pv: g, imp, exp: sum(d.exp), selfUse: d.selfUse, selfSuffProd: use > 0 ? g / use : 0, selfSuffSupply: use > 0 ? 1 - imp / use : 0, pvKw, essKwh };
+    return { use, pv: g, imp, exp: sum(d.exp), selfUse: d.selfUse, pvOffset: use > 0 ? g / use : 0, selfSuff: use > 0 ? 1 - imp / use : 0, pvKw, essKwh };
   }
 
-  const api = { H, MONTH, DOW, HOD, MDAYS, decodeCombo, level1, level2, simulate, krMonthBill, touPriceArray, dispatchYear, seasonOf, sum, sumMonthly };
+  // Zero Energy(1년 차 계통 수전 0)에 필요한 최소 ESS 모듈 수. 현재 PV·HEMS 기준, 자가소비 우선 운전(계통 충전 없음),
+  // 시작 SOC는 simulate와 같은 정상 상태. 반환 { n: 모듈 수 또는 null, imp: n(또는 maxN)에서의 남은 수전 kWh, days }
+  function minEssForZero(L1, pv1, P, maxN) {
+    const fH = hemsFactor(P), load = new Float64Array(H); for (let h = 0; h < H; h++) load[h] = L1.after.elec[h] * fH[h];
+    const pvKw = P.pvN * P.pvModW / 1000, pv = new Float64Array(H); for (let h = 0; h < H; h++) pv[h] = pv1[h] * pvKw;
+    let last = null;
+    for (let n = 0; n <= maxN; n++) {
+      const cap = n * P.essModKwh, ess = { cap, pmax: cap * P.essCrate, rte: P.essRte };
+      const soc0 = cap > 0 ? dispatchYear(load, pv, ess, 0, null).soc : 0;
+      const d = dispatchYear(load, pv, ess, soc0, null), imp = sum(d.imp);
+      let days = 0; for (let dd = 0; dd < 365; dd++) { let s = 0; for (let k = 0; k < 24; k++) s += d.imp[dd * 24 + k]; if (s > ZERO_KWH) days++; }
+      last = { n: null, imp, days, tried: n };
+      if (imp <= ZERO_KWH) return { n, imp, days };
+    }
+    return last;
+  }
+
+  const api = { H, MONTH, DOW, HOD, MDAYS, decodeCombo, level1, level2, simulate, minEssForZero, touNP, krMonthBill, touPriceArray, dispatchYear, seasonOf, sum, sumMonthly };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.SCEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

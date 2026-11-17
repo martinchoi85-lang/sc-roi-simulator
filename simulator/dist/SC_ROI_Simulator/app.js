@@ -80,8 +80,8 @@
       `<label title="${f[4]}">${f[1]} <span class="st ${f[3]}">${{ V: '확인', U: '미검증', P: '임시', A: '가정', I: '입력' }[f[3]]}</span></label><input type="text" data-c="${f[0]}" value="${(+f[2]).toLocaleString('ko-KR')}" title="${f[4]}">`).join('');
     $$('#costGrid input').forEach(el => el.onchange = () => { COST[el.dataset.c] = num(el.value); el.value = COST[el.dataset.c].toLocaleString('ko-KR'); changed(); });
     // 요금제
-    $('#tariffSel').onchange = e => { S.tariff = e.target.value; if (TARIFF[S.tariff].type === 'kr_prog' && S.exportMode === 'tou') S.exportMode = 'net'; paintL3(); changed(); };
-    seg($('[data-k=exportMode]'), [['net', '월 상계'], ['fit', 'FIT'], ['tou', 'TOU']], () => S.exportMode, v => { S.exportMode = v; paintL3(); });
+    $('#tariffSel').onchange = e => { S.tariff = e.target.value; const T = TARIFF[S.tariff]; if (T.exportDefault) S.exportMode = T.exportDefault; if (T.type !== 'tou' && S.exportMode === 'tou') S.exportMode = 'net'; paintL3(); changed(); };
+    seg($('[data-k=exportMode]'), [['net', '월 상계'], ['fit', 'FIT'], ['tou', 'TOU'], ['none', '매전 없음']], () => S.exportMode, v => { S.exportMode = v; paintL3(); });
     seg($('[data-k=essMode]'), [['self', '자가소비 우선'], ['tou', 'TOU 피크 방전']], () => S.essMode, v => { S.essMode = v; paintL3(); });
     const gu = $('#gasUnit'); gu.innerHTML = Object.entries(GAS_UNITS).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join(''); gu.value = S.gasUnit;
     gu.onchange = () => { const perKwh = gasPerKwh(); S.gasUnit = gu.value; S.gasPrice = Math.round(perKwh * GAS_UNITS[S.gasUnit][1] * 100) / 100; $('[data-k=gasPrice]').value = S.gasPrice; changed(); };
@@ -104,6 +104,7 @@
     $('#fitUnit').textContent = cu + '/kWh';
     $('#fitRow').style.display = S.exportMode === 'fit' ? '' : 'none';
     $('#touExpRow').style.display = S.exportMode === 'tou' ? '' : 'none';
+    $('#noneRow').style.display = S.exportMode === 'none' ? '' : 'none';
     $('#essModeRow').style.display = isTou ? '' : 'none';
     $('#gridChgRow').style.display = isTou && S.essMode === 'tou' ? '' : 'none';
     $('[data-k=essMode]')._paint && $('[data-k=essMode]')._paint();
@@ -112,11 +113,15 @@
     const inp = (attr, v, w) => `<input type="text" ${attr} value="${v}"${w ? ` style="width:${w}px"` : ''}>`;
     let h = '';
     if (T.type === 'tou') {
-      const t = T.tou, sn = t.seasonNames || ['간절기', '하절기', '동절기'], pn = t.periodNames || ['경부하', '중간', '최대'], pc = ['#cde2fb', '#6da7ec', '#184f95'];
+      const t = T.tou, sn = t.seasonNames || ['간절기', '하절기', '동절기'], pn = t.periodNames || ['경부하', '중간', '최대'], nP = E.touNP(t), ks = [...Array(nP).keys()];
+      const pc = nP <= 3 ? ['#cde2fb', '#6da7ec', '#184f95'] : ['#e8f1fc', '#9ec5f4', '#3987e5', '#0d366b', '#061f3f'], iw = nP > 3 ? 50 : 0;
+      const hrsRow = (lab, arr) => `<div class="hrs"><b style="font-weight:500">${lab}</b>${arr.map((k, hh) => `<span style="background:${pc[k]}" title="${hh}시 ${pn[k]}"></span>`).join('')}</div>`;
       h = `<table><tr><th>${cu}/kWh</th>${pn.map(p => `<th>${p}</th>`).join('')}</tr>` +
-        sn.map((sname, i) => `<tr><th>${sname}</th>${[0, 1, 2].map(k => `<td>${inp(`data-ts="${i}" data-tp="${k}"`, t.rates[i][k])}</td>`).join('')}</tr>`).join('') + '</table>' +
+        sn.map((sname, i) => `<tr><th>${sname}</th>${ks.map(k => `<td>${inp(`data-ts="${i}" data-tp="${k}"`, t.rates[i][k] ?? '', iw)}</td>`).join('')}</tr>`).join('') + '</table>' +
+        (t.cap ? `<div class="inl" style="margin-top:4px">${pn[t.cap.period]} 하루 한도 ${inp('data-cap="1"', t.cap.kwh, 44)} kWh · 초과분은 ${pn[t.cap.overPeriod]} 단가</div>` : '') +
         `<div class="inl" style="margin-top:4px">${t.krTax || T.currency === 'KRW' ? `기본요금 ${inp('data-f="baseFee"', t.baseFee)} 원/월` : `월 기본료 ${inp('data-f="baseFee"', t.baseFee, 52)} · 일 기본료 ${inp('data-f="dailyFee"', t.dailyFee, 52)}`}${t.addQ ? ` · 고정 조정요금 ${inp('data-f="addFixed"', t.addFixed, 60)}` : ` · kWh당 추가 ${inp('data-f="addPerKwh"', t.addPerKwh, 60)}`}</div>` + (t.addQ ? qEditor(t, cu) : '') +
-        sn.map((sname, i) => `<div class="hrs"><b style="font-weight:500">${sname}</b>${t.hours[i].map((k, hh) => `<span style="background:${pc[k]}" title="${hh}시 ${pn[k]}"></span>`).join('')}</div>`).join('') +
+        sn.map((sname, i) => { const sh = sname.replace(/\s*\(.*\)/, ''); return hrsRow(t.hoursWe ? sh + ' 평일' : sh, t.hours[i]) + (t.hoursWe ? hrsRow(sh + ' 주말', t.hoursWe[i]) : ''); }).join('') +
+        `<div class="hrs"><b></b>${[...Array(24).keys()].map(hh => `<i style="font-size:9px;color:var(--muted);font-style:normal;text-align:center">${hh % 6 ? '' : hh}</i>`).join('')}</div>` +
         (T.country === 'KR' ? '<div class="warn">원/kWh 세전 단가. 시간대·배율은 2019년 한전 실증사업 일반형(하계 13~17시 2.3배, 동계 9~12시 1.7배)을 바탕으로 한 가정값. 한국 일반 가정에는 아직 전국 시행 요금표가 없음.</div>' : '');
     } else if (T.type === 'tiered') {
       const t = T.tiered;
@@ -128,12 +133,13 @@
       const t = T.flat;
       h = `<div class="inl">일 기본료 ${inp('data-f="dailyFee"', t.dailyFee, 60)} ${cu}/일 · 사용 단가 ${inp('data-f="rate"', t.rate, 60)} ${cu}/kWh</div>`;
     }
-    if (T.src) h += `<div class="warn" style="color:var(--sub)">출처: ${T.src}${T.country === 'US' ? '. 세금(공공요금세 등) 제외' : ''}${T.country === 'AU' ? '. GST 포함. 매전(FiT)은 소매사가 정함 → 직접 입력' : ''}</div>`;
+    if (T.src) h += `<div class="warn" style="color:var(--sub)">출처: ${T.src}${T.country === 'US' ? '. 세금(공공요금세·주 부과금 등) 제외' : ''}${T.country === 'AU' ? '. GST 포함. 매전(FiT)은 소매사가 정함 → 직접 입력' : ''}</div>`;
     box.innerHTML = h;
     const tt = T.tou || T.tiered || T.flat;
     box.querySelectorAll('input[data-ts]').forEach(el => el.onchange = () => { tt.rates[+el.dataset.ts][+el.dataset.tp] = num(el.value); changed(); });
     box.querySelectorAll('input[data-lim]').forEach(el => el.onchange = () => { tt.limits[+el.dataset.lim] = num(el.value); changed(); });
     box.querySelectorAll('input[data-pac]').forEach(el => el.onchange = () => { tt.pac[+el.dataset.pac] = num(el.value); changed(); });
+    box.querySelectorAll('input[data-cap]').forEach(el => el.onchange = () => { tt.cap.kwh = num(el.value); changed(); });
     const syncAdd = () => { if (tt.addVarQ) tt.addQ = tt.addVarQ.map(v => (tt.addFixed || 0) + v); };
     box.querySelectorAll('input[data-f]').forEach(el => el.onchange = () => { tt[el.dataset.f] = num(el.value); syncAdd(); changed(); });
     box.querySelectorAll('input[data-q]').forEach(el => el.onchange = () => { tt.addVarQ[+el.dataset.q] = num(el.value); syncAdd(); changed(); });
@@ -144,7 +150,8 @@
 
   // ---------------- 상태 표시 ----------------
   let _deb = null;
-  function changed() { clearTimeout(_deb); _deb = setTimeout(() => run(3), 120); }
+  let MINESS = null; // Zero Energy 최소 ESS 계산 결과(조건이 바뀌면 지움)
+  function changed() { MINESS = null; clearTimeout(_deb); _deb = setTimeout(() => run(3), 120); }
 
   // ---------------- 계산 ----------------
   async function confirm1() {
@@ -247,21 +254,26 @@
     if (!R3) return;
     const k = R3.kpi, N = R3.years.length, r2 = R2 || {};
     const [cv, cu] = money(k.capexNet, true), [bv, bu] = money(k.benefit1, true), [nv, nu] = money(k.cumNet, true);
-    const ss = r2.selfSuffProd != null ? r2 : { selfSuffProd: k.selfSuffProd, selfSuffSupply: k.selfSuffSupply, pv: R3.years[0].energy.pv, use: k.useAfter };
+    const e1 = R3.years[0].energy;
     $('#kpis').innerHTML =
-      kpiHTML('에너지 자립률 (대표)', (ss.selfSuffProd * 100).toFixed(0), '%', `PV 발전 ${f0(ss.pv)} ÷ 전력 사용 ${f0(ss.use)} kWh<br>자가충족률 ${(ss.selfSuffSupply * 100).toFixed(0)}% (1 − 계통 수전 ÷ 사용)`) +
+      kpiHTML('에너지 자립률 (실시간)', (k.selfSuff * 100).toFixed(0), '%', `1 − 계통 수전 ${f0(e1.imp)} ÷ 사용 ${f0(k.useAfter)} kWh<br>연간 발전 상쇄율 ${(k.pvOffset * 100).toFixed(0)}% (PV 발전 ÷ 사용)${e1.curt > 0.5 ? ` · 버림 제외 ${(k.pvOffsetUsed * 100).toFixed(0)}%` : ''}`) +
       kpiHTML('초기 CAPEX (보조금 차감)', cv, cu, `설치 ${money(k.capexGross, true).join(' ')} · 보조금 ${money(k.subsidy, true).join(' ')}`) +
       kpiHTML('1년 차 연간 이득', bv, bu, `설치 전 ${money(R3.years[0].before.total, true).join(' ')} → 설치 후 ${money(R3.years[0].after.total, true).join(' ')}`) +
       kpiHTML(`${N}년 누적 순이익`, nv, nu, `교체 CAPEX ${money(R3.years.slice(1).reduce((a, y) => a + y.capT, 0), true).join(' ')} 포함`) +
       kpiHTML('회수 연도', k.payback ? k.payback + '년 차' : `${N}년 내 미회수`, '', paybackNote(), true);
+    renderBadges();
     // 누적 차트
     legend('#legCum', [['연간 이득', COL.s1], ['CAPEX (설치·교체, 보조금 차감)', COL.s2], ['누적 순이익', COL.s7, true]]);
     cumChart();
     // 월별 에너지
     const y1 = R3.y1;
-    legend('#legMon', [['전력 사용', COL.s1], ['PV 발전', COL.s4], ['계통 수전', COL.s7], ['역송', COL.s3]]);
-    groupedBars('#chMon', MON, [{ name: '전력 사용', color: COL.s1, values: Array.from(y1.monthUse) }, { name: 'PV 발전', color: COL.s4, values: Array.from(y1.monthPv) },
-      { name: '계통 수전', color: COL.s7, values: Array.from(y1.monthImp) }, { name: '역송', color: COL.s3, values: Array.from(y1.monthExp) }], { unit: 'kWh', h: 240 });
+    const monSer = [{ name: '전력 사용', color: COL.s1, values: Array.from(y1.monthUse) }, { name: 'PV 발전', color: COL.s4, values: Array.from(y1.monthPv) },
+      { name: '계통 수전', color: COL.s7, values: Array.from(y1.monthImp) }];
+    if (S.exportMode === 'none') monSer.push({ name: '버려진 PV', color: COL.s8, values: Array.from(y1.monthCurt) });
+    else monSer.push({ name: '역송', color: COL.s3, values: Array.from(y1.monthExp) });
+    legend('#legMon', monSer.map(s => [s.name, s.color]));
+    $('#monSub').textContent = S.exportMode === 'none' ? '설치 후 전력 사용량, PV 발전량, 계통 수전, 버려진 PV(매전 없음: ESS를 채우고 남은 발전) (kWh)' : '설치 후 전력 사용량, PV 발전량, 계통 수전·역송 (kWh)';
+    groupedBars('#chMon', MON, monSer, { unit: 'kWh', h: 240 });
     // 월별 비용
     const gp = gasPerKwh() * KWH_PER_KG, { fx, c } = cur(), dv = c === 'KRW' ? 1e4 : fx;
     const bB = y1.monthBillBefore.map((v, m) => (v + y1.monthGasBefore[m] * gp) / dv);
@@ -272,6 +284,29 @@
     renderCapex();
     renderTable();
   }
+  function renderBadges() {
+    const k = R3.kpi, ze = k.zeroEnergy, zb = k.zeroBill, e1 = R3.years[0].energy, { c } = cur();
+    const mm = v => money(v, true).join(' ');
+    const badge = (ok, title, body) => `<div class="zb ${ok ? 'ok' : 'no'}"><div class="zt"><b>${title}</b><span>${ok ? '달성' : '미달'}</span></div><div class="zs">${body}</div></div>`;
+    let h = badge(ze.ok, 'Zero Energy', ze.ok ? '1년 차 계통 수전 0kWh — 밤에도 PV·ESS만으로 전력을 충당' :
+      `1년 차 계통 수전 <b>${f0(ze.impKwh)} kWh</b> 남음 · 수전이 있었던 날 <b>${ze.impDays}일</b>/365일` +
+      `<div class="mine"><button class="btn-o" id="minEssBtn">Zero Energy 최소 ESS 계산</button><span id="minEssOut">${minEssText()}</span></div>`);
+    h += badge(zb.ok, 'Zero Bill', zb.ok ? `기본요금 외 전기요금 0 (매전 수익 차감 후 ${mm(Math.min(0, zb.varBill))}) · 남는 기본요금 연 ${mm(zb.fixedBill)}` :
+      `기본요금 외 전기요금 연 <b>${mm(zb.varBill)}</b> 남음(매전 수익 차감 후) · 기본요금 연 ${mm(zb.fixedBill)} 별도`);
+    if (S.exportMode === 'none') h += `<div class="zb cut"><div class="zt"><b>버려진 PV</b><span>매전 없음</span></div><div class="zs">1년 차 <b>${f0(e1.curt)} kWh</b> · 발전량의 <b>${(k.curtRatio * 100).toFixed(0)}%</b>. ESS를 늘리면 버릴 전기를 밤에 씁니다.</div></div>`;
+    $('#badges').innerHTML = h;
+    const b = $('#minEssBtn'); if (b) b.onclick = () => {
+      const P = params(); MINESS = E.minEssForZero(L1, META.pv1kw_kwh, P, 40); MINESS.pvKw = P.pvN * P.pvModW / 1000; $('#minEssOut').innerHTML = minEssText(); bindApply();
+    };
+    bindApply();
+  }
+  function minEssText() {
+    const m = MINESS; if (!m) return '';
+    if (m.n === null) return `현재 PV ${m.pvKw.toFixed(1)}kW로는 ESS 40개(200kWh)로도 <b>불가</b> — 남는 수전 ${f0(m.imp)}kWh, ${m.days}일. 겨울·흐린 날 PV 발전이 사용량보다 적기 때문(PV를 늘려야 함).`;
+    if (m.n === 0) return 'ESS 없이도 달성(자가소비 우선 운전 기준).';
+    return `현재 PV ${m.pvKw.toFixed(1)}kW 기준 <b>ESS ${m.n}개(${m.n * D.fixed.essModKwh}kWh)</b>부터 달성 <button class="btn-o" id="minEssApply">ESS ${m.n}개로 바꾸기</button>`;
+  }
+  function bindApply() { const a = $('#minEssApply'); if (a) a.onclick = () => { const n = MINESS.n; S.essN = n; S.essMode = 'self'; S.gridCharge = false; $$('.stepper').forEach(el => { if (el.dataset.k === 'essN') { const i = el.querySelector('input'); i.value = n; i.dispatchEvent(new Event('change')); } }); paintL3(); }; }
   function paybackNote() {
     const ev = R3.years.filter(y => y.ev.length).map(y => `${y.y}년 차 ${y.ev.join('·')}`);
     return ev.length ? '교체: ' + ev.slice(0, 3).join(', ') + (ev.length > 3 ? ' 외' : '') : '분석 기간 내 교체 없음';
@@ -331,7 +366,8 @@
     $('#unitNote').textContent = `단위: ${unitLabel()} · 좌우 스크롤`;
     const T = TARIFF[S.tariff];
     $('#tblNote').innerHTML = `설치 전 = 가스보일러 + 계통 전력, PV·ESS·AWHP·HEMS 없음. 설치 후 = ${aw ? 'AWHP(난방·급탕)' : '가스보일러 유지'}${R3.kpi.pvKw ? ` + PV ${R3.kpi.pvKw.toFixed(1)}kW` : ''}${R3.kpi.essKwh ? ` + ESS ${R3.kpi.essKwh}kWh` : ''}${S.hemsOn ? ' + HEMS' : ''}.
-      요금제 ${T.label}, 매전 ${{ net: '월 상계(잉여 kWh 무기한 이월)', fit: `FIT ${f0(S.fitPrice)}원/kWh 고정`, tou: `TOU 수전 단가의 ${S.touExportPct}%` }[S.exportMode]}.
+      요금제 ${T.label}, 매전 ${{ net: '월 상계(잉여 kWh 무기한 이월)', fit: `FIT ${S.fitPrice} ${CUR_LABEL[T.currency || 'KRW']}/kWh 고정`, tou: `TOU 수전 단가의 ${S.touExportPct}%`, none: '없음(ESS를 채우고 남은 PV는 버림, 상계·매전 수익 0)' }[S.exportMode]}.
+      ${R3.years[0].energy.curt > 0.5 ? `버려진 PV: 1년 차 ${f0(R3.years[0].energy.curt)}kWh(발전량의 ${(R3.kpi.curtRatio * 100).toFixed(0)}%) — 요금·이득에 반영되지 않음.` : ''}
       전기요금 ${S.escE}%/년·가스 ${S.escG}%/년 인상, 할인율 없음. 회수 연도는 테두리, 교체가 있는 해는 노란 칸. 매년 같은 기상(TMY)·같은 생활 패턴이 반복된다고 가정.`;
   }
 
@@ -347,13 +383,17 @@
     o.dhw = aw ? c.aw_dhw : new Float64Array(E.H);
     return o;
   }
+  const PURPLE = ['#f0eefb', '#d9d3f6', '#b8adee', '#9686e4', '#7462da', '#5a46c0', '#43348f', '#2d2360'];
+  const GREEN = ['#e8f6f0', '#c4ead9', '#93d8bb', '#5fc59b', '#2fb07d', '#1a8d62', '#136b4a', '#0c4a33'];
   const ORANGE = ['#fdeee6', '#fbd3bf', '#f6ae8c', '#f08a5d', '#eb6834', '#c94f20', '#9e3b14', '#6e290d'];
   const HEAT_DESC = {
     before: '기준안 = 지금 상태(가스보일러 난방·급탕, PV·ESS 없음)의 시간별 전력 소비. 가전·조명·냉방만 전기를 씁니다.',
     after: '도입안 = 1단계에서 고른 난방 방식의 시간별 전력 소비. AWHP 도입이면 AWHP 난방·급탕 전력이 더해집니다. PV 발전·HEMS 절감을 빼기 전 값.',
     heat: '난방이 켜진 시간만 색칠(회색 = 꺼짐). 색이 진할수록 그 시간 난방에 쓴 에너지가 큼.',
     gas: '기준안(가스보일러)의 시간별 가스 소비(연료 열량 kWh). 난방 + 급탕.',
-    pv: '현재 PV 용량 기준 1년 차 시간별 발전량.', tin: '도입안 기준 실내 온도(난방·냉방 운전 결과).', tout: 'TMY 외기 온도.', occ: '집에 있는 인원(수면 포함).',
+    pv: '현재 PV 용량 기준 1년 차 시간별 발전량.',
+    imp: '현재 2·3단계 조건(PV·ESS·HEMS·ESS 운전)에서 1년 차에 계통에서 받은 전기. 회색 = 수전 0(자립한 시간). 밤과 겨울에 수전이 몰리면 PV만으로는 자립이 어렵다는 뜻.',
+    sur: 'ESS를 채우고도 남은 PV 발전. 매전 방식이 "매전 없음"이면 버려지고, 그 밖에는 계통으로 역송. 회색 = 남는 전기 없음.', tin: '도입안 기준 실내 온도(난방·냉방 운전 결과).', tout: 'TMY 외기 온도.', occ: '집에 있는 인원(수면 포함).',
   };
   function heatSeries(mode) {
     const c = combo.ch;
@@ -366,6 +406,8 @@
       }
       case 'gas': return { a: L1.before.gas.map(v => v * KWH_PER_KG), unit: 'kWh', name: '가스 소비 (기준안 · 가스보일러)' };
       case 'pv': { const kw = (R3 ? R3.kpi.pvKw : S.pvN * 0.4) || 1; return { a: META.pv1kw_kwh.map(v => v * kw), unit: 'kWh', name: `PV 발전 (${kw.toFixed(1)} kW, 1년 차)` }; }
+      case 'imp': return { a: R3 ? R3.y1.hourImp : new Float64Array(E.H), unit: 'kWh', name: `계통 수전 (1년 차${R3 ? ', 수전이 있었던 날 ' + R3.y1.impDays + '일' : ''})`, ramp: PURPLE, offZero: true };
+      case 'sur': { const a = new Float64Array(E.H); if (R3) for (let h = 0; h < E.H; h++) a[h] = R3.y1.hourExp[h] + R3.y1.hourCurt[h]; return { a, unit: 'kWh', name: S.exportMode === 'none' ? '버려진 PV (1년 차)' : '역송 (1년 차 남는 PV)', ramp: S.exportMode === 'none' ? ORANGE : GREEN, offZero: true }; }
       case 'tin': return { a: S.awhp ? c.t_in_aw : c.t_in_base, unit: '°C', name: '실내 온도', temp: true };
       case 'tout': return { a: META.temp_out, unit: '°C', name: '외기 온도', temp: true };
       case 'occ': { const a = new Float64Array(E.H); combo.persons.forEach(p => { for (let h = 0; h < E.H; h++) if (p[h] !== 0) a[h]++; }); return { a, unit: '명', name: '재택 인원 (수면 포함)' }; }
@@ -382,7 +424,7 @@
       kpiHTML('재실일', rec.occupied_days, '일', `이용률 ${Math.round(S.rate * 100)}%`) + kpiHTML('PV 1kW 연간 발전', f0(E.sum(META.pv1kw_kwh)), 'kWh/kW', '경사 25°, 정남향');
     // 히트맵 보기 전환
     const hv = $('#heatView');
-    if (!hv._built) { seg(hv, [['before', '기준안 전력'], ['after', '도입안 전력'], ['heat', '난방 가동'], ['gas', '가스'], ['pv', 'PV 발전'], ['tin', '실내 온도'], ['tout', '외기 온도'], ['occ', '재택 인원']], () => heatMode, v => { heatMode = v; }); hv.addEventListener('click', () => drawHeat()); hv._built = 1; }
+    if (!hv._built) { seg(hv, [['before', '기준안 전력'], ['after', '도입안 전력'], ['heat', '난방 가동'], ['gas', '가스'], ['pv', 'PV 발전'], ['imp', '계통 수전'], ['sur', '남는 PV'], ['tin', '실내 온도'], ['tout', '외기 온도'], ['occ', '재택 인원']], () => heatMode, v => { heatMode = v; }); hv.addEventListener('click', () => drawHeat()); hv._built = 1; }
     const ev = $('#euView');
     if (!ev._built) { seg(ev, [['after', '도입안'], ['before', '기준안']], () => euMode, v => { euMode = v; }); ev.addEventListener('click', () => drawEU()); ev._built = 1; }
     drawHeat(); drawEU();
@@ -493,13 +535,16 @@
 <li>v10 회귀 확인: v10과 겹치는 28조합 모두 기준안 전력·가스·AWHP 전력이 0.1% 이내로 일치(예: Core 72 3인 100% = 4,205kWh · 가스 552.9kg · 6,599kWh). 이후 아래의 v2 열모델(창 일사·차양·환기) 보정을 적용. 3인 Core 54/DUO Max 45와 이용률 10%는 이번에 새로 계산한 조합입니다.</li>
 <li><b>실내 온도 모델 (v2 보정)</b>: v10은 창 18m²가 수평면 일사를 그대로 받고 창문을 열지 않아 5월 실내가 50°C에 이르렀습니다. 시뮬레이터는 ① 벽면(수직) 창 일사(방향 비율 남 50·동 20·서 20·북 10%, 가정), ② 실내 24°C 초과 시 실내 블라인드(일사 취득 × 0.6), ③ 사람이 집에 있고 실내 23°C 초과·외기가 1°C 이상 낮으면 창문 환기(+2회/h)를 넣었습니다. 이 값은 패시브하우스연구소(PHI) 과열 기준(25°C 초과 시간 ≤ 10%, 권장 &lt; 5%)을 비냉방기(10~5월) 재택 시간에 맞추도록 정했습니다: 춘천 4.5%, 광주 6.6%, 5월 실내 최고 27.7°C(춘천)·28.2°C(광주). 냉방은 v10과 같이 6~9월 재실 시 26/27°C.</li>
 <li><b>2단계 (설비)</b>: PV는 지역별 1kW당 시간 발전량 × 모듈 수 × (1 − 연간 열화 × 경과 연수). ESS는 가용 용량 = 모듈 × 5kWh × SOH, 충방전 효율 √0.9씩, C-rate 0.5의 단순 규칙 운전(자가소비 우선: PV 잉여만 충전, 부족할 때 방전). 최적화 운전(LP)은 하지 않습니다.</li>
-<li><b>에너지 자립률</b>: 대표값 = PV 발전량 ÷ 연간 전력 사용량(생산 기준, 100%를 넘을 수 있음). 보조값 = 자가충족률 = 1 − 계통 수전량 ÷ 연간 전력 사용량. 가스 사용분은 포함하지 않습니다. 둘 다 1년 차, 자가소비 우선 운전 기준.</li>
+<li><b>에너지 자립률(실시간)</b> = 1 − 계통 수전량 ÷ 연간 전력 사용량(1년 차, 선택한 ESS 운전 기준). 밤에는 PV가 없으므로 PV만으로는 100%가 될 수 없고, ESS가 낮의 잉여를 밤으로 옮겨야 올라갑니다. <b>연간 발전 상쇄율</b> = PV 발전량 ÷ 연간 전력 사용량(낮의 잉여를 연간으로 상쇄한 비율, 100%를 넘을 수 있음 — 월 상계에서는 이 값이 높으면 요금이 0에 가까워짐). 가스 사용분은 둘 다 포함하지 않습니다.</li>
+<li><b>Zero Energy</b>: 1년 차 계통 수전 0kWh. 미달이면 남은 수전량과 수전이 있었던 날 수를 표시. <b>최소 ESS 계산</b>은 현재 PV·HEMS 그대로 ESS를 0~40개(5kWh 단위) 늘려 가며 1년 차 수전이 0이 되는 최소 개수를 찾습니다(자가소비 우선 운전, 계통 충전 없음). 겨울 흐린 날이 이어지면 PV 발전 자체가 부족해 ESS를 늘려도 달성할 수 없습니다.</li>
+<li><b>Zero Bill</b>: 1년 차 전기요금에서 기본요금(사용량이 0일 때 나오는 요금: 기본요금·최소요금·일 기본료와 그 세금)을 빼고 매전 수익을 차감한 값이 0 이하. 기본요금은 남습니다.</li>
+<li><b>ESS 시작 상태</b>: 1년 차 조건으로 한 해를 미리 돌린 연말 충전량에서 시작합니다(1월 1일 0시에 빈 배터리로 시작해 생기는 왜곡 방지).</li>
 <li><b>HEMS</b>: 실제 제어는 구현하지 않고, 설치 후 전체 전력 사용량에 계절별 절감률을 곱해 줄입니다(가스는 미적용). 동절기 12~2월, 하절기 6~8월, 나머지 간절기(남반구는 반대).</li>
 <li><b>교체</b>: PV·ESS는 "1 − 열화율 × 경과 연수"가 교체 기준 이하가 되는 해 초에 교체(교체 후 새 제품). AWHP·인버터는 선택한 수명이 지난 해 초에 교체("고장 없음"이면 교체 안 함). PV 교체 시 인버터도 새로 봅니다.</li>
-<li><b>3단계 (요금)</b>: 한전 주택용 저압 누진제는 v10 요금 계산기를 그대로 옮겼습니다(51,900개 경우 원 단위 일치, 300kWh = 57,760원). 월 상계는 잉여 kWh가 다음 달로 무기한 이월되며, 20년을 순서대로 계산합니다(1년 차는 이월 0에서 시작). 요금 인상률은 매년 청구액 전체에 곱합니다. FIT 단가는 고정, TOU 매전 단가는 전기요금 인상률을 따릅니다.</li>
+<li><b>3단계 (요금)</b>: 한전 주택용 저압 누진제는 v10 요금 계산기를 그대로 옮겼습니다(51,900개 경우 원 단위 일치, 300kWh = 57,760원). 월 상계는 잉여 kWh가 다음 달로 무기한 이월되며, 20년을 순서대로 계산합니다(1년 차는 이월 0에서 시작). 요금 인상률은 매년 청구액 전체에 곱합니다. FIT 단가는 고정, TOU 매전 단가는 전기요금 인상률을 따릅니다. <b>매전 없음</b>은 역송이 허용되지 않는 경우: ESS를 채우고 남은 PV는 버리고(상계 크레딧·매전 수익 0), 버린 양을 월별 차트·KPI에 표시합니다.</li>
 <li><b>연간 이득</b> = 설치 전 총비용(전기 + 가스) − 설치 후 총비용(전기 − 매전 수익 + 가스 + 유지보수비). <b>누적 순이익</b> = 누적 이득 − 누적 CAPEX(보조금 차감, 교체 포함). 할인율은 적용하지 않습니다.</li>
 <li>매년 같은 기상(TMY)과 같은 생활 패턴이 반복된다고 봅니다. 15분 계산 결과를 1시간 단위로 합쳐 씁니다.</li>
-<li>계산 검증: 2·3단계 계산(JS)은 별도로 작성한 Python 기준 구현과 4개 시나리오 × 20년에서 0.000001원 이내로 일치합니다.</li>
+<li>계산 검증: 2·3단계 계산(JS)은 별도로 작성한 Python 기준 구현과 13개 시나리오(한국 5, LA 4, 멜버른 4 — 매전 없음·4구간 TOU·하루 한도 포함) × 최대 20년에서 0.000001원 이내로 일치합니다.</li>
 </ul>
 <h2>현재 지역의 데이터</h2>
 <table><tr><th>항목</th><th>내용</th></tr>
@@ -515,7 +560,8 @@
 <li>가전 구성·효율은 한국 SC와 같다고 가정했습니다(연간 사용량 보정값 동일). 사용 시간대만 현지 통계를 따릅니다.</li>
 <li>기상은 현지 표준시 기준이고 서머타임은 반영하지 않았습니다(여름철 생활 시각이 1시간 어긋날 수 있음).</li>
 <li>LADWP 기본 단가는 2019-07-01 요금 요약(현재 최신본), 조정요금은 2026년 분기별 값(ECA·ESA·RCA·IRCA·VEA)을 씁니다. 공공요금세 등 세금은 제외. LADWP 상계는 남은 발전량을 이후 요금에서 차감(현금 환급 없음)하는 방식이라 월 상계·무기한 이월로 계산합니다.</li>
-<li>빅토리아는 2026-27 VDO(GST 포함)를 썼습니다. 매전 단가(FiT)는 2025년 7월부터 규제 최저가가 없어져 소매사가 정하므로 직접 입력합니다.</li>
+<li>SCE TOU-D-PRIME은 LA 시(LADWP)가 아닌 LA 카운티 SCE 공급 지역용입니다. 히트펌프·가정용 배터리·EV가 있는 가구만 가입할 수 있습니다. 단가는 SCE 웹 게시값(¢ 반올림, 2026-11-17 확인), 공휴일은 평일로 계산합니다. 신규 태양광은 Solar Billing Plan(시간별 수출 단가)이라 월 상계가 아니므로 기본 매전 방식을 FIT로 두었습니다(단가는 직접 입력).</li>
+<li>빅토리아는 2026-27 VDO(GST 포함)를 썼습니다. 매전 단가(FiT)는 2025년 7월부터 규제 최저가가 없어져 소매사가 정하므로 직접 입력합니다. Midday Power Saver(2026-10~)는 11~14시 무료(하루 24kWh 한도, 초과분은 솔라 소크 단가)이며, 이 시간에 계통에서 ESS를 충전하려면 ESS 운전 "TOU 피크 방전" + "경부하 시간 계통 충전 허용"을 고르세요. 운전 규칙은 한도를 모르고 충전하므로, 한도 초과분은 요금 계산에서만 반영됩니다.</li>
 </ul>
 <h2>입력값과 근거 수준</h2>
 <table><tr><th>항목</th><th>값</th><th>근거</th><th>수준</th></tr>

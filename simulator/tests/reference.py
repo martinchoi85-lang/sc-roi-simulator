@@ -64,13 +64,23 @@ def bill(imp, exp, P, T, K, st):
             k = netm(mi[m], me[m], st, 'c') if net else mi[m]
             tot += (f['dailyFee'] * MD[m] + k * f['rate']) * fx
     else:
-        tou = T['tou']; sidx, per, price = tou_arrays(tou)
+        tou = T['tou']; sidx, per, price = tou_arrays(tou); nP = max(len(r) for r in tou['rates'])
+        # 월·기간별 수전량, 하루 한도 초과분은 다른 기간으로 이동
+        PI = np.zeros((12, nP)); PE = np.zeros((12, nP))
+        for m in range(12):
+            for k in range(nP):
+                sel = (MONTH == m+1) & (per == k); PI[m, k] = imp[sel].sum(); PE[m, k] = exp[sel].sum()
+        if tou.get('cap'):
+            cp = tou['cap']; daily = np.where(per == cp['period'], imp, 0).reshape(365, 24).sum(1)
+            dmon = MONTH.reshape(365, 24)[:, 0]
+            for d in range(365):
+                o = daily[d] - cp['kwh']
+                if o > 0: PI[dmon[d]-1, cp['period']] -= o; PI[dmon[d]-1, cp['overPeriod']] += o
         for m in range(12):
             en = 0; kw = 0
             sm = tou['seasonMonths'][m] if tou.get('seasonMonths') else season(np.array([m+1]))[0]
-            for k in range(3):
-                sel = (MONTH == m+1) & (per == k)
-                b = netm(imp[sel].sum(), exp[sel].sum(), st, f'p{k}') if net else imp[sel].sum()
+            for k in range(nP):
+                b = netm(PI[m, k], PE[m, k], st, f'p{k}') if net else PI[m, k]
                 en += b * tou['rates'][sm][k]; kw += b
             add = tou['addQ'][m // 3] if tou.get('addQ') else tou.get('addPerKwh', 0)
             sub = tou.get('baseFee', 0) + tou.get('dailyFee', 0) * MD[m] + en + kw * add
@@ -100,16 +110,9 @@ def run(region, c, D):
     sub = (C['subPV'] if kw>0 else 0)+(C['subESS'] if ek>0 else 0)+(C['subAWHP'] if c['awhp'] else 0)+(C['subHEMS'] if hm['on'] and C['hemsInclude'] else 0)
     inv = max(C['invMin'], C['invPerKw']*max(kw, ek*P['essCrate'] if ek>0 else 0)) if (kw>0 or ek>0) else 0
     bB,_ = bill(eB, np.zeros(8760), P, T, K, {'c':0})
-    st={'c':0}; ages=dict(pv=0,ess=0,inv=0,aw=0); soc=0; res=[]; cumB=cumC=0
-    for y in range(1,P['years']+1):
-        capT = gross-sub if y==1 else 0
-        if y>1:
-            if kw>0 and P['pvDeg']>0 and 1-P['pvDeg']/100*ages['pv']<=P['pvRepl']/100+1e-9: capT+=kw*C['pvReplPerKw']; ages['pv']=0; ages['inv']=0
-            if ek>0 and P['essDeg']>0 and 1-P['essDeg']/100*ages['ess']<=P['essRepl']/100+1e-9: capT+=ek*C['essReplPerKwh']; ages['ess']=0
-            if inv>0 and P['invLife']>0 and ages['inv']>=P['invLife']: capT+=inv; ages['inv']=0
-            if c['awhp'] and P['awhpLife']>0 and ages['aw']>=P['awhpLife']: capT+=C['awhpRepl']; ages['aw']=0
-        pv=pv1*kw*max(0,1-P['pvDeg']/100*ages['pv']); cap=ek*max(0,1-P['essDeg']/100*ages['ess']); pm=cap*P['essCrate']; e=math.sqrt(P['essRte'])
-        imp=np.zeros(8760); exp=np.zeros(8760); soc=min(soc,cap)
+    def disp(pv, cap, soc):
+        pm=cap*P['essCrate']; e=math.sqrt(P['essRte']); imp=np.zeros(8760); exp=np.zeros(8760); soc=min(soc,cap)
+        tm = price is not None and P['essMode']=='tou'
         for h in range(8760):
             n=load_[h]-pv[h]
             if n<=0:
@@ -117,30 +120,53 @@ def run(region, c, D):
                 if cap>0: q=min(s_,pm,(cap-soc)/e); soc+=q*e; s_-=q
                 exp[h]=s_
             else:
-                need=n; tm = price is not None and P['essMode']=='tou'
+                need=n
                 if cap>0 and (not tm or price[h]>dmin[h]+1e-9): q=min(need,pm,soc*e); soc-=q/e; need-=q
                 imp[h]=need
                 if tm and P['gridCharge'] and cap>0 and price[h]<=dmin[h]+1e-9 and dmax[h]*P['essRte']>price[h]:
                     q=min(pm,(cap-soc)/e)
                     if q>0: soc+=q*e; imp[h]+=q
+        return imp, exp, soc
+    none = P['exportMode']=='none'
+    st={'c':0}; ages=dict(pv=0,ess=0,inv=0,aw=0); res=[]; cumB=cumC=0
+    soc = disp(pv1*kw, ek, 0)[2] if ek>0 else 0   # 정상 상태 시작 SOC
+    fixed,_ = bill(np.zeros(8760), np.zeros(8760), P, T, K, {'c':0})
+    for y in range(1,P['years']+1):
+        capT = gross-sub if y==1 else 0
+        if y>1:
+            if kw>0 and P['pvDeg']>0 and 1-P['pvDeg']/100*ages['pv']<=P['pvRepl']/100+1e-9: capT+=kw*C['pvReplPerKw']; ages['pv']=0; ages['inv']=0
+            if ek>0 and P['essDeg']>0 and 1-P['essDeg']/100*ages['ess']<=P['essRepl']/100+1e-9: capT+=ek*C['essReplPerKwh']; ages['ess']=0
+            if inv>0 and P['invLife']>0 and ages['inv']>=P['invLife']: capT+=inv; ages['inv']=0
+            if c['awhp'] and P['awhpLife']>0 and ages['aw']>=P['awhpLife']: capT+=C['awhpRepl']; ages['aw']=0
+        pv=pv1*kw*max(0,1-P['pvDeg']/100*ages['pv']); cap=ek*max(0,1-P['essDeg']/100*ages['ess'])
+        imp,exp,soc = disp(pv, cap, soc)
+        curt = exp if none else np.zeros(8760)
+        if none: exp = np.zeros(8760)
         bA,inc = bill(imp,exp,P,T,K,st)
         fe=(1+P['escE']/100)**(y-1); fg=(1+P['escG']/100)**(y-1)
         before=bB*fe+gB.sum()*P['gasPrice']*fg
         after=bA*fe-inc*(1 if P['exportMode']=='fit' else fe)+gA.sum()*P['gasPrice']*fg+gross*P['omPct']/100
         ben=before-after; cumB+=ben; cumC+=capT
-        res.append(dict(y=y,capT=capT,ben=ben,net=cumB-cumC,imp=imp.sum(),exp=exp.sum(),pv=pv.sum()))
+        res.append(dict(y=y,capT=capT,ben=ben,net=cumB-cumC,imp=imp.sum(),exp=exp.sum(),pv=pv.sum(),curt=curt.sum()))
+        if y==1:
+            use=load_.sum(); days=int((imp.reshape(365,24).sum(1)>0.001).sum())
+            res[0]['kpi']=dict(selfSuff=1-imp.sum()/use, pvOffset=pv.sum()/use, impDays=days, billVar=bA-fixed-inc)
         for k in ages: ages[k]+=1
     return res
 
 if __name__=='__main__':
     D=json.load(open(ROOT/'tests/defaults.json')); cases=json.load(open(ROOT/'tests/cases.json'))
-    js={c['key']:c for c in json.load(open(sys.argv[1]))}
+    jl=json.load(open(sys.argv[1])); assert len(jl)==len(cases)
     worst=0
-    for c in cases:
-        r=run(c.get('region','kr_central'),c,D); j=js[c['key']+c.get('region','')]['years']
+    for c,jc in zip(cases,jl):
+        r=run(c.get('region','kr_central'),c,D); j=jc['years']
         for a,b in zip(r,j):
-            for k in ['capT','ben','net','imp','exp','pv']:
+            for k in ['capT','ben','net','imp','exp','pv','curt']:
                 d=abs(a[k]-b[k]); worst=max(worst,d)
                 if d>1.0: print('DIFF',c['key'],a['y'],k,a[k],b[k])
-        print(c['key'],'years',len(r),'최종 누적순이익 py',round(r[-1]['net']),'js',round(j[-1]['net']))
+        jk=jc['kpi']; pk=r[0]['kpi']
+        for k in ['selfSuff','pvOffset','impDays','billVar']:
+            d=abs(pk[k]-jk[k]); worst=max(worst,d)
+            if d>1e-6*max(1,abs(pk[k])): print('KPI DIFF',c['key'],k,pk[k],jk[k])
+        print(c['key'],c.get('region','kr_central'),c['tariff'],c['exportMode'],'years',len(r),'누적순이익 py',round(r[-1]['net']),'js',round(j[-1]['net']),'자립률 %.3f'%pk['selfSuff'],'버림 %.0f'%r[0]['curt'],'변동요금 %.0f'%pk['billVar'])
     print('최대 절대 차이',worst)
