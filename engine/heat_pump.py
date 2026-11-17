@@ -1,6 +1,6 @@
 """Heating, cooling, and DHW equipment simulation with HM091HF performance model."""
 
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple, Optional, Union
 import numpy as np
 
 
@@ -197,12 +197,46 @@ def simulate_hvac_and_dhw(
         }
 
 
+def mains_water_temp_daily(temp_air: np.ndarray, latitude: float) -> np.ndarray:
+    """Calculates daily mains water temperature according to EnergyPlus Site:WaterMainsTemperature correlation (Burch & Christensen, NREL).
+
+    T_mains = (T_out_avg + 6°F) + ratio * (delta_T_maxdiff * 1.8 / 2) * sin(0.986 * (day - 15 - lag) - 90°)
+    ratio = 0.4 + 0.01 * (T_out_avg_F - 44)
+    lag = 35 - 1.0 * (T_out_avg_F - 44)
+    Southern hemisphere (latitude < 0) shifts phase by 182 days.
+    Lower bound: 4.0 °C.
+    """
+    temp_arr = np.asarray(temp_air, dtype=float)
+    daily_temp = temp_arr.reshape(365, -1).mean(axis=1)
+    t_avg = float(daily_temp.mean())
+    month_days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    m_starts = np.cumsum([0] + month_days[:-1])
+    m_ends = np.cumsum(month_days)
+    monthly_means = [float(daily_temp[s:e].mean()) for s, e in zip(m_starts, m_ends)]
+    max_diff = max(monthly_means) - min(monthly_means)
+
+    t_avg_f = t_avg * 1.8 + 32.0
+    ratio = 0.4 + 0.01 * (t_avg_f - 44.0)
+    lag = 35.0 - 1.0 * (t_avg_f - 44.0)
+    if latitude < 0:
+        lag -= 182.0
+
+    days = np.arange(1, 366)
+    angle_deg = 0.986 * (days - 15.0 - lag) - 90.0
+    angle_rad = np.radians(angle_deg)
+    t_mains_f = (t_avg_f + 6.0) + ratio * (max_diff * 1.8 / 2.0) * np.sin(angle_rad)
+    t_mains_c = (t_mains_f - 32.0) / 1.8
+    return np.maximum(4.0, t_mains_c)
+
+
 def generate_event_based_dhw(
     occupants: int,
     is_occupied_15min: np.ndarray,
     occupants_active_15min: np.ndarray,
     is_occupied_day_365: np.ndarray,
     seed: int = 42,
+    use_dhw_v2: bool = False,
+    persons_state_15min: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """Generates 15-minute event-based domestic hot water draw profile.
 
@@ -234,21 +268,57 @@ def generate_event_based_dhw(
         if len(active_indices) == 0:
             continue
 
-        for p in range(occupants):
-            weights = np.ones(len(active_indices), dtype=float)
-            for idx_pos, step_in_day in enumerate(active_indices):
-                if 24 <= step_in_day <= 36:  # Morning peak 6:00~9:00
-                    weights[idx_pos] = 3.0
-                elif 76 <= step_in_day <= 92:  # Evening peak 19:00~23:00
-                    weights[idx_pos] = 4.0
-                elif 44 <= step_in_day <= 56:  # Lunch 11:00~14:00
-                    weights[idx_pos] = 1.5
-            weights /= weights.sum()
+        if not use_dhw_v2:
+            for p in range(occupants):
+                weights = np.ones(len(active_indices), dtype=float)
+                for idx_pos, step_in_day in enumerate(active_indices):
+                    if 24 <= step_in_day <= 36:  # Morning peak 6:00~9:00
+                        weights[idx_pos] = 3.0
+                    elif 76 <= step_in_day <= 92:  # Evening peak 19:00~23:00
+                        weights[idx_pos] = 4.0
+                    elif 44 <= step_in_day <= 56:  # Lunch 11:00~14:00
+                        weights[idx_pos] = 1.5
+                weights /= weights.sum()
 
-            chosen_indices = rng.choice(active_indices, size=3, replace=True, p=weights)
-            dhw_draw_liters[s_idx + chosen_indices[0]] += 50.0
-            dhw_draw_liters[s_idx + chosen_indices[1]] += 15.0
-            dhw_draw_liters[s_idx + chosen_indices[2]] += 10.0
+                chosen_indices = rng.choice(active_indices, size=3, replace=True, p=weights)
+                dhw_draw_liters[s_idx + chosen_indices[0]] += 50.0
+                dhw_draw_liters[s_idx + chosen_indices[1]] += 15.0
+                dhw_draw_liters[s_idx + chosen_indices[2]] += 10.0
+        else:
+            for p in range(occupants):
+                if persons_state_15min is not None and len(persons_state_15min) > p:
+                    p_active = (persons_state_15min[p, s_idx:e_idx] == 1) & (is_occupied_15min[s_idx:e_idx] == 1)
+                    p_indices = np.where(p_active)[0]
+                else:
+                    p_indices = np.array([], dtype=int)
+
+                cand_indices = p_indices if len(p_indices) > 0 else active_indices
+
+                # 샤워 50L 가중: 06–09시 3, 18–23시 4, 그 밖 0.3
+                weights_shower = np.full(len(cand_indices), 0.3, dtype=float)
+                for idx_pos, step_in_day in enumerate(cand_indices):
+                    if 24 <= step_in_day <= 36:  # 06:00~09:00
+                        weights_shower[idx_pos] = 3.0
+                    elif 72 <= step_in_day <= 92:  # 18:00~23:00
+                        weights_shower[idx_pos] = 4.0
+                weights_shower /= weights_shower.sum()
+
+                # 세면 15L·10L는 지금 가중 그대로
+                weights_basin = np.ones(len(cand_indices), dtype=float)
+                for idx_pos, step_in_day in enumerate(cand_indices):
+                    if 24 <= step_in_day <= 36:  # Morning peak 6:00~9:00
+                        weights_basin[idx_pos] = 3.0
+                    elif 76 <= step_in_day <= 92:  # Evening peak 19:00~23:00
+                        weights_basin[idx_pos] = 4.0
+                    elif 44 <= step_in_day <= 56:  # Lunch 11:00~14:00
+                        weights_basin[idx_pos] = 1.5
+                weights_basin /= weights_basin.sum()
+
+                chosen_shower = rng.choice(cand_indices, p=weights_shower)
+                chosen_basin = rng.choice(cand_indices, size=2, replace=True, p=weights_basin)
+                dhw_draw_liters[s_idx + chosen_shower] += 50.0
+                dhw_draw_liters[s_idx + chosen_basin[0]] += 15.0
+                dhw_draw_liters[s_idx + chosen_basin[1]] += 10.0
 
     return dhw_draw_liters
 
@@ -259,9 +329,14 @@ def simulate_dhw_tank_reheat(
     awhp_cfg: Dict[str, Any],
     tank_volume_liters: float = 200.0,
     supply_water_temp: float = 55.0,
-    mains_water_temp: float = 15.0,
+    mains_water_temp: Union[float, np.ndarray] = 15.0,
     dt_hours: float = 0.25,
-) -> Tuple[np.ndarray, np.ndarray, float]:
+    use_tank_v2: bool = False,
+    ua_tank_w_per_k: float = 1.35,
+    t_ambient_tank: float = 20.0,
+    hysteresis_fraction: float = 0.3,
+    return_details: bool = False,
+) -> Union[Tuple[np.ndarray, np.ndarray, float], Tuple[np.ndarray, np.ndarray, float, Dict[str, Any]]]:
     """Simulates AWHP DHW storage tank reheat dynamics.
 
     Rules:
@@ -280,23 +355,63 @@ def simulate_dhw_tank_reheat(
     p_dhw_elec = np.zeros(n, dtype=float)
     q_dhw_th = np.zeros(n, dtype=float)
 
-    delta_t = supply_water_temp - mains_water_temp
-    kwh_per_liter = 4.186 * delta_t / 3600.0
-
     cop_dhw = calculate_hm091hf_cop(temp_air, supply_water_temp, awhp_cfg)
     max_cap_dhw = calculate_hm091hf_max_capacity(temp_air, supply_water_temp, cop_dhw, awhp_cfg)
 
-    q_deficit_kwh = 0.0
+    if not use_tank_v2:
+        mains_t = float(mains_water_temp) if isinstance(mains_water_temp, (int, float)) else float(mains_water_temp[0])
+        delta_t = supply_water_temp - mains_t
+        kwh_per_liter = 4.186 * delta_t / 3600.0
+
+        q_deficit_kwh = 0.0
+        for i in range(n):
+            draw_l = dhw_draw_liters[i]
+            if draw_l > 0:
+                q_deficit_kwh += draw_l * kwh_per_liter
+
+            if q_deficit_kwh > 1e-4:
+                cap_kwh = max_cap_dhw[i] * dt_hours
+                q_reheat_kwh = min(q_deficit_kwh, cap_kwh)
+                q_deficit_kwh -= q_reheat_kwh
+
+                q_th_kw = q_reheat_kwh / dt_hours
+                p_elec_kw = q_th_kw / max(1.0, cop_dhw[i])
+
+                q_dhw_th[i] = q_th_kw
+                p_dhw_elec[i] = p_elec_kw
+
+        annual_dhw_elec_kwh = float(np.sum(p_dhw_elec) * dt_hours)
+        return p_dhw_elec, q_dhw_th, annual_dhw_elec_kwh
+
+    # v2: Hysteresis (0.3 of tank capacity) + Standby loss (UA * 35K * 0.25h)
+    if isinstance(mains_water_temp, (int, float)):
+        tm_arr = np.full(n, float(mains_water_temp))
+    else:
+        tm_arr = np.asarray(mains_water_temp, dtype=float)
+        if len(tm_arr) == 365:
+            tm_arr = np.repeat(tm_arr, n // 365)
+
+    standby_loss_kwh = ua_tank_w_per_k * (supply_water_temp - t_ambient_tank) * dt_hours / 1000.0
+    D = 0.0
+    is_reheating = False
+    reheat_starts = 0
 
     for i in range(n):
+        tm = tm_arr[i]
         draw_l = dhw_draw_liters[i]
-        if draw_l > 0:
-            q_deficit_kwh += draw_l * kwh_per_liter
+        use_kwh = draw_l * 4.186 * (supply_water_temp - tm) / 3600.0
+        D += use_kwh + standby_loss_kwh
+        c_tank = tank_volume_liters * 4.186 * (supply_water_temp - tm) / 3600.0
 
-        if q_deficit_kwh > 1e-4:
+        if not is_reheating:
+            if D >= hysteresis_fraction * c_tank:
+                is_reheating = True
+                reheat_starts += 1
+
+        if is_reheating:
             cap_kwh = max_cap_dhw[i] * dt_hours
-            q_reheat_kwh = min(q_deficit_kwh, cap_kwh)
-            q_deficit_kwh -= q_reheat_kwh
+            q_reheat_kwh = min(D, cap_kwh)
+            D -= q_reheat_kwh
 
             q_th_kw = q_reheat_kwh / dt_hours
             p_elec_kw = q_th_kw / max(1.0, cop_dhw[i])
@@ -304,7 +419,19 @@ def simulate_dhw_tank_reheat(
             q_dhw_th[i] = q_th_kw
             p_dhw_elec[i] = p_elec_kw
 
+            if D <= 1e-6:
+                D = max(0.0, D)
+                is_reheating = False
+
     annual_dhw_elec_kwh = float(np.sum(p_dhw_elec) * dt_hours)
+    if return_details:
+        details = {
+            "reheat_starts": reheat_starts,
+            "reheat_hours": float((p_dhw_elec > 0).sum() * dt_hours),
+            "annual_standby_loss_kwh_th": float(standby_loss_kwh * n),
+            "final_deficit_kwh": float(D),
+        }
+        return p_dhw_elec, q_dhw_th, annual_dhw_elec_kwh, details
     return p_dhw_elec, q_dhw_th, annual_dhw_elec_kwh
 
 

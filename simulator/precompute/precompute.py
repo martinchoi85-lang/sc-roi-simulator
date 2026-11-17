@@ -22,11 +22,14 @@ from engine.weather import load_weather_data
 from engine.occupancy_tus import OccupancyTUSModel
 from engine.thermal_5r1c import simulate_thermal_5r1c
 from engine.heat_pump import (generate_event_based_dhw, simulate_dhw_tank_reheat,
+                              mains_water_temp_daily,
                               simulate_awhp_space_heating_with_capacity_bound)
 from engine.pv import simulate_pv_generation_1kwp
 from engine import passive_climate
 USE_PASSIVE = True  # v2: 수직창 일사·차양·창문 환기 (engine/passive_climate.py). False면 v10과 동일
 USE_EVENTS = True   # 가전 개별 이벤트화 (조리/식세기/세탁). False면 v10 기대값 곡선과 동일
+USE_EVENTS_V2 = True  # 수정3: 끼니 기반 조리, 깨어있는 시간 세탁/식세기
+USE_DHW_V2 = True     # 수정3: 상수도 수온 연동, 탱크 히스테리시스+대기손실
 
 REGIONS = {
     "kr_central": {"label": "한국 중부 · 춘천", "country_dir": "korea",
@@ -101,7 +104,7 @@ def run_combo(args):
     # ---- Step1 (pipeline.run_step1_load 와 동일) ----
     model = OccupancyTUSModel(kosis_dir=kosis_dir, load_config=cfg["load"], house_config=h_cfg,
                               weather_df=weather_df, occupants=occ, seed=42, country_params=cparams,
-                              appliance_events=USE_EVENTS)
+                              appliance_events=USE_EVENTS, appliance_events_v2=USE_EVENTS_V2)
     tus = model.simulate_year(occupancy_rate=rate)
     q_occ_w = tus["occupants_active_15min"] * 80.0
     sleeping = (np.array(tus["persons_state_15min"]) == 2).sum(axis=0).astype(float)
@@ -117,14 +120,25 @@ def run_combo(args):
     kwh_per_kg = _v(tariff.get("lpg_net_heating_value_mj_per_kg", 46.3), 46.3) / 3.6
     dhw_l = generate_event_based_dhw(occupants=occ, is_occupied_15min=tus["is_occupied_15min"],
                                      occupants_active_15min=tus["occupants_active_15min"],
-                                     is_occupied_day_365=tus["is_occupied_day_365"], seed=42)
-    q_dhw_kw = dhw_l * 4.186 * 40.0 / 3600.0 / DT
+                                     is_occupied_day_365=tus["is_occupied_day_365"], seed=42,
+                                     use_dhw_v2=USE_DHW_V2,
+                                     persons_state_15min=np.asarray(tus["persons_state_15min"]))
+    if USE_DHW_V2:
+        t_mains_daily = mains_water_temp_daily(weather_df["temp_air"].values, reg["lat"])
+        t_mains_15m = np.repeat(t_mains_daily, 96)
+        q_dhw_kw = dhw_l * 4.186 * (55.0 - t_mains_15m) / 3600.0 / DT
+        tank = _v(equip["awhp_system"].get("dhw_tank_volume_liters", 200.0), 200.0)
+        p_dhw_aw, _, _ = simulate_dhw_tank_reheat(dhw_draw_liters=dhw_l, temp_air=weather_df["temp_air"].values,
+                                                  awhp_cfg=equip["awhp_system"], tank_volume_liters=tank,
+                                                  supply_water_temp=55.0, mains_water_temp=t_mains_15m,
+                                                  dt_hours=DT, use_tank_v2=True)
+    else:
+        q_dhw_kw = dhw_l * 4.186 * 40.0 / 3600.0 / DT
+        tank = _v(equip["awhp_system"].get("dhw_tank_volume_liters", 200.0), 200.0)
+        p_dhw_aw, _, _ = simulate_dhw_tank_reheat(dhw_draw_liters=dhw_l, temp_air=weather_df["temp_air"].values,
+                                                  awhp_cfg=equip["awhp_system"], tank_volume_liters=tank,
+                                                  supply_water_temp=55.0, dt_hours=DT)
     p_cool_base = np.where(q_cool_kw > 0, q_cool_kw / cop_cool, 0.0)
-
-    tank = _v(equip["awhp_system"].get("dhw_tank_volume_liters", 200.0), 200.0)
-    p_dhw_aw, _, _ = simulate_dhw_tank_reheat(dhw_draw_liters=dhw_l, temp_air=weather_df["temp_air"].values,
-                                              awhp_cfg=equip["awhp_system"], tank_volume_liters=tank,
-                                              supply_water_temp=55.0, dt_hours=DT)
     aw = simulate_awhp_space_heating_with_capacity_bound(
         house_config=h_cfg, temp_air=weather_df["temp_air"].values, ghi=weather_df["ghi"].values,
         occupant_presence=tus["is_occupied_15min"].astype(float), internal_heat_gain_w=q_occ_w,
@@ -216,7 +230,9 @@ def write_meta(region):
             "pv1kw_annual": round(float(hourly_sum(pv1).sum()), 1),
             "year_start": "2026-01-01", "tus_src": reg.get("tus_src", "KOSIS 2024 생활시간조사"), "cooling_months": reg.get("cooling_months", [6, 7, 8, 9]),
             "thermal": ("v2 수동형 제어: " + json.dumps({k: v for k, v in passive_climate.DEFAULT.items()}, ensure_ascii=False)) if USE_PASSIVE else "v10",
-            "appliance_model": "events-v1" if USE_EVENTS else "expected-curve(v10)"}
+            "appliance_model": "events-v2" if USE_EVENTS_V2 else ("events-v1" if USE_EVENTS else "expected-curve(v10)"),
+            "dhw_model": "tank-v2" if USE_DHW_V2 else "tank-v1",
+            "cooking_annual_kwh_by_occ": {1: 250, 2: 350, 3: 420} if USE_EVENTS_V2 else {1: 420, 2: 420, 3: 420}}
     out = ROOT / "simulator" / "data" / region
     out.mkdir(parents=True, exist_ok=True)
     (out / "meta.js").write_text("SCDATA.meta(" + json.dumps(meta, ensure_ascii=False) + ");\n", encoding="utf-8")
