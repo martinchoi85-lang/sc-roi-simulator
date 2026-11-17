@@ -26,6 +26,7 @@ from engine.heat_pump import (generate_event_based_dhw, simulate_dhw_tank_reheat
 from engine.pv import simulate_pv_generation_1kwp
 from engine import passive_climate
 USE_PASSIVE = True  # v2: 수직창 일사·차양·창문 환기 (engine/passive_climate.py). False면 v10과 동일
+USE_EVENTS = True   # 가전 개별 이벤트화 (조리/식세기/세탁). False면 v10 기대값 곡선과 동일
 
 REGIONS = {
     "kr_central": {"label": "한국 중부 · 춘천", "country_dir": "korea",
@@ -99,7 +100,8 @@ def run_combo(args):
 
     # ---- Step1 (pipeline.run_step1_load 와 동일) ----
     model = OccupancyTUSModel(kosis_dir=kosis_dir, load_config=cfg["load"], house_config=h_cfg,
-                              weather_df=weather_df, occupants=occ, seed=42, country_params=cparams)
+                              weather_df=weather_df, occupants=occ, seed=42, country_params=cparams,
+                              appliance_events=USE_EVENTS)
     tus = model.simulate_year(occupancy_rate=rate)
     q_occ_w = tus["occupants_active_15min"] * 80.0
     sleeping = (np.array(tus["persons_state_15min"]) == 2).sum(axis=0).astype(float)
@@ -212,7 +214,9 @@ def write_meta(region):
             "temp_out": [round(x, 2) for x in hourly_mean(w["temp_air"].values)],
             "ghi_wh": [round(x, 1) for x in hourly_mean(w["ghi"].values)],
             "pv1kw_annual": round(float(hourly_sum(pv1).sum()), 1),
-            "year_start": "2026-01-01", "tus_src": reg.get("tus_src", "KOSIS 2024 생활시간조사"), "cooling_months": reg.get("cooling_months", [6, 7, 8, 9]), "thermal": ("v2 수동형 제어: " + json.dumps({k: v for k, v in passive_climate.DEFAULT.items()}, ensure_ascii=False)) if USE_PASSIVE else "v10"}
+            "year_start": "2026-01-01", "tus_src": reg.get("tus_src", "KOSIS 2024 생활시간조사"), "cooling_months": reg.get("cooling_months", [6, 7, 8, 9]),
+            "thermal": ("v2 수동형 제어: " + json.dumps({k: v for k, v in passive_climate.DEFAULT.items()}, ensure_ascii=False)) if USE_PASSIVE else "v10",
+            "appliance_model": "events-v1" if USE_EVENTS else "expected-curve(v10)"}
     out = ROOT / "simulator" / "data" / region
     out.mkdir(parents=True, exist_ok=True)
     (out / "meta.js").write_text("SCDATA.meta(" + json.dumps(meta, ensure_ascii=False) + ");\n", encoding="utf-8")
@@ -225,6 +229,7 @@ def main():
     ap.add_argument("--jobs", type=int, default=2)
     ap.add_argument("--only", default=None)
     ap.add_argument("--max", type=int, default=999, help="이번 실행에서 계산할 최대 조합 수")
+    ap.add_argument("--force", action="store_true", help="이미 계산된 조합도 다시 계산")
     ap.add_argument("--index-only", action="store_true")
     a = ap.parse_args()
     out = ROOT / "simulator" / "data" / a.region
@@ -234,6 +239,8 @@ def main():
     combos = [(a.region, h, o, r) for h in HOUSES for o in OCCS for r in RATES]
     if a.only:
         h, o, r = a.only.split("|"); combos = [(a.region, h, int(o), float(r))]
+    elif a.force:
+        combos = combos[:a.max]
     else:
         combos = [c for c in combos if not (out / f"c_{HOUSE_KEY[c[1]]}_{c[2]}_{int(round(c[3]*100))}.js").exists()][:a.max]
     recs = []

@@ -235,3 +235,4 @@ california/source/atus/*.zip
 
 # 참고 원문(보조금 공고 등, 저장소 제외)
 _ref/
+simulator/data_prev/

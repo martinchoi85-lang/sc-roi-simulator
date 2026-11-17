@@ -12,6 +12,15 @@ import pandas as pd
 from engine.occupancy import generate_occupancy_calendar
 
 
+def resample_10m_to_15m_conservative(arr_10m: np.ndarray) -> np.ndarray:
+    """Resamples 10-min timeseries to 15-min while strictly conserving total energy.
+    10-min values are duplicated to 5-min (x2), then averaged over 3 consecutive steps (15-min).
+    """
+    flat = np.asarray(arr_10m, dtype=float).flatten()
+    arr_5m = np.repeat(flat, 2)
+    return arr_5m.reshape(-1, 3).mean(axis=1)
+
+
 class OccupancyTUSModel:
     """TUS-based probabilistic occupant and appliance load simulation."""
 
@@ -26,6 +35,7 @@ class OccupancyTUSModel:
         kappa: float = 0.5,
         lambda_mix: Optional[float] = None,
         country_params: Optional[Dict[str, Any]] = None,
+        appliance_events: bool = False,
     ):
         self.kosis_dir = Path(kosis_dir)
         self.load_config = load_config
@@ -35,6 +45,7 @@ class OccupancyTUSModel:
         self.seed = seed
         self.kappa = kappa
         self.lambda_mix = None  # λ 혼합 방식 삭제: tus.lambda = null (SPEC 6절 대체)
+        self.appliance_events = appliance_events
         # 국가별 상수 (기본값 = 한국 KOSIS 2024, v10과 동일). 시뮬레이터에서 미국·호주 값을 넘긴다.
         cp = country_params or {}
         self.cp_w_part = cp.get("w_part_rate", {"남자": 0.924, "여자": 0.887})
@@ -1200,6 +1211,7 @@ class OccupancyTUSModel:
         # Track daily paths (365 days x 144 steps x occupants)
         # States: 0: away(외출), 1: home_active(재택 활동), 2: sleep(수면)
         paths_10min = np.zeros((365, steps_per_day_10min, self.occupants), dtype=int)
+        is_cook_48 = np.zeros((365, 48, self.occupants), dtype=int)
 
         # Ensure routine cache is ready
         if not hasattr(self, "_routine_dist_cache") or not self._routine_dist_cache:
@@ -1216,8 +1228,9 @@ class OccupancyTUSModel:
 
             if self.mode == "A":
                 for p_idx, p_type in enumerate(person_types):
-                    p_path, _ = self._sample_individual_routine_path(dt, p_type, rng)
+                    p_path, p_metrics = self._sample_individual_routine_path(dt, p_type, rng)
                     paths_10min[day_idx, :, p_idx] = p_path
+                    is_cook_48[day_idx, :, p_idx] = p_metrics["is_cook"]
             else:
                 # Mode B: Fixed schedule fallback (0: away, 1: home_act, 2: sleep)
                 for p_idx in range(self.occupants):
@@ -1380,10 +1393,196 @@ class OccupancyTUSModel:
             error_pct = abs(actual_kwh - target_kwh) / target_kwh * 100.0 if target_kwh > 0 else 0.0
             return power_arr, error_pct
 
-        p_induction, err_ind = run_calibration(target_induction_scaled, cook_curve_wd, cook_curve_we, 2.0)
-        p_dish, err_dish = run_calibration(target_dish_scaled, dish_curve_wd, dish_curve_we, 1.4)
-        p_wash, err_wash = run_calibration(target_wash_scaled, wash_curve_wd, wash_curve_we, rated_wash_kw)
-        p_plug, err_plug = run_calibration(target_plug_scaled, media_curve_wd, media_curve_we, 0.40)
+        if not self.appliance_events:
+            p_induction, err_ind = run_calibration(target_induction_scaled, cook_curve_wd, cook_curve_we, 2.0)
+            p_dish, err_dish = run_calibration(target_dish_scaled, dish_curve_wd, dish_curve_we, 1.4)
+            p_wash, err_wash = run_calibration(target_wash_scaled, wash_curve_wd, wash_curve_we, rated_wash_kw)
+            p_plug, err_plug = run_calibration(target_plug_scaled, media_curve_wd, media_curve_we, 0.40)
+        else:
+            # Discrete event placement using separate RNG (self.seed + 7919)
+            rng_ev = np.random.default_rng(self.seed + 7919)
+
+            # 1. Cooking events (10-min 365x144)
+            # Step 1: Merge runs on the same day if gap <= 1 slot (30 min)
+            p_induction = np.zeros((365, 144))
+            tot_raw_cook_runs = 0
+            events_by_day = {}
+            all_cook_events = []
+            for d in range(365):
+                if not is_occupied_day_365[d]:
+                    continue
+                cook_30m = (is_cook_48[d] == 1).any(axis=1)
+                raw_runs = []
+                in_run = False
+                r_start = 0
+                for s in range(48):
+                    if cook_30m[s]:
+                        if not in_run:
+                            in_run = True
+                            r_start = s
+                    else:
+                        if in_run:
+                            raw_runs.append((r_start, s - 1))
+                            in_run = False
+                if in_run:
+                    raw_runs.append((r_start, 47))
+
+                tot_raw_cook_runs += len(raw_runs)
+                if not raw_runs:
+                    continue
+
+                # Merge runs if gap <= 1 slot (30 min)
+                merged_runs = [raw_runs[0]]
+                for cur in raw_runs[1:]:
+                    prev_s, prev_e = merged_runs[-1]
+                    cur_s, cur_e = cur
+                    if cur_s - prev_e - 1 <= 1:
+                        merged_runs[-1] = (prev_s, cur_e)
+                    else:
+                        merged_runs.append(cur)
+
+                day_events = []
+                for rs, re in merged_runs:
+                    offset_10m = int(rng_ev.integers(0, 3))
+                    st_10m = 3 * rs + offset_10m
+                    u = float(rng_ev.uniform(0.5, 1.5))
+                    day_events.append({"day": d, "rs": rs, "re": re, "start": st_10m, "u": u})
+                events_by_day[d] = day_events
+                all_cook_events.extend(day_events)
+
+            n_cook = len(all_cook_events)
+            if target_induction_scaled > 0:
+                if n_cook == 0:
+                    raise ValueError("Cooking events count N is 0 while target kWh > 0")
+                t_mean_min = (target_induction_scaled / (n_cook * 2.0)) * 60.0
+
+                # Iterative calibration of T up to 5 times (no overlap, strictly truncated at next start)
+                for _ in range(5):
+                    if not (10.0 <= t_mean_min <= 75.0):
+                        raise ValueError(f"Cooking mean duration T {t_mean_min:.1f} min out of bounds [10, 75]")
+                    p_induction.fill(0.0)
+                    for d, evs in events_by_day.items():
+                        for idx, ev in enumerate(evs):
+                            st = ev["start"]
+                            dur_m = t_mean_min * ev["u"]
+                            dur_s = max(1, min(9, int(round(dur_m / 10.0))))
+                            en = min(144, st + dur_s)
+                            if idx + 1 < len(evs):
+                                en = min(en, evs[idx + 1]["start"])
+                            p_induction[d, st:en] = 2.0
+
+                    act_kwh = float(p_induction.sum() * (10.0 / 60.0))
+                    if act_kwh <= 0:
+                        raise ValueError("Cooking event placement produced 0 kWh")
+                    if abs(act_kwh - target_induction_scaled) / target_induction_scaled < 0.005:
+                        break
+                    t_mean_min = t_mean_min * (target_induction_scaled / act_kwh)
+
+                scale_ind = target_induction_scaled / act_kwh
+                p_induction *= scale_ind
+                eff_cook_kw = 2.0 * scale_ind
+                if not (1.7 <= eff_cook_kw <= 2.3):
+                    raise ValueError(f"Cooking effective power {eff_cook_kw:.3f} kW out of bounds [1.7, 2.3]")
+                err_ind = abs(p_induction.sum() * (10.0 / 60.0) - target_induction_scaled) / target_induction_scaled * 100.0
+            else:
+                err_ind = 0.0
+                t_mean_min = 0.0
+                eff_cook_kw = 0.0
+                scale_ind = 1.0
+
+            self.cooking_stats = {
+                "n_raw": tot_raw_cook_runs,
+                "n_merged": n_cook,
+                "t_mean_min": round(t_mean_min, 1),
+                "eff_cook_kw": round(eff_cook_kw, 3),
+            }
+
+            # 2. Dishwasher events
+            p_dish = np.zeros((365, 144))
+            if has_dish and target_dish_scaled > 0:
+                n_dish = int(round(target_dish_scaled / 1.0))
+                weights_dish = np.zeros((365, 144))
+                for d in range(365):
+                    if is_occupied_day_365[d]:
+                        curve = dish_curve_wd if day_types_365[d] == "weekday" else dish_curve_we
+                        weights_dish[d] = curve * (active_occupants_10min[d] > 0)
+                valid_dish_days = [d for d in range(365) if is_occupied_day_365[d] and weights_dish[d].sum() > 0]
+                if valid_dish_days and n_dish > 0:
+                    if n_dish <= len(valid_dish_days):
+                        chosen_dish_days = list(rng_ev.choice(valid_dish_days, size=n_dish, replace=False))
+                    else:
+                        chosen_dish_days = list(valid_dish_days) + list(
+                            rng_ev.choice(valid_dish_days, size=n_dish - len(valid_dish_days), replace=False)
+                        )
+                    chosen_dish_days.sort()
+                    for d in chosen_dish_days:
+                        w = weights_dish[d]
+                        p_norm = w / w.sum()
+                        start_10m = int(rng_ev.choice(144, p=p_norm))
+                        end_10m = min(144, start_10m + 9)
+                        p_dish[d, start_10m:end_10m] += (1.0 / 1.5)
+
+                raw_dish_kwh = float(p_dish.sum() * (10.0 / 60.0))
+                if raw_dish_kwh <= 0:
+                    raise ValueError("Dishwasher event placement produced 0 kWh")
+                scale_dish = target_dish_scaled / raw_dish_kwh
+                p_dish *= scale_dish
+                eff_dish_kw = (1.0 / 1.5) * scale_dish
+                if not (0.4 <= eff_dish_kw <= 1.2):
+                    raise ValueError(f"Dishwasher effective power {eff_dish_kw:.3f} kW out of bounds [0.4, 1.2]")
+                err_dish = abs(p_dish.sum() * (10.0 / 60.0) - target_dish_scaled) / target_dish_scaled * 100.0
+            else:
+                err_dish = 0.0
+
+            # 3. Laundry events
+            p_wash = np.zeros((365, 144))
+            if target_wash_scaled > 0:
+                cycle_kwh = 2.0 if has_washtower else 0.5
+                n_wash = int(round(target_wash_scaled / cycle_kwh))
+                weights_wash = np.zeros((365, 144))
+                for d in range(365):
+                    if is_occupied_day_365[d]:
+                        curve = wash_curve_wd if day_types_365[d] == "weekday" else wash_curve_we
+                        weights_wash[d] = curve * (active_occupants_10min[d] > 0)
+                valid_wash_days = [d for d in range(365) if is_occupied_day_365[d] and weights_wash[d].sum() > 0]
+                if valid_wash_days and n_wash > 0:
+                    if n_wash <= len(valid_wash_days):
+                        chosen_wash_days = list(rng_ev.choice(valid_wash_days, size=n_wash, replace=False))
+                    else:
+                        chosen_wash_days = list(valid_wash_days) + list(
+                            rng_ev.choice(valid_wash_days, size=n_wash - len(valid_wash_days), replace=False)
+                        )
+                    chosen_wash_days.sort()
+                    for d in chosen_wash_days:
+                        w = weights_wash[d]
+                        p_norm = w / w.sum()
+                        start_10m = int(rng_ev.choice(144, p=p_norm))
+                        if has_washtower:
+                            w_end = min(144, start_10m + 6)
+                            p_wash[d, start_10m:w_end] += 0.5
+                            d_start = start_10m + 6
+                            if d_start < 144:
+                                d_end = min(144, d_start + 9)
+                                p_wash[d, d_start:d_end] += 1.0
+                        elif has_washing_machine:
+                            w_end = min(144, start_10m + 6)
+                            p_wash[d, start_10m:w_end] += 0.5
+
+                raw_wash_kwh = float(p_wash.sum() * (10.0 / 60.0))
+                if raw_wash_kwh <= 0:
+                    raise ValueError("Laundry event placement produced 0 kWh")
+                scale_wash = target_wash_scaled / raw_wash_kwh
+                p_wash *= scale_wash
+                if has_washtower:
+                    eff_dryer_kw = 1.0 * scale_wash
+                    if not (0.8 <= eff_dryer_kw <= 2.5):
+                        raise ValueError(f"Dryer effective power {eff_dryer_kw:.3f} kW out of bounds [0.8, 2.5]")
+                err_wash = abs(p_wash.sum() * (10.0 / 60.0) - target_wash_scaled) / target_wash_scaled * 100.0
+            else:
+                err_wash = 0.0
+
+            # 4. Plug loads (unchanged expected curve)
+            p_plug, err_plug = run_calibration(target_plug_scaled, media_curve_wd, media_curve_we, 0.40)
 
         # Calibrate Lighting
         light_intensity = np.zeros((365, 144))
@@ -1461,15 +1660,32 @@ class OccupancyTUSModel:
                 dhw_liters_15min[s_idx:e_idx] = 0.0
 
         # Resample individual appliance profiles to 15-min
-        p_ind_15min = np.interp(x_15, x_10, p_induction.flatten())
-        p_oven_15min = np.interp(x_15, x_10, p_oven.flatten())
-        p_cooking_15min = p_ind_15min + p_oven_15min
-        p_dish_15min = np.interp(x_15, x_10, p_dish.flatten())
-        p_wash_15min = np.interp(x_15, x_10, p_wash.flatten())
         p_plug_15min = np.interp(x_15, x_10, p_plug.flatten())
         p_light_15min = np.interp(x_15, x_10, p_light.flatten())
         p_fridge_15min = np.full(35040, p_fridge_base)
         p_vent_standby_15min = np.full(35040, p_purifier_base + p_erv_base + p_standby_base)
+
+        if self.appliance_events:
+            p_ind_15min = resample_10m_to_15m_conservative(p_induction)
+            p_oven_15min = resample_10m_to_15m_conservative(p_oven)
+            p_cooking_15min = p_ind_15min + p_oven_15min
+            p_dish_15min = resample_10m_to_15m_conservative(p_dish)
+            p_wash_15min = resample_10m_to_15m_conservative(p_wash)
+            total_elec_15min = (
+                p_cooking_15min
+                + p_dish_15min
+                + p_wash_15min
+                + p_plug_15min
+                + p_light_15min
+                + p_fridge_15min
+                + p_vent_standby_15min
+            )
+        else:
+            p_ind_15min = np.interp(x_15, x_10, p_induction.flatten())
+            p_oven_15min = np.interp(x_15, x_10, p_oven.flatten())
+            p_cooking_15min = p_ind_15min + p_oven_15min
+            p_dish_15min = np.interp(x_15, x_10, p_dish.flatten())
+            p_wash_15min = np.interp(x_15, x_10, p_wash.flatten())
 
         # 15-minute discrete states (0: away, 1: home_active, 2: sleep)
         persons_state_15min = []
