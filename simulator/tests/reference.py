@@ -103,6 +103,8 @@ def run(region, c, D):
     load_=eA*(1-red[sea])
     pv1=np.array(meta['pv1kw_kwh']); kw=P['pvN']*P['pvModW']/1000; ek=P['essN']*P['essModKwh']
     price=None
+    OFF=bool(P.get('offGrid'))
+    if OFF: P['exportMode']='none'; P['essMode']='self'; P['gridCharge']=False
     if T['type']=='tou':
         tou=T['tou']
         _,_,price=tou_arrays(tou); dmin=np.repeat(price.reshape(365,24).min(1),24); dmax=np.repeat(price.reshape(365,24).max(1),24)
@@ -130,7 +132,7 @@ def run(region, c, D):
     none = P['exportMode']=='none'
     st={'c':0}; ages=dict(pv=0,ess=0,inv=0,aw=0); res=[]; cumB=cumC=0
     soc = disp(pv1*kw, ek, 0)[2] if ek>0 else 0   # 정상 상태 시작 SOC
-    fixed,_ = bill(np.zeros(8760), np.zeros(8760), P, T, K, {'c':0})
+    fixed,_ = (0,0) if OFF else bill(np.zeros(8760), np.zeros(8760), P, T, K, {'c':0})
     for y in range(1,P['years']+1):
         capT = gross-sub if y==1 else 0
         if y>1:
@@ -142,7 +144,7 @@ def run(region, c, D):
         imp,exp,soc = disp(pv, cap, soc)
         curt = exp if none else np.zeros(8760)
         if none: exp = np.zeros(8760)
-        bA,inc = bill(imp,exp,P,T,K,st)
+        bA,inc = (0,0) if OFF else bill(imp,exp,P,T,K,st)
         fe=(1+P['escE']/100)**(y-1); fg=(1+P['escG']/100)**(y-1)
         before=bB*fe+gB.sum()*P['gasPrice']*fg
         after=bA*fe-inc*(1 if P['exportMode']=='fit' else fe)+gA.sum()*P['gasPrice']*fg+gross*P['omPct']/100
@@ -150,7 +152,10 @@ def run(region, c, D):
         res.append(dict(y=y,capT=capT,ben=ben,net=cumB-cumC,imp=imp.sum(),exp=exp.sum(),pv=pv.sum(),curt=curt.sum()))
         if y==1:
             use=load_.sum(); days=int((imp.reshape(365,24).sum(1)>0.001).sum())
-            res[0]['kpi']=dict(selfSuff=1-imp.sum()/use, pvOffset=pv.sum()/use, impDays=days, billVar=bA-fixed-inc)
+            s0={'c':0}
+            if OFF: bS,iS=0,0
+            else: bill(imp,exp,P,T,K,s0); bS,iS=bill(imp,exp,P,T,K,s0)   # 정상 상태(이월 반영) Zero Bill
+            res[0]['kpi']=dict(selfSuff=1-imp.sum()/use, pvOffset=pv.sum()/use, impDays=days, billVar=bA-fixed-inc, billVarSteady=bS-fixed-iS, unservedHours=int((imp>0.001).sum()))
         for k in ages: ages[k]+=1
     return res
 
@@ -165,8 +170,8 @@ if __name__=='__main__':
                 d=abs(a[k]-b[k]); worst=max(worst,d)
                 if d>1.0: print('DIFF',c['key'],a['y'],k,a[k],b[k])
         jk=jc['kpi']; pk=r[0]['kpi']
-        for k in ['selfSuff','pvOffset','impDays','billVar']:
+        for k in ['selfSuff','pvOffset','impDays','billVar','billVarSteady','unservedHours']:
             d=abs(pk[k]-jk[k]); worst=max(worst,d)
             if d>1e-6*max(1,abs(pk[k])): print('KPI DIFF',c['key'],k,pk[k],jk[k])
-        print(c['key'],c.get('region','kr_central'),c['tariff'],c['exportMode'],'years',len(r),'누적순이익 py',round(r[-1]['net']),'js',round(j[-1]['net']),'자립률 %.3f'%pk['selfSuff'],'버림 %.0f'%r[0]['curt'],'변동요금 %.0f'%pk['billVar'])
+        print(c['key'],c.get('region','kr_central'),c['tariff'],c['exportMode'],'years',len(r),'누적순이익 py',round(r[-1]['net']),'js',round(j[-1]['net']),'자립률 %.3f'%pk['selfSuff'],'버림 %.0f'%r[0]['curt'],'변동요금 %.0f'%pk['billVar'],'정상상태 %.0f'%pk['billVarSteady'])
     print('최대 절대 차이',worst)

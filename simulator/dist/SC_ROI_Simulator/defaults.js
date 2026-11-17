@@ -13,7 +13,7 @@ window.SCDEF = {
     house: 'MONO Core 72', occ: 3, rate: 1.0, region: 'kr_central', awhp: true,
     pvN: 8, essN: 0, pvDeg: 0.5, essDeg: 3.0, pvRepl: 80, essRepl: 70, awhpLife: 15, invLife: 12,
     hemsOn: false, hemsWinter: 5, hemsSummer: 5, hemsMid: 3, hemsInclude: true,
-    tariff: 'kr_prog', exportMode: 'net', fitPrice: 100, touExportPct: 100, essMode: 'self', gridCharge: false,
+    tariff: 'kr_prog', exportMode: 'net', offGrid: 'grid', fitPrice: 100, touExportPct: 100, essMode: 'self', gridCharge: false,
     escE: 3, escG: 2, gasPrice: 218.66, gasUnit: 'kwh', omPct: 0.5, years: 20,
   },
   fixed: { pvModW: 400, essModKwh: 5 },

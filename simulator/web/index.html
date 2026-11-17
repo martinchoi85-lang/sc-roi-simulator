@@ -67,7 +67,9 @@
     <div class="lvh"><div class="num">3</div><h3>요금 · 기간<small>연도별 OPEX · 이득</small></h3></div>
     <div class="row"><label>전기요금제</label><select id="tariffSel"></select></div>
     <div id="touBox" class="toubox"></div>
-    <div class="row"><label>매전 방식</label><div class="seg" data-k="exportMode"></div></div>
+    <div class="row"><label>계통 연결</label><div class="seg" data-k="offGrid"></div></div>
+    <div class="row" id="offRow"><label></label><div class="hint">계통 미연결 가정: 전기요금·매전 없음, 남는 PV는 버림, ESS는 자가소비 우선. 계통에서 받던 전기는 '공급 부족(정전)'으로 셈</div></div>
+    <div class="row" id="expRow"><label>매전 방식</label><div class="seg" data-k="exportMode"></div></div>
     <div class="row" id="fitRow"><label>FIT 단가</label><div class="inl"><input type="text" data-k="fitPrice" inputmode="decimal"> <span id="fitUnit">원/kWh</span> <span class="hint">고정, 인상률 미적용</span></div></div>
     <div class="row" id="noneRow"><label></label><div class="hint">역송 불가: ESS를 채우고 남은 PV는 버림(상계·매전 수익 없음)</div></div>
     <div class="row" id="touExpRow"><label>TOU 매전 단가</label><div class="inl">해당 시간대 수전 단가의 <input type="text" data-k="touExportPct" inputmode="decimal"> %</div></div>

@@ -191,6 +191,10 @@
   }
 
   function simulate(L1, pv1, P) {
+    // 계통 미연결(오프그리드): 남는 PV는 버림, ESS는 자가소비 우선(계통 충전 없음), 전기요금 0. 계통 수전 = 공급 부족(정전)
+    const OFF = !!P.offGrid;
+    if (OFF) P = Object.assign({}, P, { exportMode: 'none', essMode: 'self', gridCharge: false });
+    const NOBILL = { bill: 0, exportIncome: 0, monthBill: new Float64Array(12), billedKwh: 0 };
     const N = P.years, out = { years: [] };
     const fH = hemsFactor(P);
     const loadA = new Float64Array(H); for (let h = 0; h < H; h++) loadA[h] = L1.after.elec[h] * fH[h];
@@ -207,7 +211,7 @@
     // 설치 전(기준안): 계통만
     const zero = new Float64Array(H);
     const stB = { carry: 0 }; const billB1 = annualElecBill(L1.before.elec, zero, P, stB);
-    const fixedBill = annualElecBill(zero, zero, P, { carry: 0 }).bill; // 사용량 0일 때의 연간 요금(기본요금·최소요금)
+    const fixedBill = OFF ? 0 : annualElecBill(zero, zero, P, { carry: 0 }).bill; // 사용량 0일 때의 연간 요금(기본요금·최소요금)
     const noExport = P.exportMode === 'none';
     // 상태
     let pvAge = 0, essAge = 0, invAge = 0, awAge = 0, soc = 0;
@@ -238,7 +242,7 @@
       const ess = { cap: essKwh * soh, pmax: essKwh * soh * P.essCrate, rte: P.essRte };
       const d = dispatchYear(loadA, pvArr, ess, soc, opt); soc = d.soc;
       const curtA = noExport ? d.exp : zero, expA = noExport ? zero : d.exp; // 매전 없음: 남는 PV는 버림
-      const billA = annualElecBill(d.imp, expA, P, stA);
+      const billA = OFF ? NOBILL : annualElecBill(d.imp, expA, P, stA);
       const escE = Math.pow(1 + P.escE / 100, y - 1), escG = Math.pow(1 + P.escG / 100, y - 1);
       const expEsc = P.exportMode === 'fit' ? 1 : escE;
       const before = { elec: billB1.bill * escE, gas: gasBeforeKg * P.gasPrice * escG };
@@ -264,13 +268,20 @@
       pvAge++; essAge++; invAge++; awAge++;
     }
     const y1 = out.years[0].energy, Y1 = out.y1;
+    { // Zero Bill 정상 상태 판정: 1년 차 수전·역송으로 한 해를 미리 돌려 생긴 상계 이월을 안고 다시 계산(설치 첫해는 이월 0에서 시작)
+      const stW = { carry: 0 }; if (!OFF) annualElecBill(Y1.hourImp, Y1.hourExp, P, stW);
+      const bS = OFF ? NOBILL : annualElecBill(Y1.hourImp, Y1.hourExp, P, stW);
+      Y1.billVarSteady = bS.bill - Y1.fixedBill - bS.exportIncome; Y1.monthBillSteady = bS.monthBill;
+    }
+    let unservedHours = 0; for (let h = 0; h < H; h++) if (Y1.hourImp[h] > ZERO_KWH) unservedHours++;
     out.kpi = {
+      offGrid: OFF, offGridSupply: { ok: y1.imp <= ZERO_KWH, unservedKwh: y1.imp, hours: unservedHours, days: Y1.impDays },
       selfSuff: useAfter > 0 ? 1 - y1.imp / useAfter : 0,        // 대표: 에너지 자립률(실시간) = 1 − 계통 수전 / 전력 사용량
       pvOffset: useAfter > 0 ? y1.pv / useAfter : 0,             // 보조: 연간 발전 상쇄율 = PV 발전량 / 전력 사용량 (100% 초과 가능)
       pvOffsetUsed: useAfter > 0 ? (y1.pv - y1.curt) / useAfter : 0, // 버려진 PV 제외
       curt: y1.curt, curtRatio: y1.pv > 0 ? y1.curt / y1.pv : 0,
       zeroEnergy: { ok: y1.imp <= ZERO_KWH, impKwh: y1.imp, impDays: Y1.impDays },
-      zeroBill: { ok: Y1.billVar <= ZERO_WON, varBill: Y1.billVar, fixedBill: Y1.fixedBill },
+      zeroBill: { ok: Y1.billVar <= ZERO_WON, varBill: Y1.billVar, fixedBill: Y1.fixedBill, okSteady: Y1.billVarSteady <= ZERO_WON, varBillSteady: Y1.billVarSteady },
       capexGross: grossInit, subsidy, capexNet: grossInit - subsidy,
       benefit1: out.years[0].benefit, cumNet: out.years[N - 1].net, payback,
       useBefore, useAfter, gasBeforeKg, gasAfterKg, pvKw, essKwh,

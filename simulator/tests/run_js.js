@@ -9,6 +9,6 @@ for(const c of cases){
   const P=Object.assign({},D,c);P.tariff=D.tariffs[c.tariff];P.cost=D.cost;
   if(P.tariff.type==='tou')P.touArr=E.touPriceArray(P.tariff.tou,P.hemi);
   const t0=Date.now();const r=E.simulate(L1,META.pv1kw_kwh,P);const ms=Date.now()-t0;
-  out.push({key:c.key+(c.region||''),ms,kpi:Object.assign({},r.kpi,{impDays:r.y1.impDays,billVar:r.y1.billVar}),years:r.years.map(y=>({y:y.y,curt:y.energy.curt,capT:y.capT,bE:y.before.elec,bG:y.before.gas,aE:y.after.elec,aX:y.after.exportIncome,aG:y.after.gas,om:y.after.om,ben:y.benefit,net:y.net,imp:y.energy.imp,exp:y.energy.exp,pv:y.energy.pv,ev:y.ev}))});
+  out.push({key:c.key+(c.region||''),ms,kpi:Object.assign({},r.kpi,{impDays:r.y1.impDays,billVar:r.y1.billVar,billVarSteady:r.y1.billVarSteady,unservedHours:r.kpi.offGridSupply.hours}),years:r.years.map(y=>({y:y.y,curt:y.energy.curt,capT:y.capT,bE:y.before.elec,bG:y.before.gas,aE:y.after.elec,aX:y.after.exportIncome,aG:y.after.gas,om:y.after.om,ben:y.benefit,net:y.net,imp:y.energy.imp,exp:y.energy.exp,pv:y.energy.pv,ev:y.ev}))});
 }
 console.log(JSON.stringify(out));

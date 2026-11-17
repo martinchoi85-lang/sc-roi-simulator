@@ -34,7 +34,7 @@
   const KWH_PER_KG = 12.861; // 데이터의 가스 소비는 LPG kg 기준으로 저장(순발열량 46.3MJ/kg) → 연료 열량 kWh로 표시
   const GAS_UNITS = { kwh: ['원/kWh (열량)', 1], kg: ['원/kg (LPG)', 12.861], m3: ['원/m³ (도시가스, 약 10.8kWh/m³)', 10.8] };
   const gasPerKwh = () => S.gasPrice / GAS_UNITS[S.gasUnit][1];
-  const snap3 = () => JSON.stringify([$('#fxUSD').value, $('#fxAUD').value, S.tariff, S.exportMode, S.fitPrice, S.touExportPct, S.essMode, S.gridCharge, S.escE, S.escG, S.gasPrice, S.gasUnit, S.omPct, S.years, TARIFF]);
+  const snap3 = () => JSON.stringify([$('#fxUSD').value, $('#fxAUD').value, S.tariff, S.exportMode, S.fitPrice, S.touExportPct, S.essMode, S.gridCharge, S.escE, S.escG, S.gasPrice, S.gasUnit, S.omPct, S.years, TARIFF, S.offGrid]);
   const region = () => D.regions.find(r => r.id === S.region);
   const houseKey = h => D.houses.find(x => x[0] === h)[1];
 
@@ -84,6 +84,7 @@
     $('#tariffSel').onchange = e => { S.tariff = e.target.value; const T = TARIFF[S.tariff]; if (T.exportDefault) S.exportMode = T.exportDefault; if (T.type !== 'tou' && S.exportMode === 'tou') S.exportMode = 'net'; paintL3(); changed(); };
     seg($('[data-k=exportMode]'), [['net', '월 상계'], ['fit', 'FIT'], ['tou', 'TOU'], ['none', '매전 없음']], () => S.exportMode, v => { S.exportMode = v; paintL3(); });
     seg($('[data-k=essMode]'), [['self', '자가소비 우선'], ['tou', 'TOU 피크 방전']], () => S.essMode, v => { S.essMode = v; paintL3(); });
+    seg($('[data-k=offGrid]'), [['grid', '연결'], ['off', '미연결 (오프그리드)']], () => S.offGrid || 'grid', v => { S.offGrid = v; paintL3(); });
     const gu = $('#gasUnit'); gu.innerHTML = Object.entries(GAS_UNITS).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join(''); gu.value = S.gasUnit;
     gu.onchange = () => { const perKwh = gasPerKwh(); S.gasUnit = gu.value; S.gasPrice = Math.round(perKwh * GAS_UNITS[S.gasUnit][1] * 100) / 100; $('[data-k=gasPrice]').value = S.gasPrice; changed(); };
     paintHems(); paintL3();
@@ -98,6 +99,7 @@
     const el = $('#subRef'); if (!el) return;
     el.innerHTML = `<details><summary>${region().label} 보조금 참고 (2026-11 기준, 현지 통화)</summary>${subRefHTML(subRefRows(), true)}<div class="src">참고용입니다. 금액은 위 입력칸에 직접 넣으세요(원). 자격·예산 소진 여부는 신청 시점에 다시 확인.</div></details>`;
   }
+  const OFFG = () => S.offGrid === 'off';
   function paintHems() { $('#hemsBox').classList.toggle('off', !S.hemsOn); }
   const CUR_LABEL = { KRW: '원', USD: 'USD', AUD: 'AUD' };
   const qEditor = (t, cu) => `<div class="inl" style="margin-top:4px">분기 조정요금(IRCA·VEA, ${cu}/kWh) ${['1~3월', '4~6월', '7~9월', '10~12월'].map((q, i) => `${q} <input type="text" data-q="${i}" value="${t.addVarQ[i]}" style="width:56px">`).join(' ')}</div>`;
@@ -114,7 +116,9 @@
     $('#fitUnit').textContent = cu + '/kWh';
     $('#fitRow').style.display = S.exportMode === 'fit' ? '' : 'none';
     $('#touExpRow').style.display = S.exportMode === 'tou' ? '' : 'none';
-    $('#noneRow').style.display = S.exportMode === 'none' ? '' : 'none';
+    $('#noneRow').style.display = S.exportMode === 'none' && !OFFG() ? '' : 'none';
+    $('#offRow').style.display = OFFG() ? '' : 'none'; $('#expRow').style.display = '';
+    ['#expRow', '#fitRow', '#touExpRow', '#noneRow', '#essModeRow', '#gridChgRow'].forEach(s => { if (OFFG()) $(s).style.display = 'none'; });
     $('#essModeRow').style.display = isTou ? '' : 'none';
     $('#gridChgRow').style.display = isTou && S.essMode === 'tou' ? '' : 'none';
     $('[data-k=essMode]')._paint && $('[data-k=essMode]')._paint();
@@ -182,7 +186,7 @@
       hems: { on: S.hemsOn, winter: S.hemsWinter, summer: S.hemsSummer, mid: S.hemsMid }, hemi: reg.hemi,
       tariff: T, exportMode: S.exportMode, fitPrice: S.fitPrice, touExportRatio: S.touExportPct / 100, essMode: S.essMode, gridCharge: S.gridCharge,
       escE: S.escE, escG: S.escG, gasPrice: gasPerKwh() * KWH_PER_KG, omPct: S.omPct, years: S.years,
-      cost: Object.assign({}, COST, { hemsInclude: S.hemsInclude }),
+      cost: Object.assign({}, COST, { hemsInclude: S.hemsInclude }), offGrid: OFFG(),
     };
     if (T.type === 'tou') P.touArr = E.touPriceArray(T.tou, reg.hemi);
     P.fx = T.currency === 'USD' ? num($('#fxUSD').value) : T.currency === 'AUD' ? num($('#fxAUD').value) : 1;
@@ -267,7 +271,7 @@
     const [cv, cu] = money(k.capexNet, true), [bv, bu] = money(k.benefit1, true), [nv, nu] = money(k.cumNet, true);
     const e1 = R3.years[0].energy;
     $('#kpis').innerHTML =
-      kpiHTML('에너지 자립률 (실시간)', (k.selfSuff * 100).toFixed(0), '%', `1 − 계통 수전 ${f0(e1.imp)} ÷ 사용 ${f0(k.useAfter)} kWh<br>연간 발전 상쇄율 ${(k.pvOffset * 100).toFixed(0)}% (PV 발전 ÷ 사용)${e1.curt > 0.5 ? ` · 버림 제외 ${(k.pvOffsetUsed * 100).toFixed(0)}%` : ''}`) +
+      kpiHTML(OFFG() ? '에너지 자립률 (오프그리드)' : '에너지 자립률 (실시간)', (k.selfSuff * 100).toFixed(0), '%', `1 − ${OFFG() ? '공급 부족' : '계통 수전'} ${f0(e1.imp)} ÷ 사용 ${f0(k.useAfter)} kWh<br>연간 발전 상쇄율 ${(k.pvOffset * 100).toFixed(0)}% (PV 발전 ÷ 사용)${e1.curt > 0.5 ? ` · 버림 제외 ${(k.pvOffsetUsed * 100).toFixed(0)}%` : ''}`) +
       kpiHTML('초기 CAPEX (보조금 차감)', cv, cu, `설치 ${money(k.capexGross, true).join(' ')} · 보조금 ${money(k.subsidy, true).join(' ')}`) +
       kpiHTML('1년 차 연간 이득', bv, bu, `설치 전 ${money(R3.years[0].before.total, true).join(' ')} → 설치 후 ${money(R3.years[0].after.total, true).join(' ')}`) +
       kpiHTML(`${N}년 누적 순이익`, nv, nu, `교체 CAPEX ${money(R3.years.slice(1).reduce((a, y) => a + y.capT, 0), true).join(' ')} 포함`) +
@@ -279,11 +283,11 @@
     // 월별 에너지
     const y1 = R3.y1;
     const monSer = [{ name: '전력 사용', color: COL.s1, values: Array.from(y1.monthUse) }, { name: 'PV 발전', color: COL.s4, values: Array.from(y1.monthPv) },
-      { name: '계통 수전', color: COL.s7, values: Array.from(y1.monthImp) }];
-    if (S.exportMode === 'none') monSer.push({ name: '버려진 PV', color: COL.s8, values: Array.from(y1.monthCurt) });
+      { name: OFFG() ? '공급 부족' : '계통 수전', color: COL.s7, values: Array.from(y1.monthImp) }];
+    if (S.exportMode === 'none' || OFFG()) monSer.push({ name: '버려진 PV', color: COL.s8, values: Array.from(y1.monthCurt) });
     else monSer.push({ name: '역송', color: COL.s3, values: Array.from(y1.monthExp) });
     legend('#legMon', monSer.map(s => [s.name, s.color]));
-    $('#monSub').textContent = S.exportMode === 'none' ? '설치 후 전력 사용량, PV 발전량, 계통 수전, 버려진 PV(매전 없음: ESS를 채우고 남은 발전) (kWh)' : '설치 후 전력 사용량, PV 발전량, 계통 수전·역송 (kWh)';
+    $('#monSub').textContent = OFFG() ? '설치 후 전력 사용량, PV 발전량, 공급 부족(정전), 버려진 PV (kWh) — 계통 미연결 가정' : S.exportMode === 'none' ? '설치 후 전력 사용량, PV 발전량, 계통 수전, 버려진 PV(매전 없음: ESS를 채우고 남은 발전) (kWh)' : '설치 후 전력 사용량, PV 발전량, 계통 수전·역송 (kWh)';
     groupedBars('#chMon', MON, monSer, { unit: 'kWh', h: 240 });
     // 월별 비용
     const gp = gasPerKwh() * KWH_PER_KG, { fx, c } = cur(), dv = c === 'KRW' ? 1e4 : fx;
@@ -299,17 +303,31 @@
     const k = R3.kpi, ze = k.zeroEnergy, zb = k.zeroBill, e1 = R3.years[0].energy, { c } = cur();
     const mm = v => money(v, true).join(' ');
     const badge = (ok, title, body) => `<div class="zb ${ok ? 'ok' : 'no'}"><div class="zt"><b>${title}</b><span>${ok ? '달성' : '미달'}</span></div><div class="zs">${body}</div></div>`;
-    let h = badge(ze.ok, 'Zero Energy', ze.ok ? '1년 차 계통 수전 0kWh — 밤에도 PV·ESS만으로 전력을 충당' :
-      `1년 차 계통 수전 <b>${f0(ze.impKwh)} kWh</b> 남음 · 수전이 있었던 날 <b>${ze.impDays}일</b>/365일` +
+    const og = k.offGridSupply;
+    let h = OFFG() ? badge(og.ok, '오프그리드 공급 (정전 0)', og.ok ? '계통 없이 1년 내내 PV·ESS만으로 전력 공급 — 공급 부족 0kWh' :
+      `공급 부족 <b>${f0(og.unservedKwh)} kWh</b> · 정전 <b>${og.hours}시간</b>, <b>${og.days}일</b>/365일<br><span class="hint">부족 발생: ${impMonths()} · ESS는 전년도 말 충전량에서 시작</span>` +
+      `<div class="mine"><button class="btn-o" id="minEssBtn">정전 0에 필요한 최소 ESS 계산</button><span id="minEssOut">${minEssText()}</span></div>`) :
+      badge(ze.ok, 'Zero Energy', ze.ok ? '1년 차 계통 수전 0kWh — 밤에도 PV·ESS만으로 전력을 충당' :
+      `1년 차 계통 수전 <b>${f0(ze.impKwh)} kWh</b> 남음 · 수전이 있었던 날 <b>${ze.impDays}일</b>/365일<br><span class="hint">수전 발생: ${impMonths()} · ESS는 전년도 말 충전량에서 시작</span>` +
       `<div class="mine"><button class="btn-o" id="minEssBtn">Zero Energy 최소 ESS 계산</button><span id="minEssOut">${minEssText()}</span></div>`);
-    h += badge(zb.ok, 'Zero Bill', zb.ok ? `기본요금 외 전기요금 0 (매전 수익 차감 후 ${mm(Math.min(0, zb.varBill))}) · 남는 기본요금 연 ${mm(zb.fixedBill)}` :
-      `기본요금 외 전기요금 연 <b>${mm(zb.varBill)}</b> 남음(매전 수익 차감 후) · 기본요금 연 ${mm(zb.fixedBill)} 별도`);
-    if (S.exportMode === 'none') h += `<div class="zb cut"><div class="zt"><b>버려진 PV</b><span>매전 없음</span></div><div class="zs">1년 차 <b>${f0(e1.curt)} kWh</b> · 발전량의 <b>${(k.curtRatio * 100).toFixed(0)}%</b>. ESS를 늘리면 버릴 전기를 밤에 씁니다.</div></div>`;
+    const st = S.zbBasis !== 'first', zOk = st ? zb.okSteady : zb.ok, zV = st ? zb.varBillSteady : zb.varBill, other = st ? zb.varBill : zb.varBillSteady;
+    const zbSeg = `<div class="seg small zbseg"><button data-zb="steady" class="${st ? 'on' : ''}">정상 상태(전년 상계 이월 반영)</button><button data-zb="first" class="${st ? '' : 'on'}">설치 첫해(이월 0에서 시작)</button></div>`;
+    const diff = S.exportMode === 'net' && Math.abs(other - zV) > 0.5 ? `<br><span class="hint">${st ? '설치 첫해는 이월 크레딧 없이 시작해 1월 등에 연 ' + mm(Math.max(0, other)) + '이 생김' : '전년 이월을 반영하면 연 ' + mm(Math.max(0, other))}</span>` : '';
+    if (OFFG()) h += `<div class="zb ok"><div class="zt"><b>전기요금</b><span>0</span></div><div class="zs">계통 미연결이라 기본요금·사용요금·매전 수익 모두 없음. 공급 부족이 있으면 그 시간은 정전이므로, 비용 비교는 공급 부족 0일 때만 의미가 있습니다.</div></div>`;
+    else h += badge(zOk, 'Zero Bill', (zOk ? `기본요금 외 전기요금 0 (매전 수익 차감 후 ${mm(Math.min(0, zV))}) · 남는 기본요금 연 ${mm(zb.fixedBill)}` :
+      `기본요금 외 전기요금 연 <b>${mm(zV)}</b> 남음(매전 수익 차감 후) · 기본요금 연 ${mm(zb.fixedBill)} 별도`) + diff + zbSeg);
+    if (S.exportMode === 'none' || OFFG()) h += `<div class="zb cut"><div class="zt"><b>버려진 PV</b><span>매전 없음</span></div><div class="zs">1년 차 <b>${f0(e1.curt)} kWh</b> · 발전량의 <b>${(k.curtRatio * 100).toFixed(0)}%</b>. ESS를 늘리면 버릴 전기를 밤에 씁니다.</div></div>`;
     $('#badges').innerHTML = h;
+    $$('#badges [data-zb]').forEach(b => b.onclick = () => { S.zbBasis = b.dataset.zb; renderBadges(); });
     const b = $('#minEssBtn'); if (b) b.onclick = () => {
       const P = params(); MINESS = E.minEssForZero(L1, META.pv1kw_kwh, P, 40); MINESS.pvKw = P.pvN * P.pvModW / 1000; $('#minEssOut').innerHTML = minEssText(); bindApply();
     };
     bindApply();
+  }
+  function impMonths() {
+    const a = R3.y1.hourImp, m = {}; for (let d = 0; d < 365; d++) { let s = 0; for (let k = 0; k < 24; k++) s += a[d * 24 + k]; if (s > 0.001) { const mo = E.MONTH[d * 24]; (m[mo] = m[mo] || [0, 0]); m[mo][0]++; m[mo][1] += s; } }
+    const ks = Object.keys(m).sort((p, q) => m[q][1] - m[p][1]);
+    return ks.slice(0, 4).map(k => `${k}월 ${m[k][0]}일(${f0(m[k][1])}kWh)`).join(', ') + (ks.length > 4 ? ` 외 ${ks.length - 4}개월` : '');
   }
   function minEssText() {
     const m = MINESS; if (!m) return '';
@@ -377,6 +395,7 @@
     $('#unitNote').textContent = `단위: ${unitLabel()} · 좌우 스크롤`;
     const T = TARIFF[S.tariff];
     $('#tblNote').innerHTML = `설치 전 = 가스보일러 + 계통 전력, PV·ESS·AWHP·HEMS 없음. 설치 후 = ${aw ? 'AWHP(난방·급탕)' : '가스보일러 유지'}${R3.kpi.pvKw ? ` + PV ${R3.kpi.pvKw.toFixed(1)}kW` : ''}${R3.kpi.essKwh ? ` + ESS ${R3.kpi.essKwh}kWh` : ''}${S.hemsOn ? ' + HEMS' : ''}.
+      ${OFFG() ? `<b>계통 미연결 가정</b>: 설치 후 전기요금 0, 공급 부족 1년 차 ${f0(R3.kpi.offGridSupply.unservedKwh)}kWh(정전 ${R3.kpi.offGridSupply.hours}시간) — 공급 부족이 0이 아니면 비용 비교는 참고용. 설치 전(기준안)은 계통 요금 그대로.` : ''}
       요금제 ${T.label}, 매전 ${{ net: '월 상계(잉여 kWh 무기한 이월)', fit: `FIT ${S.fitPrice} ${CUR_LABEL[T.currency || 'KRW']}/kWh 고정`, tou: `TOU 수전 단가의 ${S.touExportPct}%`, none: '없음(ESS를 채우고 남은 PV는 버림, 상계·매전 수익 0)' }[S.exportMode]}.
       ${R3.years[0].energy.curt > 0.5 ? `버려진 PV: 1년 차 ${f0(R3.years[0].energy.curt)}kWh(발전량의 ${(R3.kpi.curtRatio * 100).toFixed(0)}%) — 요금·이득에 반영되지 않음.` : ''}
       전기요금 ${S.escE}%/년·가스 ${S.escG}%/년 인상, 할인율 없음. 회수 연도는 테두리, 교체가 있는 해는 노란 칸. 매년 같은 기상(TMY)·같은 생활 패턴이 반복된다고 가정.`;
@@ -417,7 +436,7 @@
       }
       case 'gas': return { a: L1.before.gas.map(v => v * KWH_PER_KG), unit: 'kWh', name: '가스 소비 (기준안 · 가스보일러)' };
       case 'pv': { const kw = (R3 ? R3.kpi.pvKw : S.pvN * 0.4) || 1; return { a: META.pv1kw_kwh.map(v => v * kw), unit: 'kWh', name: `PV 발전 (${kw.toFixed(1)} kW, 1년 차)` }; }
-      case 'imp': return { a: R3 ? R3.y1.hourImp : new Float64Array(E.H), unit: 'kWh', name: `계통 수전 (1년 차${R3 ? ', 수전이 있었던 날 ' + R3.y1.impDays + '일' : ''})`, ramp: PURPLE, offZero: true };
+      case 'imp': return { a: R3 ? R3.y1.hourImp : new Float64Array(E.H), unit: 'kWh', name: `${OFFG() ? '공급 부족 (계통 미연결' : '계통 수전 (1년 차'}${R3 ? ', 수전이 있었던 날 ' + R3.y1.impDays + '일' : ''})`, ramp: PURPLE, offZero: true };
       case 'sur': { const a = new Float64Array(E.H); if (R3) for (let h = 0; h < E.H; h++) a[h] = R3.y1.hourExp[h] + R3.y1.hourCurt[h]; return { a, unit: 'kWh', name: S.exportMode === 'none' ? '버려진 PV (1년 차)' : '역송 (1년 차 남는 PV)', ramp: S.exportMode === 'none' ? ORANGE : GREEN, offZero: true }; }
       case 'tin': return { a: S.awhp ? c.t_in_aw : c.t_in_base, unit: '°C', name: '실내 온도', temp: true };
       case 'tout': return { a: META.temp_out, unit: '°C', name: '외기 온도', temp: true };
@@ -549,7 +568,8 @@
 <li><b>2단계 (설비)</b>: PV는 지역별 1kW당 시간 발전량 × 모듈 수 × (1 − 연간 열화 × 경과 연수). ESS는 가용 용량 = 모듈 × 5kWh × SOH, 충방전 효율 √0.9씩, C-rate 0.5의 단순 규칙 운전(자가소비 우선: PV 잉여만 충전, 부족할 때 방전). 최적화 운전(LP)은 하지 않습니다.</li>
 <li><b>에너지 자립률(실시간)</b> = 1 − 계통 수전량 ÷ 연간 전력 사용량(1년 차, 선택한 ESS 운전 기준). 밤에는 PV가 없으므로 PV만으로는 100%가 될 수 없고, ESS가 낮의 잉여를 밤으로 옮겨야 올라갑니다. <b>연간 발전 상쇄율</b> = PV 발전량 ÷ 연간 전력 사용량(낮의 잉여를 연간으로 상쇄한 비율, 100%를 넘을 수 있음 — 월 상계에서는 이 값이 높으면 요금이 0에 가까워짐). 가스 사용분은 둘 다 포함하지 않습니다.</li>
 <li><b>Zero Energy</b>: 1년 차 계통 수전 0kWh. 미달이면 남은 수전량과 수전이 있었던 날 수를 표시. <b>최소 ESS 계산</b>은 현재 PV·HEMS 그대로 ESS를 0~40개(5kWh 단위) 늘려 가며 1년 차 수전이 0이 되는 최소 개수를 찾습니다(자가소비 우선 운전, 계통 충전 없음). 겨울 흐린 날이 이어지면 PV 발전 자체가 부족해 ESS를 늘려도 달성할 수 없습니다.</li>
-<li><b>Zero Bill</b>: 1년 차 전기요금에서 기본요금(사용량이 0일 때 나오는 요금: 기본요금·최소요금·일 기본료와 그 세금)을 빼고 매전 수익을 차감한 값이 0 이하. 기본요금은 남습니다.</li>
+<li><b>Zero Bill</b>: 기본값은 <b>정상 상태</b> 판정 — 1년 차와 같은 수전·역송으로 한 해를 미리 돌려 생긴 상계 이월(월 상계)을 안고 계산합니다(ESS 시작 충전량과 같은 방식). '설치 첫해' 버튼을 누르면 이월 0에서 시작하는 실제 첫해 기준으로 봅니다. 20년 현금흐름은 항상 설치 첫해(이월 0)부터 순서대로 계산합니다. 판정식: 전기요금에서 기본요금(사용량이 0일 때 나오는 요금: 기본요금·최소요금·일 기본료와 그 세금)을 빼고 매전 수익을 차감한 값이 0 이하. 기본요금은 남습니다.</li>
+<li><b>계통 미연결(오프그리드) 가정</b>: 3단계 '계통 연결 → 미연결'을 고르면 계통 수전을 '공급 부족(정전)'으로 셉니다. 전기요금·매전 수익은 0, 남는 PV는 버리고, ESS는 자가소비 우선(계통 충전 없음)입니다. '오프그리드 공급' 배지는 1년 동안 공급 부족이 0인지(v10 보고서의 Zero Energy·LOL=0 기준) 판정하고, 최소 ESS 계산으로 정전 0에 필요한 ESS 모듈 수를 찾습니다. 계산량은 계통 연결 때와 같습니다.</li>
 <li><b>ESS 시작 상태</b>: 1년 차 조건으로 한 해를 미리 돌린 연말 충전량에서 시작합니다(1월 1일 0시에 빈 배터리로 시작해 생기는 왜곡 방지).</li>
 <li><b>HEMS</b>: 실제 제어는 구현하지 않고, 설치 후 전체 전력 사용량에 계절별 절감률을 곱해 줄입니다(가스는 미적용). 동절기 12~2월, 하절기 6~8월, 나머지 간절기(남반구는 반대).</li>
 <li><b>교체</b>: PV·ESS는 "1 − 열화율 × 경과 연수"가 교체 기준 이하가 되는 해 초에 교체(교체 후 새 제품). AWHP·인버터는 선택한 수명이 지난 해 초에 교체("고장 없음"이면 교체 안 함). PV 교체 시 인버터도 새로 봅니다.</li>
