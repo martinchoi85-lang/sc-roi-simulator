@@ -133,6 +133,17 @@
 <section id="tab-data" class="tab" hidden>
 <div class="dmain">
   <div class="ctx card" id="dctx"></div>
+  <div class="card hemsd">
+    <div class="ct">HEMS 적용 <span class="sub">시뮬레이터 탭 ② 설비 구성의 HEMS·③ 요금제와 같은 값입니다(어느 쪽에서 바꿔도 함께 바뀜). 켜고 끄며 '도입안 전력'·'HEMS 변화' 히트맵, 월별 용도별 사용량, 선택일 상세의 변화를 보세요.</span></div>
+    <div class="hemsdrow">
+      <label><input type="checkbox" data-k="hemsOn"> <b>HEMS 적용</b></label>
+      <label><input type="checkbox" data-k="hemsShift"> TOU 부하 이동 (세탁·식세기, AWHP 급탕)</label>
+      <span>급탕 이동 상한 <input type="text" data-k="hemsDhwCap" inputmode="decimal"> kWh/일</span>
+      <span>계절별 절감률 동절기 <input type="text" data-k="hemsWinter" inputmode="decimal"> · 하절기 <input type="text" data-k="hemsSummer" inputmode="decimal"> · 간절기 <input type="text" data-k="hemsMid" inputmode="decimal"> %</span>
+      <span>요금제 <select id="tariffSel2"></select></span>
+    </div>
+    <div class="hint" id="shiftNote2"></div>
+  </div>
   <div class="kpis six" id="dkpis"></div>
   <div class="dgrid">
     <div>
@@ -144,7 +155,7 @@
       </div>
       <div class="card">
         <div class="ct row2">월별 용도별 전력 사용량 <span class="seg small" id="euView"></span></div>
-        <div class="cs">kWh. 기준안 = 가스보일러(현재), 도입안 = 1단계에서 고른 난방. 냉장고·환기·대기에는 AWHP 대기전력 포함. HEMS 절감 반영 전 값.</div>
+        <div class="cs" id="euSub">kWh. 기준안 = 가스보일러(현재), 도입안 = 1단계에서 고른 난방. 냉장고·환기·대기에는 AWHP 대기전력 포함.</div>
         <div class="legend" id="legEu"></div>
         <div id="chEu" class="chart"></div>
       </div>

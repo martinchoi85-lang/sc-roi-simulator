@@ -89,6 +89,7 @@
     gu.onchange = () => { const perKwh = gasPerKwh(); S.gasUnit = gu.value; S.gasPrice = Math.round(perKwh * GAS_UNITS[S.gasUnit][1] * 100) / 100; $('[data-k=gasPrice]').value = S.gasPrice; changed(); };
     paintHems(); paintL3();
     $$('[data-yr]').forEach(r => r.addEventListener('input', () => { S.chartYear = +r.value; renderMonthly(); }));
+    $('#tariffSel2').onchange = e => { const t = $('#tariffSel'); t.value = e.target.value; t.dispatchEvent(new Event('change')); };
     ['#curSel', '#fxUSD', '#fxAUD'].forEach(s => $(s).addEventListener('change', () => { $('#fxUSD').value = num($('#fxUSD').value).toLocaleString('ko-KR'); $('#fxAUD').value = num($('#fxAUD').value).toLocaleString('ko-KR'); changed(); }));
   }
   const REF_LV = { V: ['공식 원문 확인', 'ok'], U: ['언론·업계 보도', 'u'], N: ['확인 안 됨', 'n'] };
@@ -109,6 +110,7 @@
     $('#tariffSel').innerHTML = Object.entries(TARIFF).filter(([, t]) => t.country === reg.country).map(([k, t]) => `<option value="${k}">${t.label}</option>`).join('');
     if (!TARIFF[S.tariff] || TARIFF[S.tariff].country !== reg.country) S.tariff = D.countryDefaults[reg.country].tariff;
     $('#tariffSel').value = S.tariff;
+    const t2 = $('#tariffSel2'); if (t2) { t2.innerHTML = $('#tariffSel').innerHTML; t2.value = S.tariff; }
     const T = TARIFF[S.tariff], isTou = T.type === 'tou', cu = CUR_LABEL[T.currency || 'KRW'];
     const eb = $('[data-k=exportMode]'); eb.querySelector('[data-v=tou]').disabled = !isTou;
     eb.querySelector('[data-v=tou]').title = isTou ? '' : '시간대 단가가 없는 요금제에는 TOU 매전을 쓸 수 없습니다';
@@ -167,7 +169,14 @@
   // ---------------- 상태 표시 ----------------
   let _deb = null;
   let MINESS = null; // Zero Energy 최소 ESS 계산 결과(조건이 바뀌면 지움)
-  function changed() { MINESS = null; clearTimeout(_deb); _deb = setTimeout(() => run(3), 120); }
+  function syncTwins() { // 같은 data-k 입력이 두 탭에 있을 때 화면 값을 맞춤
+    $$('input[data-k]').forEach(el => {
+      const k = el.dataset.k; if (!(k in S) || el.closest('.slider') || el.closest('.stepper')) return;
+      if (el.type === 'checkbox') el.checked = !!S[k]; else if (el.type === 'text' && document.activeElement !== el) el.value = S[k];
+    });
+    paintHems();
+  }
+  function changed() { syncTwins(); MINESS = null; clearTimeout(_deb); _deb = setTimeout(() => run(3), 120); }
 
   // ---------------- 계산 ----------------
   async function confirm1() {
@@ -315,7 +324,10 @@
     if (!hs.months.length) return hs.cand > 0.5 ? '부하 이동: 옮겨도 연간 전기 비용이 줄지 않아 적용하지 않음(월 상계 크레딧이 남는 달 등).' : '부하 이동: 옮길 부하 없음.';
     return `부하 이동(1년 차): 세탁·식세기 ${f0(hs.laundry)} kWh, 급탕 ${f0(hs.dhw)} kWh를 더 싼 시간으로 옮김 · 적용 달 ${hs.months.length === 12 ? '전체' : hs.months.join('·') + '월'} · 1년 차 정상 상태 전기 비용 ${money(hs.cost0 - hs.cost1, true).join(' ')} 절감`;
   }
-  function renderShiftNote() { const el = $('#shiftNote'); if (el) el.textContent = shiftText(); }
+  function renderShiftNote() {
+    const t = shiftText(), el = $('#shiftNote'); if (el) el.textContent = t;
+    const e2 = $('#shiftNote2'); if (e2) e2.textContent = !S.hemsOn ? 'HEMS 미적용 — 아래 차트는 HEMS 없는 값입니다.' : (t || '부하 이동 꺼짐') + ` · 계절별 절감률 동절기 ${S.hemsWinter}% · 하절기 ${S.hemsSummer}% · 간절기 ${S.hemsMid}%`;
+  }
   function renderBadges() {
     const k = R3.kpi, ze = k.zeroEnergy, zb = k.zeroBill, e1 = R3.years[0].energy, { c } = cur();
     const mm = v => money(v, true).join(' ');
@@ -429,14 +441,22 @@
     o.cool = aw ? c.aw_cool : c.cool_base;
     o.heat = aw ? c.aw_heat.map((v, h) => v + c.aw_backup[h]) : new Float64Array(E.H);
     o.dhw = aw ? c.aw_dhw : new Float64Array(E.H);
+    if (mode === 'after' && S.hemsOn && R3 && R3.hemsView) { // HEMS 반영: 부하 이동 후 세탁·급탕, 모든 용도에 계절별 절감률
+      const V = R3.hemsView, f = V.fH;
+      o.laundry = V.laundry; if (aw && V.dhw) o.dhw = V.dhw;
+      for (const k of Object.keys(o)) o[k] = Float64Array.from(o[k], (v, h) => v * f[h]);
+    }
     return o;
   }
+  const hemsLoadArr = () => (R3 ? R3.y1.hourLoad : L1.after.elec); // HEMS 반영 도입안 전력(HEMS 끄면 L1.after.elec와 같음)
   const PURPLE = ['#f0eefb', '#d9d3f6', '#b8adee', '#9686e4', '#7462da', '#5a46c0', '#43348f', '#2d2360'];
   const GREEN = ['#e8f6f0', '#c4ead9', '#93d8bb', '#5fc59b', '#2fb07d', '#1a8d62', '#136b4a', '#0c4a33'];
+  const DIVR = ['#1f4e9c', '#5b86c9', '#a9c3ea', '#f3f4f6', '#f2b8a8', '#de7458', '#b13a22'];
   const ORANGE = ['#fdeee6', '#fbd3bf', '#f6ae8c', '#f08a5d', '#eb6834', '#c94f20', '#9e3b14', '#6e290d'];
   const HEAT_DESC = {
     before: '기준안 = 지금 상태(가스보일러 난방·급탕, PV·ESS 없음)의 시간별 전력 소비. 가전·조명·냉방만 전기를 씁니다.',
-    after: '도입안 = 1단계에서 고른 난방 방식의 시간별 전력 소비. AWHP 도입이면 AWHP 난방·급탕 전력이 더해집니다. PV 발전·HEMS 절감을 빼기 전 값.',
+    after: '도입안 = 1단계에서 고른 난방 방식의 시간별 전력 소비. AWHP 도입이면 AWHP 난방·급탕 전력이 더해집니다. HEMS를 켜면 부하 이동·계절별 절감 후 값(PV 발전은 빼기 전).',
+    hemsd: 'HEMS 적용 후 − 적용 전 도입안 전력(kWh). 파랑 = 줄어든 시간, 빨강 = 늘어난 시간(부하 이동으로 옮겨 온 시간). 계절별 절감률만 있으면 전부 옅은 파랑, HEMS를 끄면 모두 0.',
     heat: '난방이 켜진 시간만 색칠(회색 = 꺼짐). 색이 진할수록 그 시간 난방에 쓴 에너지가 큼.',
     gas: '기준안(가스보일러)의 시간별 가스 소비(연료 열량 kWh). 난방 + 급탕.',
     pv: '현재 PV 용량 기준 1년 차 시간별 발전량.',
@@ -446,7 +466,8 @@
   function heatSeries(mode) {
     const c = combo.ch;
     switch (mode) {
-      case 'after': return { a: L1.after.elec, unit: 'kWh', name: `도입안 전력 소비 (${L1.awhp ? 'AWHP 난방' : '가스보일러 유지'})` };
+      case 'after': return { a: hemsLoadArr(), unit: 'kWh', name: `도입안 전력 소비 (${L1.awhp ? 'AWHP 난방' : '가스보일러 유지'}${S.hemsOn ? ', HEMS 적용' : ''})` };
+      case 'hemsd': { const b = hemsLoadArr(), a = new Float64Array(E.H); for (let h = 0; h < E.H; h++) a[h] = b[h] - L1.after.elec[h]; return { a, unit: 'kWh', name: 'HEMS 변화 (적용 후 − 적용 전)', ramp: DIVR, div: true }; }
       case 'before': return { a: L1.before.elec, unit: 'kWh', name: '기준안 전력 소비 (가스보일러)' };
       case 'heat': {
         if (L1.awhp) return { a: c.aw_heat.map((v, h) => v + c.aw_backup[h]), unit: 'kWh', name: '난방 가동 · AWHP 난방 전력 (보조히터 포함)', ramp: ORANGE, offZero: true };
@@ -465,14 +486,16 @@
     if (!combo) return;
     const rec = combo.rec, sm = rec.summary;
     $('#dctx').innerHTML = `현재 1단계 조건: <span class="chip">${S.house}</span><span class="chip">${S.occ}인</span><span class="chip">이용률 ${Math.round(S.rate * 100)}%</span><span class="chip">${META.label}</span><span class="chip">${L1.awhp ? 'AWHP 도입' : '가스보일러 유지'}</span><span class="hint" style="margin-left:auto">기상: ${META.weather_src} · 1단계를 바꾸려면 시뮬레이터 탭에서 확인</span>`;
-    const ue = E.sum(L1.after.elec), ub = E.sum(L1.before.elec), g = E.sum(L1.before.gas);
-    let pk = 0, pkH = 0; L1.after.elec.forEach((v, h) => { if (v > pk) { pk = v; pkH = h; } });
-    $('#dkpis').innerHTML = kpiHTML('전력 사용 (설치 후)', f0(ue), 'kWh', 'HEMS 절감 전') + kpiHTML('전력 사용 (설치 전)', f0(ub), 'kWh', '기준안: 가스보일러') +
+    const LA = hemsLoadArr(), ue = E.sum(LA), ue0 = E.sum(L1.after.elec), ub = E.sum(L1.before.elec), g = E.sum(L1.before.gas);
+    let pk = 0, pkH = 0; LA.forEach((v, h) => { if (v > pk) { pk = v; pkH = h; } });
+    $('#euSub').textContent = `kWh. 기준안 = 가스보일러(현재), 도입안 = 1단계에서 고른 난방${S.hemsOn ? ' + HEMS(부하 이동·계절별 절감) 적용' : ', HEMS 미적용'}. 냉장고·환기·대기에는 AWHP 대기전력 포함.`;
+    renderShiftNote();
+    $('#dkpis').innerHTML = kpiHTML('전력 사용 (설치 후)', f0(ue), 'kWh', S.hemsOn ? `HEMS 적용 · 적용 전 ${f0(ue0)}` : 'HEMS 미적용') + kpiHTML('전력 사용 (설치 전)', f0(ub), 'kWh', '기준안: 가스보일러') +
       kpiHTML('가스 (설치 전)', f0(g * KWH_PER_KG), 'kWh', `난방 ${f0(sm.gas_heat_kg * KWH_PER_KG)} · 급탕 ${f0(sm.gas_dhw_kg * KWH_PER_KG)} kWh (연료 열량)`) + kpiHTML('최대 시간 부하', pk.toFixed(1), 'kWh/h', dateLabel(Math.floor(pkH / 24)) + ` ${pkH % 24}시`) +
       kpiHTML('재실일', rec.occupied_days, '일', `이용률 ${Math.round(S.rate * 100)}%`) + kpiHTML('PV 1kW 연간 발전', f0(E.sum(META.pv1kw_kwh)), 'kWh/kW', '경사 25°, 정남향');
     // 히트맵 보기 전환
     const hv = $('#heatView');
-    if (!hv._built) { seg(hv, [['before', '기준안 전력'], ['after', '도입안 전력'], ['heat', '난방 가동'], ['gas', '가스'], ['pv', 'PV 발전'], ['imp', '계통 수전'], ['sur', '남는 PV'], ['tin', '실내 온도'], ['tout', '외기 온도'], ['occ', '재택 인원']], () => heatMode, v => { heatMode = v; }); hv.addEventListener('click', () => drawHeat()); hv._built = 1; }
+    if (!hv._built) { seg(hv, [['before', '기준안 전력'], ['after', '도입안 전력'], ['hemsd', 'HEMS 변화'], ['heat', '난방 가동'], ['gas', '가스'], ['pv', 'PV 발전'], ['imp', '계통 수전'], ['sur', '남는 PV'], ['tin', '실내 온도'], ['tout', '외기 온도'], ['occ', '재택 인원']], () => heatMode, v => { heatMode = v; }); hv.addEventListener('click', () => drawHeat()); hv._built = 1; }
     const ev = $('#euView');
     if (!ev._built) { seg(ev, [['after', '도입안'], ['before', '기준안']], () => euMode, v => { euMode = v; }); ev.addEventListener('click', () => drawEU()); ev._built = 1; }
     drawHeat(); drawEU();
@@ -484,11 +507,12 @@
   }
   function dateLabel(d) { const dt = new Date(2026, 0, 1 + d); return `${dt.getMonth() + 1}월 ${dt.getDate()}일(${'일월화수목금토'[dt.getDay()]})`; }
   function drawHeat() {
-    const { a, unit, name, temp, ramp, offZero } = heatSeries(heatMode), box = $('#heat'), RAMP = ramp || SEQ;
+    const { a, unit, name, temp, ramp, offZero, div } = heatSeries(heatMode), box = $('#heat'), RAMP = ramp || SEQ;
     $('#heatTitle').textContent = '연간 시간별 히트맵 · ' + name;
     $('#heatDesc').textContent = HEAT_DESC[heatMode];
     let mn = Infinity, mx = -Infinity; for (const v of a) { mn = Math.min(mn, v); mx = Math.max(mx, v); }
-    if (!temp) { mn = 0; const s = Array.from(a).filter(v => !offZero || v > 1e-4).sort((p, q) => p - q); mx = Math.max(s[Math.floor(s.length * 0.995)] || 0, 1e-6); }
+    if (div) { const s = Array.from(a, v => Math.abs(v)).sort((p, q) => p - q); const M = Math.max(s[Math.floor(s.length * 0.995)] || 0, 0.05); mn = -M; mx = M; }
+    else if (!temp) { mn = 0; const s = Array.from(a).filter(v => !offZero || v > 1e-4).sort((p, q) => p - q); mx = Math.max(s[Math.floor(s.length * 0.995)] || 0, 1e-6); }
     const cw = 3, ch = 9, L = 34, W = L + 365 * cw + 70, Hh = 24 * ch + 22;
     box.innerHTML = `<canvas width="${W * 2}" height="${Hh * 2}" style="aspect-ratio:${W}/${Hh}"></canvas>`;
     const cv = box.querySelector('canvas'), g = cv.getContext('2d'); g.scale(2, 2);
@@ -499,7 +523,7 @@
     g.textAlign = 'left'; let d0 = 0; MON.forEach((m, i) => { g.fillText(m, L + d0 * cw + 2, 24 * ch + 14); d0 += E.MDAYS[i]; });
     g.strokeStyle = COL.ink; g.lineWidth = 1.2; g.strokeRect(L + selDay * cw - 0.5, -0.5 + 0.5, cw + 1, 24 * ch);
     for (let i = 0; i < 40; i++) { g.fillStyle = col(Math.max(offZero ? 1e-3 : -1e9, mn + (mx - mn) * (39 - i) / 39)); g.fillRect(L + 365 * cw + 14, i * (24 * ch / 40), 10, 24 * ch / 40 + 0.5); }
-    g.fillStyle = COL.txt; g.fillText((temp ? mx.toFixed(0) : mx.toFixed(1)) + ' ' + unit, L + 365 * cw + 28, 8); g.fillText((temp ? mn.toFixed(0) : '0') + ' ' + unit, L + 365 * cw + 28, 24 * ch);
+    g.fillStyle = COL.txt; g.fillText((temp ? mx.toFixed(0) : div ? '+' + mx.toFixed(2) : mx.toFixed(1)) + ' ' + unit, L + 365 * cw + 28, 8); g.fillText((temp ? mn.toFixed(0) : div ? mn.toFixed(2) : '0') + ' ' + unit, L + 365 * cw + 28, 24 * ch);
     const pos = e => { const r = cv.getBoundingClientRect(), sx = (e.clientX - r.left) / r.width * W, sy = (e.clientY - r.top) / r.height * Hh; const d = Math.floor((sx - L) / cw), h = Math.floor(sy / ch); return (d >= 0 && d < 365 && h >= 0 && h < 24) ? [d, h] : null; };
     cv.onmousemove = e => { const p = pos(e); if (!p) return hideTip(); const i = p[0] * 24 + p[1], v = +a[i]; const extra = heatMode === 'heat' ? (v > 1e-4 ? `<br>설정 ${combo.ch.t_set[i].toFixed(1)}°C · 실내 ${(L1.awhp ? combo.ch.t_in_aw : combo.ch.t_in_base)[i].toFixed(1)}°C · 외기 ${META.temp_out[i].toFixed(1)}°C` : '<br>난방 꺼짐') : ''; showTip(e, `<b>${dateLabel(p[0])} ${p[1]}시</b><br>${name}: ${v.toFixed(2)} ${unit}${extra}<br>${combo.occDays[p[0]] ? '재실일' : '비재실일'}`); };
     cv.onmouseleave = hideTip; cv.onclick = e => { const p = pos(e); if (p) { selDay = p[0]; drawHeat(); drawDay(); drawOcc(); } };

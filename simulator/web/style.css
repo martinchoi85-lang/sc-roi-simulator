@@ -21,6 +21,12 @@ nav a.on{color:var(--red);border-bottom-color:var(--red);font-weight:700}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:15px 16px;margin-bottom:14px}
 .simgrid{display:grid;grid-template-columns:392px minmax(0,1fr);gap:16px;padding:16px 22px}
 .inputs .card{padding:14px 15px}
+.inputs{position:sticky;top:72px;align-self:start;max-height:calc(100vh - 72px);overflow-y:auto;overscroll-behavior:contain;padding-right:4px;scrollbar-width:thin}
+.hemsd .hemsdrow{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;font-size:12.5px;margin:8px 0 4px}
+.hemsd .hemsdrow label{display:flex;gap:6px;align-items:center}
+.hemsd input[type=text]{width:44px;border:1px solid var(--line);border-radius:4px;padding:2px 4px;text-align:right;font-weight:600}
+.hemsd select{border:1px solid var(--line);border-radius:5px;padding:3px 4px;font-size:12px;max-width:300px}
+.hemsd .hint{font-size:11.5px;color:var(--sub)}
 .lvh{display:flex;align-items:center;gap:9px;margin-bottom:10px}
 .num{width:24px;height:24px;border-radius:50%;background:var(--red);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:12px;flex:none}
 .lvh h3{font-size:14px}

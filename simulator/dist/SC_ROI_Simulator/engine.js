@@ -234,6 +234,7 @@
         }
       }
     }
+    res.lauS = lau; res.dhwS = dhw; // 이동 후 채널(12개월 모두 이동한 경우)
     return res;
   }
   function touOpt(P) { // ESS TOU 운전용 하루 최저·최고 단가
@@ -254,7 +255,7 @@
   function hemsLoad(L1, pv1, P) {
     const sh = hemsShift(L1, pv1, P), fH = hemsFactor(P);
     let load = new Float64Array(H); for (let h = 0; h < H; h++) load[h] = L1.after.elec[h] * fH[h];
-    if (!sh.on) return { load, sh };
+    if (!sh.on) return { load, sh, fH };
     const pvKw = P.pvN * P.pvModW / 1000, essKwh = P.essN * P.essModKwh, opt = touOpt(P);
     const pv = new Float64Array(H); for (let h = 0; h < H; h++) pv[h] = pv1[h] * pvKw;
     const ess = { cap: essKwh, pmax: essKwh * P.essCrate, rte: P.essRte };
@@ -266,7 +267,13 @@
       if (c < best - 1e-6) { load = trial; best = c; sh.months.push(m); sh.laundry += sh.lauM[m - 1]; sh.dhw += sh.dhwM[m - 1]; }
     }
     sh.cost1 = best;
-    return { load, sh };
+    if (sh.months.length) { // 적용된 달만 이동 후 채널로(1년 데이터 탭 표시용)
+      const lau = Float64Array.from(L1.shift.laundry), dhw = L1.shift.dhw ? Float64Array.from(L1.shift.dhw) : null, on = new Uint8Array(13);
+      sh.months.forEach(m => { on[m] = 1; });
+      for (let h = 0; h < H; h++) if (on[MONTH[h]]) { lau[h] = sh.lauS[h]; if (dhw) dhw[h] = sh.dhwS[h]; }
+      sh.lauF = lau; sh.dhwF = dhw;
+    }
+    return { load, sh, fH };
   }
 
   function simulate(L1, pv1, P) {
@@ -276,6 +283,7 @@
     const NOBILL = { bill: 0, exportIncome: 0, monthBill: new Float64Array(12), monthExpInc: new Float64Array(12), billedKwh: 0 };
     const N = P.years, out = { years: [] };
     const HL = hemsLoad(L1, pv1, P), loadA = HL.load;
+    out.hemsView = { fH: HL.fH, laundry: HL.sh.lauF || L1.shift.laundry, dhw: HL.sh.dhwF || L1.shift.dhw }; // HEMS 반영 채널(절감률 곱하기 전)
     const monGasB = sumMonthly(L1.before.gas), monGasA = sumMonthly(L1.after.gas);
     const pvKw = P.pvN * P.pvModW / 1000, essKwh = P.essN * P.essModKwh;
     const gasBeforeKg = sum(L1.before.gas), gasAfterKg = sum(L1.after.gas);
