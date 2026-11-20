@@ -55,6 +55,9 @@
       <div>하절기 6~8월<input type="text" data-k="hemsSummer" inputmode="decimal"><b>%</b></div>
       <div>간절기<input type="text" data-k="hemsMid" inputmode="decimal"><b>%</b></div>
       <label class="chk"><input type="checkbox" data-k="hemsInclude"> HEMS 비용을 CAPEX에 포함</label>
+      <div class="shiftrow"><label><input type="checkbox" data-k="hemsShift"> TOU 요금제일 때 부하 이동 (세탁·식세기, AWHP 급탕)</label>
+        <span>급탕 이동 상한<input type="text" data-k="hemsDhwCap" inputmode="decimal"><b>kWh/일</b></span></div>
+      <div class="shiftrow hint" id="shiftNote"></div>
     </div>
     <details class="adv" id="advCost">
       <summary>단가 · 보조금 (입력값, 원)</summary>
@@ -97,7 +100,7 @@
       <div id="chCum" class="chart"></div>
     </div>
     <div class="card">
-      <div class="ct">1년 차 월별 에너지 흐름</div>
+      <div class="ct row2"><span><span class="yrN">1</span>년 차 월별 에너지 흐름</span><label class="yrsel">표시 연도 <input type="range" min="1" max="20" step="1" value="1" data-yr></label></div>
       <div class="cs" id="monSub">설치 후 전력 사용량, PV 발전량, 계통 수전·역송 (kWh)</div>
       <div class="legend" id="legMon"></div>
       <div id="chMon" class="chart"></div>
@@ -105,8 +108,8 @@
   </div>
   <div class="grid2">
     <div class="card">
-      <div class="ct">1년 차 월별 에너지 비용 <span class="sub">(전기 + 가스)</span></div>
-      <div class="cs">설치 전(기준안)과 설치 후. 설치 후 매전 수익은 차감.</div>
+      <div class="ct row2"><span><span class="yrN">1</span>년 차 월별 에너지 비용 <span class="sub">(전기 + 가스)</span></span><label class="yrsel">표시 연도 <input type="range" min="1" max="20" step="1" value="1" data-yr></label></div>
+      <div class="cs" id="billSub">설치 전(기준안)과 설치 후. 설치 후 매전 수익은 차감.</div>
       <div class="legend" id="legBill"></div>
       <div id="chBill" class="chart"></div>
     </div>

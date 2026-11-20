@@ -89,6 +89,40 @@ def bill(imp, exp, P, T, K, st):
     elif P['exportMode'] == 'tou': inc = (exp * price).sum() * P['touExportRatio'] * fx
     return tot, inc
 
+# HEMS 부하 이동(TOU): 같은 날 안에서 세탁·식세기(7~22시, 시간당 2.0kWh 이하)와 AWHP 급탕(하루 상한, 압축기 3.91kW 이하)을
+# 계통 수전분이 있는 가장 비싼 시간에서 가장 싼 시간(PV 잉여가 있으면 매전 가치)으로 옮긴다.
+LCAP, COMP, LWIN = 2.0, 3.91, (7, 22)
+def hems_shift(eA, ch, awhp, pv, price, P):
+    base = eA.copy(); lau = ch['laundry'].copy(); dhw = ch['aw_dhw'].copy() if awhp else None; comp = ch['aw_heat'] if awhp else None
+    em = P['exportMode']
+    def ev(h): return price[h] if em == 'net' else P['fitPrice'] if em == 'fit' else price[h]*P['touExportRatio'] if em == 'tou' else 0.0
+    tot = [np.zeros(12), np.zeros(12)]
+    for d in range(365):
+        o = d*24
+        for kind, s in ((0, lau), (1, dhw)):
+            if s is None: continue
+            budget = math.inf if kind == 0 else max(0.0, P['hems'].get('dhwCap', 0))
+            if budget <= 1e-9: continue
+            done = [False]*24
+            for _ in range(500):
+                src = -1; ms = 0.0
+                for k in range(24):
+                    if done[k]: continue
+                    h = o+k; m = min(s[h], max(0.0, base[h]-pv[h]))
+                    if m > 1e-9 and (src < 0 or price[h] > price[o+src]+1e-12): src, ms = k, m
+                if src < 0: break
+                ps = price[o+src]; dst = -1; cd = 0.0; room = 0.0
+                for k in range(24):
+                    if k == src or (kind == 0 and not (LWIN[0] <= k <= LWIN[1])): continue
+                    h = o+k; cap = LCAP-s[h] if kind == 0 else COMP-comp[h]-s[h]
+                    if cap <= 1e-9: continue
+                    sur = pv[h]-base[h]; cc = ev(h) if sur > 1e-9 else price[h]; r = min(sur, cap) if sur > 1e-9 else cap
+                    if cc < ps-1e-9 and (dst < 0 or cc < cd-1e-12): dst, cd, room = k, cc, r
+                if dst < 0: done[src] = True; continue
+                q = min(ms, room, budget); s[o+src] -= q; s[o+dst] += q; base[o+src] -= q; base[o+dst] += q; budget -= q; tot[kind][MONTH[o]-1] += q
+                if budget <= 1e-9: break
+    return base, tot
+
 def run(region, c, D):
     meta, rec, ch = load(region, c['key'])
     P = {**D, **c}; T = D['tariffs'][c['tariff']]; C = D['cost']
@@ -100,10 +134,12 @@ def run(region, c, D):
     gA = np.zeros(8760) if c['awhp'] else gB
     hm=P['hems']; red=np.array([hm['mid'],hm['summer'],hm['winter']])/100 if hm['on'] else np.zeros(3)
     sea=season(MONTH) if P.get('hemi','N')=='N' else np.where(season(MONTH)==1,2,np.where(season(MONTH)==2,1,0))
-    load_=eA*(1-red[sea])
     pv1=np.array(meta['pv1kw_kwh']); kw=P['pvN']*P['pvModW']/1000; ek=P['essN']*P['essModKwh']
     price=None
     OFF=bool(P.get('offGrid'))
+    shiftTot=[0.0,0.0]; shiftOn = hm['on'] and hm.get('shift') and T['type']=='tou' and not OFF
+    if shiftOn: eS,shiftM = hems_shift(eA, ch, c['awhp'], pv1*kw, tou_arrays(T['tou'])[2], P)
+    load_=eA*(1-red[sea])
     if OFF: P['exportMode']='none'; P['essMode']='self'; P['gridCharge']=False
     if T['type']=='tou':
         tou=T['tou']
@@ -112,11 +148,12 @@ def run(region, c, D):
     sub = (C['subPV'] if kw>0 else 0)+(C['subESS'] if ek>0 else 0)+(C['subAWHP'] if c['awhp'] else 0)+(C['subHEMS'] if hm['on'] and C['hemsInclude'] else 0)
     inv = max(C['invMin'], C['invPerKw']*max(kw, ek*P['essCrate'] if ek>0 else 0)) if (kw>0 or ek>0) else 0
     bB,_ = bill(eB, np.zeros(8760), P, T, K, {'c':0})
-    def disp(pv, cap, soc):
+    def disp(pv, cap, soc, L=None):
+        LL = load_ if L is None else L
         pm=cap*P['essCrate']; e=math.sqrt(P['essRte']); imp=np.zeros(8760); exp=np.zeros(8760); soc=min(soc,cap)
         tm = price is not None and P['essMode']=='tou'
         for h in range(8760):
-            n=load_[h]-pv[h]
+            n=LL[h]-pv[h]
             if n<=0:
                 s_=-n
                 if cap>0: q=min(s_,pm,(cap-soc)/e); soc+=q*e; s_-=q
@@ -130,6 +167,17 @@ def run(region, c, D):
                     if q>0: soc+=q*e; imp[h]+=q
         return imp, exp, soc
     none = P['exportMode']=='none'
+    if shiftOn:   # 달마다 1년 차 정상 상태 비용(전기요금 − 매전)이 줄어드는 달에만 이동 적용
+        def ycost(L):
+            s0 = disp(pv1*kw, ek, 0, L)[2] if ek>0 else 0
+            i_,e_,_ = disp(pv1*kw, ek, s0, L)
+            if none: e_ = np.zeros(8760)
+            st_={'c':0}; bill(i_,e_,P,T,K,st_); b_,x_ = bill(i_,e_,P,T,K,st_); return b_-x_
+        alt = eS*(1-red[sea]); best = ycost(load_)
+        for m in range(1,13):
+            if shiftM[0][m-1]+shiftM[1][m-1] <= 1e-9: continue
+            tr = load_.copy(); tr[MONTH==m] = alt[MONTH==m]; cc = ycost(tr)
+            if cc < best-1e-6: load_=tr; best=cc; shiftTot[0]+=shiftM[0][m-1]; shiftTot[1]+=shiftM[1][m-1]
     st={'c':0}; ages=dict(pv=0,ess=0,inv=0,aw=0); res=[]; cumB=cumC=0
     soc = disp(pv1*kw, ek, 0)[2] if ek>0 else 0   # 정상 상태 시작 SOC
     fixed,_ = (0,0) if OFF else bill(np.zeros(8760), np.zeros(8760), P, T, K, {'c':0})
@@ -155,7 +203,7 @@ def run(region, c, D):
             s0={'c':0}
             if OFF: bS,iS=0,0
             else: bill(imp,exp,P,T,K,s0); bS,iS=bill(imp,exp,P,T,K,s0)   # 정상 상태(이월 반영) Zero Bill
-            res[0]['kpi']=dict(selfSuff=1-imp.sum()/use, pvOffset=pv.sum()/use, impDays=days, billVar=bA-fixed-inc, billVarSteady=bS-fixed-iS, unservedHours=int((imp>0.001).sum()))
+            res[0]['kpi']=dict(selfSuff=1-imp.sum()/use, pvOffset=pv.sum()/use, selfCons=(pv.sum()-exp.sum()-curt.sum())/pv.sum() if pv.sum()>0 else 0, shiftL=shiftTot[0], shiftD=shiftTot[1], impDays=days, billVar=bA-fixed-inc, billVarSteady=bS-fixed-iS, unservedHours=int((imp>0.001).sum()))
         for k in ages: ages[k]+=1
     return res
 
@@ -169,9 +217,9 @@ if __name__=='__main__':
             for k in ['capT','ben','net','imp','exp','pv','curt']:
                 d=abs(a[k]-b[k]); worst=max(worst,d)
                 if d>1.0: print('DIFF',c['key'],a['y'],k,a[k],b[k])
-        jk=jc['kpi']; pk=r[0]['kpi']
-        for k in ['selfSuff','pvOffset','impDays','billVar','billVarSteady','unservedHours']:
+        jk=dict(jc['kpi']); pk=r[0]['kpi']; jk['shiftL']=jk['hemsShift']['laundry']; jk['shiftD']=jk['hemsShift']['dhw']
+        for k in ['selfSuff','pvOffset','selfCons','shiftL','shiftD','impDays','billVar','billVarSteady','unservedHours']:
             d=abs(pk[k]-jk[k]); worst=max(worst,d)
             if d>1e-6*max(1,abs(pk[k])): print('KPI DIFF',c['key'],k,pk[k],jk[k])
-        print(c['key'],c.get('region','kr_central'),c['tariff'],c['exportMode'],'years',len(r),'누적순이익 py',round(r[-1]['net']),'js',round(j[-1]['net']),'자립률 %.3f'%pk['selfSuff'],'버림 %.0f'%r[0]['curt'],'변동요금 %.0f'%pk['billVar'],'정상상태 %.0f'%pk['billVarSteady'])
+        print(c['key'],c.get('region','kr_central'),c['tariff'],c['exportMode'],'years',len(r),'누적순이익 py',round(r[-1]['net']),'js',round(j[-1]['net']),'자립률 %.3f'%pk['selfSuff'],'버림 %.0f'%r[0]['curt'],'변동요금 %.0f'%pk['billVar'],'정상상태 %.0f'%pk['billVarSteady'],('부하이동 세탁 %.0f 급탕 %.0f'%(pk['shiftL'],pk['shiftD'])) if (pk['shiftL'] or pk['shiftD']) else '')
     print('최대 절대 차이',worst)

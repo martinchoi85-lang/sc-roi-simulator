@@ -30,7 +30,7 @@
   const unitLabel = () => { const { c } = cur(); return c === 'KRW' ? '만 원' : c; };
   function loadScript(src) { return new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => no(new Error('불러오기 실패: ' + src)); document.head.appendChild(s); }); }
   const snap1 = () => JSON.stringify([S.house, S.occ, S.rate, S.region, S.awhp]);
-  const snap2 = () => JSON.stringify([S.pvN, S.essN, S.pvDeg, S.essDeg, S.pvRepl, S.essRepl, S.awhpLife, S.invLife, S.hemsOn, S.hemsWinter, S.hemsSummer, S.hemsMid, S.hemsInclude, COST]);
+  const snap2 = () => JSON.stringify([S.pvN, S.essN, S.pvDeg, S.essDeg, S.pvRepl, S.essRepl, S.awhpLife, S.invLife, S.hemsOn, S.hemsWinter, S.hemsSummer, S.hemsMid, S.hemsInclude, S.hemsShift, S.hemsDhwCap, COST]);
   const KWH_PER_KG = 12.861; // 데이터의 가스 소비는 LPG kg 기준으로 저장(순발열량 46.3MJ/kg) → 연료 열량 kWh로 표시
   const GAS_UNITS = { kwh: ['원/kWh (열량)', 1], kg: ['원/kg (LPG)', 12.861], m3: ['원/m³ (도시가스, 약 10.8kWh/m³)', 10.8] };
   const gasPerKwh = () => S.gasPrice / GAS_UNITS[S.gasUnit][1];
@@ -88,6 +88,7 @@
     const gu = $('#gasUnit'); gu.innerHTML = Object.entries(GAS_UNITS).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join(''); gu.value = S.gasUnit;
     gu.onchange = () => { const perKwh = gasPerKwh(); S.gasUnit = gu.value; S.gasPrice = Math.round(perKwh * GAS_UNITS[S.gasUnit][1] * 100) / 100; $('[data-k=gasPrice]').value = S.gasPrice; changed(); };
     paintHems(); paintL3();
+    $$('[data-yr]').forEach(r => r.addEventListener('input', () => { S.chartYear = +r.value; renderMonthly(); }));
     ['#curSel', '#fxUSD', '#fxAUD'].forEach(s => $(s).addEventListener('change', () => { $('#fxUSD').value = num($('#fxUSD').value).toLocaleString('ko-KR'); $('#fxAUD').value = num($('#fxAUD').value).toLocaleString('ko-KR'); changed(); }));
   }
   const REF_LV = { V: ['공식 원문 확인', 'ok'], U: ['언론·업계 보도', 'u'], N: ['확인 안 됨', 'n'] };
@@ -183,7 +184,7 @@
     const P = {
       pvN: S.pvN, essN: S.essN, pvModW: D.fixed.pvModW, essModKwh: D.fixed.essModKwh, pvDeg: S.pvDeg, essDeg: S.essDeg, pvRepl: S.pvRepl, essRepl: S.essRepl,
       awhpLife: S.awhpLife, invLife: S.invLife, essRte: COST.essRte, essCrate: COST.essCrate,
-      hems: { on: S.hemsOn, winter: S.hemsWinter, summer: S.hemsSummer, mid: S.hemsMid }, hemi: reg.hemi,
+      hems: { on: S.hemsOn, winter: S.hemsWinter, summer: S.hemsSummer, mid: S.hemsMid, shift: S.hemsShift, dhwCap: S.hemsDhwCap }, hemi: reg.hemi,
       tariff: T, exportMode: S.exportMode, fitPrice: S.fitPrice, touExportRatio: S.touExportPct / 100, essMode: S.essMode, gridCharge: S.gridCharge,
       escE: S.escE, escG: S.escG, gasPrice: gasPerKwh() * KWH_PER_KG, omPct: S.omPct, years: S.years,
       cost: Object.assign({}, COST, { hemsInclude: S.hemsInclude }), offGrid: OFFG(),
@@ -271,7 +272,7 @@
     const [cv, cu] = money(k.capexNet, true), [bv, bu] = money(k.benefit1, true), [nv, nu] = money(k.cumNet, true);
     const e1 = R3.years[0].energy;
     $('#kpis').innerHTML =
-      kpiHTML(OFFG() ? '에너지 자립률 (오프그리드)' : '에너지 자립률 (실시간)', (k.selfSuff * 100).toFixed(0), '%', `1 − ${OFFG() ? '공급 부족' : '계통 수전'} ${f0(e1.imp)} ÷ 사용 ${f0(k.useAfter)} kWh<br>연간 발전 상쇄율 ${(k.pvOffset * 100).toFixed(0)}% (PV 발전 ÷ 사용)${e1.curt > 0.5 ? ` · 버림 제외 ${(k.pvOffsetUsed * 100).toFixed(0)}%` : ''}`) +
+      kpiHTML(OFFG() ? '에너지 자립률 (오프그리드)' : '에너지 자립률 (실시간)', (k.selfSuff * 100).toFixed(0), '%', `Self-sufficiency = 1 − ${OFFG() ? '공급 부족' : '계통 수전'} ${f0(e1.imp)} ÷ 사용 ${f0(k.useAfter)} kWh<br>연간 발전 상쇄율 ${(k.pvOffset * 100).toFixed(0)}% (PV 발전 ÷ 사용)${e1.curt > 0.5 ? ` · 버림 제외 ${(k.pvOffsetUsed * 100).toFixed(0)}%` : ''}${k.pvKw > 0 ? `<br>자가소비율 ${(k.selfCons * 100).toFixed(0)}% (Self-consumption: PV 중 집에서 쓴 몫)` : ''}`) +
       kpiHTML('초기 CAPEX (보조금 차감)', cv, cu, `설치 ${money(k.capexGross, true).join(' ')} · 보조금 ${money(k.subsidy, true).join(' ')}`) +
       kpiHTML('1년 차 연간 이득', bv, bu, `설치 전 ${money(R3.years[0].before.total, true).join(' ')} → 설치 후 ${money(R3.years[0].after.total, true).join(' ')}`) +
       kpiHTML(`${N}년 누적 순이익`, nv, nu, `교체 CAPEX ${money(R3.years.slice(1).reduce((a, y) => a + y.capT, 0), true).join(' ')} 포함`) +
@@ -280,25 +281,41 @@
     // 누적 차트
     legend('#legCum', [['연간 이득', COL.s1], ['CAPEX (설치·교체, 보조금 차감)', COL.s2], ['누적 순이익', COL.s7, true]]);
     cumChart();
-    // 월별 에너지
-    const y1 = R3.y1;
-    const monSer = [{ name: '전력 사용', color: COL.s1, values: Array.from(y1.monthUse) }, { name: 'PV 발전', color: COL.s4, values: Array.from(y1.monthPv) },
-      { name: OFFG() ? '공급 부족' : '계통 수전', color: COL.s7, values: Array.from(y1.monthImp) }];
-    if (S.exportMode === 'none' || OFFG()) monSer.push({ name: '버려진 PV', color: COL.s8, values: Array.from(y1.monthCurt) });
-    else monSer.push({ name: '역송', color: COL.s3, values: Array.from(y1.monthExp) });
+    renderMonthly();
+    renderCapex();
+    renderTable();
+    renderShiftNote();
+  }
+  // N년 차 월별 차트 (표시 연도 슬라이더: 열화·교체·요금 인상률·상계 이월이 반영된 그 해 값)
+  function renderMonthly() {
+    if (!R3) return;
+    const N = R3.years.length; S.chartYear = Math.max(1, Math.min(N, Math.round(S.chartYear || 1)));
+    const Y = R3.years[S.chartYear - 1], M = Y.mon, y1 = R3.y1;
+    $$('[data-yr]').forEach(r => { r.max = N; r.value = S.chartYear; });
+    $$('.yrN').forEach(e => { e.textContent = S.chartYear; });
+    const monSer = [{ name: '전력 사용', color: COL.s1, values: Array.from(y1.monthUse) }, { name: 'PV 발전', color: COL.s4, values: Array.from(M.pv) },
+      { name: OFFG() ? '공급 부족' : '계통 수전', color: COL.s7, values: Array.from(M.imp) }];
+    if (S.exportMode === 'none' || OFFG()) monSer.push({ name: '버려진 PV', color: COL.s8, values: Array.from(M.curt) });
+    else monSer.push({ name: '역송', color: COL.s3, values: Array.from(M.exp) });
     legend('#legMon', monSer.map(s => [s.name, s.color]));
     $('#monSub').textContent = OFFG() ? '설치 후 전력 사용량, PV 발전량, 공급 부족(정전), 버려진 PV (kWh) — 계통 미연결 가정' : S.exportMode === 'none' ? '설치 후 전력 사용량, PV 발전량, 계통 수전, 버려진 PV(매전 없음: ESS를 채우고 남은 발전) (kWh)' : '설치 후 전력 사용량, PV 발전량, 계통 수전·역송 (kWh)';
     groupedBars('#chMon', MON, monSer, { unit: 'kWh', h: 240 });
-    // 월별 비용
-    const gp = gasPerKwh() * KWH_PER_KG, { fx, c } = cur(), dv = c === 'KRW' ? 1e4 : fx;
-    const bB = y1.monthBillBefore.map((v, m) => (v + y1.monthGasBefore[m] * gp) / dv);
-    const expInc = R3.years[0].after.exportIncome, expM = Array.from(y1.monthExp), expT = expM.reduce((a, b) => a + b, 0) || 1;
-    const bA = y1.monthBillAfter.map((v, m) => (v + y1.monthGasAfter[m] * gp - expInc * expM[m] / expT) / dv);
+    // 월별 비용 (그 해 인상률 반영, 매전 수익은 그달 역송분, 유지보수비 제외)
+    const { fx, c } = cur(), dv = c === 'KRW' ? 1e4 : fx;
+    const bB = Array.from(M.billB, (v, m) => (v + M.gasB[m]) / dv);
+    const bA = Array.from(M.billA, (v, m) => (v + M.gasA[m] - M.expInc[m]) / dv);
+    $('#billSub').innerHTML = '설치 전(기준안)과 설치 후. 설치 후 매전 수익은 차감, 유지보수비 제외.' + (S.chartYear > 1 ? ` ${S.chartYear}년 차 = 전기 ${S.escE}%/년·가스 ${S.escG}%/년 인상, PV·ESS 열화${S.exportMode === 'net' ? ', 상계 이월 누적' : ''} 반영.` : '') + (Y.ev.length ? ` <b>이 해 교체: ${Y.ev.join('·')}</b>` : '');
     legend('#legBill', [['설치 전 (전기+가스)', COL.s8], ['설치 후 (전기+가스−매전)', COL.s3]]);
     groupedBars('#chBill', MON, [{ name: '설치 전', color: COL.s8, values: bB }, { name: '설치 후', color: COL.s3, values: bA.map(v => Math.max(0, v)) }], { unit: unitLabel(), vfmt: v => c === 'KRW' ? f1(v) : f0(v), fmt: v => c === 'KRW' ? f0(v) : f0(v), h: 220 });
-    renderCapex();
-    renderTable();
   }
+  function shiftText() {
+    const hs = R3 && R3.kpi.hemsShift; if (!S.hemsOn || !S.hemsShift || !hs) return '';
+    if (OFFG()) return '부하 이동: 계통 미연결 가정에서는 적용하지 않음.';
+    if (TARIFF[S.tariff].type !== 'tou') return '부하 이동: 현재 요금제는 시간대별 단가가 없어 적용하지 않음(TOU 요금제를 고르면 동작).';
+    if (!hs.months.length) return hs.cand > 0.5 ? '부하 이동: 옮겨도 연간 전기 비용이 줄지 않아 적용하지 않음(월 상계 크레딧이 남는 달 등).' : '부하 이동: 옮길 부하 없음.';
+    return `부하 이동(1년 차): 세탁·식세기 ${f0(hs.laundry)} kWh, 급탕 ${f0(hs.dhw)} kWh를 더 싼 시간으로 옮김 · 적용 달 ${hs.months.length === 12 ? '전체' : hs.months.join('·') + '월'} · 1년 차 정상 상태 전기 비용 ${money(hs.cost0 - hs.cost1, true).join(' ')} 절감`;
+  }
+  function renderShiftNote() { const el = $('#shiftNote'); if (el) el.textContent = shiftText(); }
   function renderBadges() {
     const k = R3.kpi, ze = k.zeroEnergy, zb = k.zeroBill, e1 = R3.years[0].energy, { c } = cur();
     const mm = v => money(v, true).join(' ');
@@ -397,6 +414,7 @@
     $('#tblNote').innerHTML = `설치 전 = 가스보일러 + 계통 전력, PV·ESS·AWHP·HEMS 없음. 설치 후 = ${aw ? 'AWHP(난방·급탕)' : '가스보일러 유지'}${R3.kpi.pvKw ? ` + PV ${R3.kpi.pvKw.toFixed(1)}kW` : ''}${R3.kpi.essKwh ? ` + ESS ${R3.kpi.essKwh}kWh` : ''}${S.hemsOn ? ' + HEMS' : ''}.
       ${OFFG() ? `<b>계통 미연결 가정</b>: 설치 후 전기요금 0, 공급 부족 1년 차 ${f0(R3.kpi.offGridSupply.unservedKwh)}kWh(정전 ${R3.kpi.offGridSupply.hours}시간) — 공급 부족이 0이 아니면 비용 비교는 참고용. 설치 전(기준안)은 계통 요금 그대로.` : ''}
       요금제 ${T.label}, 매전 ${{ net: '월 상계(잉여 kWh 무기한 이월)', fit: `FIT ${S.fitPrice} ${CUR_LABEL[T.currency || 'KRW']}/kWh 고정`, tou: `TOU 수전 단가의 ${S.touExportPct}%`, none: '없음(ESS를 채우고 남은 PV는 버림, 상계·매전 수익 0)' }[S.exportMode]}.
+      ${shiftText() ? shiftText() + '.' : ''}
       ${R3.years[0].energy.curt > 0.5 ? `버려진 PV: 1년 차 ${f0(R3.years[0].energy.curt)}kWh(발전량의 ${(R3.kpi.curtRatio * 100).toFixed(0)}%) — 요금·이득에 반영되지 않음.` : ''}
       전기요금 ${S.escE}%/년·가스 ${S.escG}%/년 인상, 할인율 없음. 회수 연도는 테두리, 교체가 있는 해는 노란 칸. 매년 같은 기상(TMY)·같은 생활 패턴이 반복된다고 가정.`;
   }
@@ -566,17 +584,17 @@
 <li>v10 회귀 확인: v10과 겹치는 28조합 모두 기준안 전력·가스·AWHP 전력이 0.1% 이내로 일치(예: Core 72 3인 100% = 4,205kWh · 가스 552.9kg · 6,599kWh). 이후 아래의 v2 열모델(창 일사·차양·환기) 보정을 적용. 3인 Core 54/DUO Max 45와 이용률 10%는 이번에 새로 계산한 조합입니다.</li>
 <li><b>실내 온도 모델 (v2 보정)</b>: v10은 창 18m²가 수평면 일사를 그대로 받고 창문을 열지 않아 5월 실내가 50°C에 이르렀습니다. 시뮬레이터는 ① 벽면(수직) 창 일사(방향 비율 남 50·동 20·서 20·북 10%, 가정), ② 실내 24°C 초과 시 실내 블라인드(일사 취득 × 0.6), ③ 사람이 집에 있고 실내 23°C 초과·외기가 1°C 이상 낮으면 창문 환기(+2회/h)를 넣었습니다. 이 값은 패시브하우스연구소(PHI) 과열 기준(25°C 초과 시간 ≤ 10%, 권장 &lt; 5%)을 비냉방기(10~5월) 재택 시간에 맞추도록 정했습니다: 춘천 4.5%, 광주 6.6%, 5월 실내 최고 27.7°C(춘천)·28.2°C(광주). 냉방은 v10과 같이 6~9월 재실 시 26/27°C.</li>
 <li><b>2단계 (설비)</b>: PV는 지역별 1kW당 시간 발전량 × 모듈 수 × (1 − 연간 열화 × 경과 연수). ESS는 가용 용량 = 모듈 × 5kWh × SOH, 충방전 효율 √0.9씩, C-rate 0.5의 단순 규칙 운전(자가소비 우선: PV 잉여만 충전, 부족할 때 방전). 최적화 운전(LP)은 하지 않습니다.</li>
-<li><b>에너지 자립률(실시간)</b> = 1 − 계통 수전량 ÷ 연간 전력 사용량(1년 차, 선택한 ESS 운전 기준). 밤에는 PV가 없으므로 PV만으로는 100%가 될 수 없고, ESS가 낮의 잉여를 밤으로 옮겨야 올라갑니다. <b>연간 발전 상쇄율</b> = PV 발전량 ÷ 연간 전력 사용량(낮의 잉여를 연간으로 상쇄한 비율, 100%를 넘을 수 있음 — 월 상계에서는 이 값이 높으면 요금이 0에 가까워짐). 가스 사용분은 둘 다 포함하지 않습니다.</li>
+<li><b>에너지 자립률(실시간, Self-sufficiency)</b> = 1 − 계통 수전량 ÷ 연간 전력 사용량(1년 차, 선택한 ESS 운전 기준, TOU 계통 충전분 포함). 매시간 집에서 쓴 전기 중 PV(직접 + ESS 경유)로 채운 비율입니다. 밤에는 PV가 없으므로 PV만으로는 100%가 될 수 없고, ESS가 낮의 잉여를 밤으로 옮겨야 올라갑니다. <b>자가소비율(Self-consumption)</b> = 집에서 쓴 PV ÷ PV 발전량(나머지는 역송 또는 버림). <b>연간 발전 상쇄율</b> = PV 발전량 ÷ 연간 전력 사용량(시간을 따지지 않고 연간 총량으로 상쇄한 비율, 100%를 넘을 수 있음). 월 상계에서는 낮에 보낸 역송 kWh가 밤·겨울 수전 kWh를 지워 주므로, <b>Zero Bill은 연간 발전 상쇄율이 대략 100% 이상이면 달성되고 실시간 자립률과는 별개</b>입니다(예: ESS 없이 PV만 있으면 Zero Bill이어도 자립률 20~30%대가 정상). 가스 사용분은 모두 포함하지 않습니다.</li>
 <li><b>Zero Energy</b>: 1년 차 계통 수전 0kWh. 미달이면 남은 수전량과 수전이 있었던 날 수를 표시. <b>최소 ESS 계산</b>은 현재 PV·HEMS 그대로 ESS를 0~40개(5kWh 단위) 늘려 가며 1년 차 수전이 0이 되는 최소 개수를 찾습니다(자가소비 우선 운전, 계통 충전 없음). 겨울 흐린 날이 이어지면 PV 발전 자체가 부족해 ESS를 늘려도 달성할 수 없습니다.</li>
 <li><b>Zero Bill</b>: 기본값은 <b>정상 상태</b> 판정 — 1년 차와 같은 수전·역송으로 한 해를 미리 돌려 생긴 상계 이월(월 상계)을 안고 계산합니다(ESS 시작 충전량과 같은 방식). '설치 첫해' 버튼을 누르면 이월 0에서 시작하는 실제 첫해 기준으로 봅니다. 20년 현금흐름은 항상 설치 첫해(이월 0)부터 순서대로 계산합니다. 판정식: 전기요금에서 기본요금(사용량이 0일 때 나오는 요금: 기본요금·최소요금·일 기본료와 그 세금)을 빼고 매전 수익을 차감한 값이 0 이하. 기본요금은 남습니다.</li>
 <li><b>계통 미연결(오프그리드) 가정</b>: 3단계 '계통 연결 → 미연결'을 고르면 계통 수전을 '공급 부족(정전)'으로 셉니다. 전기요금·매전 수익은 0, 남는 PV는 버리고, ESS는 자가소비 우선(계통 충전 없음)입니다. '오프그리드 공급' 배지는 1년 동안 공급 부족이 0인지(v10 보고서의 Zero Energy·LOL=0 기준) 판정하고, 최소 ESS 계산으로 정전 0에 필요한 ESS 모듈 수를 찾습니다. 계산량은 계통 연결 때와 같습니다.</li>
 <li><b>ESS 시작 상태</b>: 1년 차 조건으로 한 해를 미리 돌린 연말 충전량에서 시작합니다(1월 1일 0시에 빈 배터리로 시작해 생기는 왜곡 방지).</li>
-<li><b>HEMS</b>: 실제 제어는 구현하지 않고, 설치 후 전체 전력 사용량에 계절별 절감률을 곱해 줄입니다(가스는 미적용). 동절기 12~2월, 하절기 6~8월, 나머지 간절기(남반구는 반대).</li>
+<li><b>HEMS</b>: ① <b>부하 이동</b>(TOU 요금제일 때, 선택): 같은 날 안에서 세탁·식세기(7~22시 시작, 시간당 2.0kWh 이하)와 AWHP 급탕 재가열(하루 이동 상한 기본 1.5kWh — 200L 탱크 재가열 폭 약 3kWh열 ÷ 급탕 COP 약 2, 가정; 압축기 3.91kW 이하)을, 계통에서 받는 몫이 있는 가장 비싼 시간에서 가장 싼 시간으로 옮깁니다. PV 잉여가 있는 시간은 매전 가치(월 상계 = 그 시간 단가, FIT = FIT 단가, 매전 없음 = 0)를 그 시간의 비용으로 봅니다. 이동 일정은 1년 차 PV로 한 번 정해 매년 같게 쓰며, 달마다 1년 차 정상 상태 전기 비용이 줄어드는 달에만 적용합니다(월 상계 크레딧이 남는 달은 옮겨도 이득이 없거나 손해). 난방 예열·냉방 프리쿨링 같은 건물 열 저장 이동, 날짜를 넘는 이동, 이동에 따른 탱크 손실 변화는 넣지 않았습니다(가정). ② <b>계절별 절감률</b>: 이동 후 전체 전력 사용량에 계절별 절감률을 곱해 줄입니다(가스는 미적용). 동절기 12~2월, 하절기 6~8월, 나머지 간절기(남반구는 반대).</li>
 <li><b>교체</b>: PV·ESS는 "1 − 열화율 × 경과 연수"가 교체 기준 이하가 되는 해 초에 교체(교체 후 새 제품). AWHP·인버터는 선택한 수명이 지난 해 초에 교체("고장 없음"이면 교체 안 함). PV 교체 시 인버터도 새로 봅니다.</li>
 <li><b>3단계 (요금)</b>: 한전 주택용 저압 누진제는 v10 요금 계산기를 그대로 옮겼습니다(51,900개 경우 원 단위 일치, 300kWh = 57,760원). 월 상계는 잉여 kWh가 다음 달로 무기한 이월되며, 20년을 순서대로 계산합니다(1년 차는 이월 0에서 시작). 요금 인상률은 매년 청구액 전체에 곱합니다. FIT 단가는 고정, TOU 매전 단가는 전기요금 인상률을 따릅니다. <b>매전 없음</b>은 역송이 허용되지 않는 경우: ESS를 채우고 남은 PV는 버리고(상계 크레딧·매전 수익 0), 버린 양을 월별 차트·KPI에 표시합니다.</li>
 <li><b>연간 이득</b> = 설치 전 총비용(전기 + 가스) − 설치 후 총비용(전기 − 매전 수익 + 가스 + 유지보수비). <b>누적 순이익</b> = 누적 이득 − 누적 CAPEX(보조금 차감, 교체 포함). 할인율은 적용하지 않습니다.</li>
 <li>매년 같은 기상(TMY)과 같은 생활 패턴이 반복된다고 봅니다. 15분 계산 결과를 1시간 단위로 합쳐 씁니다.</li>
-<li>계산 검증: 2·3단계 계산(JS)은 별도로 작성한 Python 기준 구현과 13개 시나리오(한국 5, LA 4, 멜버른 4 — 매전 없음·4구간 TOU·하루 한도 포함) × 최대 20년에서 0.000001원 이내로 일치합니다.</li>
+<li>계산 검증: 2·3단계 계산(JS)은 별도로 작성한 Python 기준 구현과 21개 시나리오(한국·LA·멜버른 — 매전 없음·4구간 TOU·하루 한도·오프그리드·HEMS 부하 이동 5개 포함) × 최대 20년에서 0.000001원 이내로 일치합니다.</li>
 </ul>
 <h2>현재 지역의 데이터</h2>
 <table><tr><th>항목</th><th>내용</th></tr>

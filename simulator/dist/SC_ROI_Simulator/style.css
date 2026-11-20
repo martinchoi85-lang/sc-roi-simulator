@@ -58,6 +58,12 @@ nav a.on{color:var(--red);border-bottom-color:var(--red);font-weight:700}
 .hems input{width:44px;border:1px solid var(--line);border-radius:4px;padding:2px 4px;text-align:right;margin-top:3px;font-weight:600;color:var(--ink)}
 .hems b{font-weight:500;margin-left:3px}
 .hems.off{opacity:.45;pointer-events:none}
+.hems .shiftrow{grid-column:1/-1;background:none;padding:0 2px;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:12px}
+.hems .shiftrow label{display:flex;gap:6px;align-items:center}
+.hems .shiftrow input[type=text]{margin:0 0 0 6px}
+.hems .shiftrow.hint{font-size:11px;color:var(--sub)}
+.yrsel{font-size:11px;font-weight:400;color:var(--sub);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.yrsel input{width:120px}
 .chk{grid-column:1/-1;font-size:12px;color:var(--sub);display:flex;gap:6px;align-items:center}
 .inl{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--sub);flex-wrap:wrap}
 .inl input{width:70px;border:1px solid var(--line);border-radius:5px;padding:3px 6px;text-align:right;color:var(--ink);font-weight:600}

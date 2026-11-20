@@ -51,7 +51,8 @@
     }
     if (awhp) { enduse.heat = c.aw_heat.map((v, h) => v + c.aw_backup[h]); enduse.dhw = c.aw_dhw; enduse.cool = c.aw_cool; enduse.standby_aw = c.aw_standby; }
     else { enduse.cool = c.cool_base; }
-    return { before, after, enduse, awhp };
+    const shift = { laundry: c.laundry, dhw: awhp ? c.aw_dhw : null, comp: awhp ? c.aw_heat : null }; // HEMS 부하 이동 대상
+    return { before, after, enduse, awhp, shift };
   }
 
   // ---------- 요금 ----------
@@ -127,7 +128,7 @@
     state[key] = cred - imp; return 0;
   }
   function annualElecBill(imp, exp, P, state) {
-    const res = { bill: 0, exportIncome: 0, monthBill: new Float64Array(12), billedKwh: 0 };
+    const res = { bill: 0, exportIncome: 0, monthBill: new Float64Array(12), monthExpInc: new Float64Array(12), billedKwh: 0 };
     const T = P.tariff, fx = P.fx || 1, net = P.exportMode === 'net';
     const mi = sumMonthly(imp), me = sumMonthly(exp);
     if (T.type === 'kr_prog') {
@@ -178,8 +179,8 @@
         res.monthBill[m] = b; res.bill += b; res.billedKwh += kwh;
       }
     }
-    if (P.exportMode === 'fit') res.exportIncome = sum(exp) * P.fitPrice * fx;
-    else if (P.exportMode === 'tou' && P.touArr) { const pr = P.touArr.price; for (let h = 0; h < H; h++) res.exportIncome += exp[h] * pr[h] * P.touExportRatio * fx; }
+    if (P.exportMode === 'fit') { res.exportIncome = sum(exp) * P.fitPrice * fx; const me2 = sumMonthly(exp); for (let m = 0; m < 12; m++) res.monthExpInc[m] = me2[m] * P.fitPrice * fx; }
+    else if (P.exportMode === 'tou' && P.touArr) { const pr = P.touArr.price; for (let h = 0; h < H; h++) { const v = exp[h] * pr[h] * P.touExportRatio * fx; res.exportIncome += v; res.monthExpInc[MONTH[h] - 1] += v; } }
     return res;
   }
 
@@ -190,24 +191,96 @@
     return f;
   }
 
+  // ---------- HEMS 부하 이동 (TOU 요금제일 때) ----------
+  // 같은 날 안에서 옮길 수 있는 부하(세탁·식세기, AWHP 급탕 재가열)를 더 싼 시간으로 옮긴다(1년 차 PV 기준으로 한 번 정하고 매년 같은 일정 사용).
+  // 옮길 수 있는 양 = 그 시간 부하 중 PV로 못 채우고 계통에서 받는 몫. 받는 시간의 비용 = PV 잉여가 있으면 매전 가치(월 상계는 그 시간 단가), 없으면 수전 단가.
+  // 가장 비싼 시간부터, 가장 싼 시간으로(같으면 이른 시간). 세탁·식세기는 7~22시 시작(23시 전 종료)·시간당 2.0kWh 이하, 급탕은 하루 이동 상한·AWHP 압축기 3.91kW 이하.
+  const SHIFT_LCAP = 2.0, SHIFT_COMP = 3.91, SHIFT_LWIN = [7, 22];
+  function hemsShift(L1, pv1, P) {
+    const base = Float64Array.from(L1.after.elec), res = { load: base, on: false, laundry: 0, dhw: 0, lauM: new Float64Array(12), dhwM: new Float64Array(12), months: [] };
+    if (!P.hems || !P.hems.on || !P.hems.shift || !P.touArr || P.offGrid || !L1.shift) return res;
+    res.on = true;
+    const pr = P.touArr.price, pvKw = P.pvN * P.pvModW / 1000;
+    const expVal = h => P.exportMode === 'net' ? pr[h] : P.exportMode === 'fit' ? P.fitPrice : P.exportMode === 'tou' ? pr[h] * P.touExportRatio : 0;
+    const lau = Float64Array.from(L1.shift.laundry), dhw = L1.shift.dhw ? Float64Array.from(L1.shift.dhw) : null, comp = L1.shift.comp;
+    const dhwCap = Math.max(0, P.hems.dhwCap || 0);
+    for (let d = 0; d < 365; d++) {
+      const o = d * 24;
+      for (let kind = 0; kind < 2; kind++) {
+        const s = kind === 0 ? lau : dhw; if (!s) continue;
+        let budget = kind === 0 ? Infinity : dhwCap; if (budget <= 1e-9) continue;
+        const done = new Uint8Array(24);
+        for (let it = 0; it < 500; it++) {
+          let src = -1, ms = 0;
+          for (let k = 0; k < 24; k++) {
+            if (done[k]) continue; const h = o + k, m = Math.min(s[h], Math.max(0, base[h] - pv1[h] * pvKw));
+            if (m > 1e-9 && (src < 0 || pr[h] > pr[o + src] + 1e-12)) { src = k; ms = m; }
+          }
+          if (src < 0) break;
+          const ps = pr[o + src];
+          let dst = -1, cd = 0, room = 0;
+          for (let k = 0; k < 24; k++) {
+            if (k === src || (kind === 0 && (k < SHIFT_LWIN[0] || k > SHIFT_LWIN[1]))) continue;
+            const h = o + k, cap = kind === 0 ? SHIFT_LCAP - s[h] : SHIFT_COMP - comp[h] - s[h];
+            if (cap <= 1e-9) continue;
+            const sur = pv1[h] * pvKw - base[h], c = sur > 1e-9 ? expVal(h) : pr[h], r = sur > 1e-9 ? Math.min(sur, cap) : cap;
+            if (c < ps - 1e-9 && (dst < 0 || c < cd - 1e-12)) { dst = k; cd = c; room = r; }
+          }
+          if (dst < 0) { done[src] = 1; continue; }
+          const q = Math.min(ms, room, budget), hs = o + src, hd = o + dst;
+          s[hs] -= q; s[hd] += q; base[hs] -= q; base[hd] += q; budget -= q;
+          if (kind === 0) res.lauM[MONTH[o] - 1] += q; else res.dhwM[MONTH[o] - 1] += q;
+          if (budget <= 1e-9) break;
+        }
+      }
+    }
+    return res;
+  }
+  function touOpt(P) { // ESS TOU 운전용 하루 최저·최고 단가
+    if (!P.touArr) return null;
+    const dayMin = new Float64Array(H), dayMax = new Float64Array(H);
+    for (let d = 0; d < 365; d++) { let mn = 1e9, mx = -1e9; for (let k = 0; k < 24; k++) { const v = P.touArr.price[d * 24 + k]; mn = Math.min(mn, v); mx = Math.max(mx, v); } for (let k = 0; k < 24; k++) { dayMin[d * 24 + k] = mn; dayMax[d * 24 + k] = mx; } }
+    return { mode: P.essMode, price: P.touArr.price, dayMin, dayMax, gridCharge: P.gridCharge };
+  }
+  // 1년 차 조건의 정상 상태 연간 전기 비용(전기요금 − 매전 수익): ESS 시작 SOC·상계 이월 모두 한 해를 미리 돌린 값
+  function yearCost(load, pv, ess, opt, P) {
+    const soc0 = ess.cap > 0 ? dispatchYear(load, pv, ess, 0, opt).soc : 0, d = dispatchYear(load, pv, ess, soc0, opt);
+    const exp = P.exportMode === 'none' ? new Float64Array(H) : d.exp, st = { carry: 0 };
+    annualElecBill(d.imp, exp, P, st); const b = annualElecBill(d.imp, exp, P, st);
+    return b.bill - b.exportIncome;
+  }
+  // 부하 이동 → 계절별 절감률. 이동은 달마다 1년 차 정상 상태 비용이 줄어드는 달에만 적용(1월부터 차례로 판단).
+  // 월 상계에서 크레딧이 남는 달처럼 시간대 단가가 실제 한계비용이 아닌 달에는 옮겨도 이득이 없거나 손해이므로 HEMS가 옮기지 않는다고 본다.
+  function hemsLoad(L1, pv1, P) {
+    const sh = hemsShift(L1, pv1, P), fH = hemsFactor(P);
+    let load = new Float64Array(H); for (let h = 0; h < H; h++) load[h] = L1.after.elec[h] * fH[h];
+    if (!sh.on) return { load, sh };
+    const pvKw = P.pvN * P.pvModW / 1000, essKwh = P.essN * P.essModKwh, opt = touOpt(P);
+    const pv = new Float64Array(H); for (let h = 0; h < H; h++) pv[h] = pv1[h] * pvKw;
+    const ess = { cap: essKwh, pmax: essKwh * P.essCrate, rte: P.essRte };
+    let best = yearCost(load, pv, ess, opt, P); sh.cost0 = best;
+    for (let m = 1; m <= 12; m++) {
+      if (sh.lauM[m - 1] + sh.dhwM[m - 1] <= 1e-9) continue;
+      const trial = Float64Array.from(load); for (let h = 0; h < H; h++) if (MONTH[h] === m) trial[h] = sh.load[h] * fH[h];
+      const c = yearCost(trial, pv, ess, opt, P);
+      if (c < best - 1e-6) { load = trial; best = c; sh.months.push(m); sh.laundry += sh.lauM[m - 1]; sh.dhw += sh.dhwM[m - 1]; }
+    }
+    sh.cost1 = best;
+    return { load, sh };
+  }
+
   function simulate(L1, pv1, P) {
     // 계통 미연결(오프그리드): 남는 PV는 버림, ESS는 자가소비 우선(계통 충전 없음), 전기요금 0. 계통 수전 = 공급 부족(정전)
     const OFF = !!P.offGrid;
     if (OFF) P = Object.assign({}, P, { exportMode: 'none', essMode: 'self', gridCharge: false });
-    const NOBILL = { bill: 0, exportIncome: 0, monthBill: new Float64Array(12), billedKwh: 0 };
+    const NOBILL = { bill: 0, exportIncome: 0, monthBill: new Float64Array(12), monthExpInc: new Float64Array(12), billedKwh: 0 };
     const N = P.years, out = { years: [] };
-    const fH = hemsFactor(P);
-    const loadA = new Float64Array(H); for (let h = 0; h < H; h++) loadA[h] = L1.after.elec[h] * fH[h];
+    const HL = hemsLoad(L1, pv1, P), loadA = HL.load;
+    const monGasB = sumMonthly(L1.before.gas), monGasA = sumMonthly(L1.after.gas);
     const pvKw = P.pvN * P.pvModW / 1000, essKwh = P.essN * P.essModKwh;
     const gasBeforeKg = sum(L1.before.gas), gasAfterKg = sum(L1.after.gas);
     const useBefore = sum(L1.before.elec), useAfter = sum(loadA);
-    // TOU 보조
-    let opt = null;
-    if (P.touArr) {
-      const dayMin = new Float64Array(H), dayMax = new Float64Array(H);
-      for (let d = 0; d < 365; d++) { let mn = 1e9, mx = -1e9; for (let k = 0; k < 24; k++) { const v = P.touArr.price[d * 24 + k]; mn = Math.min(mn, v); mx = Math.max(mx, v); } for (let k = 0; k < 24; k++) { dayMin[d * 24 + k] = mn; dayMax[d * 24 + k] = mx; } }
-      opt = { mode: P.essMode, price: P.touArr.price, dayMin, dayMax, gridCharge: P.gridCharge };
-    }
+    const opt = touOpt(P); // TOU 보조
     // 설치 전(기준안): 계통만
     const zero = new Float64Array(H);
     const stB = { carry: 0 }; const billB1 = annualElecBill(L1.before.elec, zero, P, stB);
@@ -256,7 +329,10 @@
       const pvGen = sum(pvArr), imp = sum(d.imp), exp = sum(expA), curt = sum(curtA);
       out.years.push({ y, cap, capT, cumC, before, after, benefit, cumB, net, ev,
         energy: { use: useAfter, pv: pvGen, imp, exp, curt, selfUse: d.selfUse, chg: d.chg, dis: d.dis, pvHealth: pvH, soh },
-        monthBillAfter: billA.monthBill.map(v => v * escE), carry: stA.carry });
+        monthBillAfter: billA.monthBill.map(v => v * escE), carry: stA.carry,
+        mon: { pv: sumMonthly(pvArr), imp: sumMonthly(d.imp), exp: sumMonthly(expA), curt: sumMonthly(curtA), // N년 차 월별 차트용 (금액은 원, 인상률 반영)
+          billB: billB1.monthBill.map(v => v * escE), billA: billA.monthBill.map(v => v * escE), expInc: billA.monthExpInc.map(v => v * expEsc),
+          gasB: monGasB.map(v => v * P.gasPrice * escG), gasA: monGasA.map(v => v * P.gasPrice * escG) } });
       if (y === 1) {
         let impDays = 0; for (let dd = 0; dd < 365; dd++) { let s = 0; for (let k = 0; k < 24; k++) s += d.imp[dd * 24 + k]; if (s > ZERO_KWH) impDays++; }
         out.y1 = { monthUse: sumMonthly(loadA), monthPv: sumMonthly(pvArr), monthImp: sumMonthly(d.imp), monthExp: sumMonthly(expA), monthCurt: sumMonthly(curtA),
@@ -279,6 +355,8 @@
       selfSuff: useAfter > 0 ? 1 - y1.imp / useAfter : 0,        // 대표: 에너지 자립률(실시간) = 1 − 계통 수전 / 전력 사용량
       pvOffset: useAfter > 0 ? y1.pv / useAfter : 0,             // 보조: 연간 발전 상쇄율 = PV 발전량 / 전력 사용량 (100% 초과 가능)
       pvOffsetUsed: useAfter > 0 ? (y1.pv - y1.curt) / useAfter : 0, // 버려진 PV 제외
+      selfCons: y1.pv > 0 ? (y1.pv - y1.exp - y1.curt) / y1.pv : 0, // 자가소비율 = 집에서 쓴(ESS 경유 포함) PV ÷ PV 발전량
+      hemsShift: { on: HL.sh.on, laundry: HL.sh.laundry, dhw: HL.sh.dhw, months: HL.sh.months, cand: HL.sh.on ? sum(HL.sh.lauM) + sum(HL.sh.dhwM) : 0, cost0: HL.sh.cost0, cost1: HL.sh.cost1 },
       curt: y1.curt, curtRatio: y1.pv > 0 ? y1.curt / y1.pv : 0,
       zeroEnergy: { ok: y1.imp <= ZERO_KWH, impKwh: y1.imp, impDays: Y1.impDays },
       zeroBill: { ok: Y1.billVar <= ZERO_WON, varBill: Y1.billVar, fixedBill: Y1.fixedBill, okSteady: Y1.billVarSteady <= ZERO_WON, varBillSteady: Y1.billVarSteady },
@@ -291,7 +369,7 @@
 
   // 2단계만 (요금 무관, 자가소비 우선 1년 차)
   function level2(L1, pv1, P) {
-    const fH = hemsFactor(P), load = new Float64Array(H); for (let h = 0; h < H; h++) load[h] = L1.after.elec[h] * fH[h];
+    const load = hemsLoad(L1, pv1, P).load;
     const pvKw = P.pvN * P.pvModW / 1000, essKwh = P.essN * P.essModKwh;
     const pv = new Float64Array(H); for (let h = 0; h < H; h++) pv[h] = pv1[h] * pvKw;
     const d = dispatchYear(load, pv, { cap: essKwh, pmax: essKwh * P.essCrate, rte: P.essRte }, 0, null);
@@ -302,7 +380,7 @@
   // Zero Energy(1년 차 계통 수전 0)에 필요한 최소 ESS 모듈 수. 현재 PV·HEMS 기준, 자가소비 우선 운전(계통 충전 없음),
   // 시작 SOC는 simulate와 같은 정상 상태. 반환 { n: 모듈 수 또는 null, imp: n(또는 maxN)에서의 남은 수전 kWh, days }
   function minEssForZero(L1, pv1, P, maxN) {
-    const fH = hemsFactor(P), load = new Float64Array(H); for (let h = 0; h < H; h++) load[h] = L1.after.elec[h] * fH[h];
+    const load = hemsLoad(L1, pv1, P).load; // simulate와 같은 부하(오프그리드면 이동 없음)
     const pvKw = P.pvN * P.pvModW / 1000, pv = new Float64Array(H); for (let h = 0; h < H; h++) pv[h] = pv1[h] * pvKw;
     let last = null;
     for (let n = 0; n <= maxN; n++) {
@@ -316,6 +394,6 @@
     return last;
   }
 
-  const api = { H, MONTH, DOW, HOD, MDAYS, decodeCombo, level1, level2, simulate, minEssForZero, touNP, krMonthBill, touPriceArray, dispatchYear, seasonOf, sum, sumMonthly };
+  const api = { H, MONTH, DOW, HOD, MDAYS, decodeCombo, level1, level2, simulate, hemsShift, minEssForZero, touNP, krMonthBill, touPriceArray, dispatchYear, seasonOf, sum, sumMonthly };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.SCEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);
