@@ -83,6 +83,8 @@
     // 요금제
     $('#tariffSel').onchange = e => { S.tariff = e.target.value; const T = TARIFF[S.tariff]; if (T.exportDefault) S.exportMode = T.exportDefault; if (T.type !== 'tou' && S.exportMode === 'tou') S.exportMode = 'net'; paintL3(); changed(); };
     seg($('[data-k=exportMode]'), [['net', '월 상계'], ['fit', 'FIT'], ['tou', 'TOU'], ['none', '매전 없음']], () => S.exportMode, v => { S.exportMode = v; paintL3(); });
+    $('[data-k=exportMode] [data-v=net]').setAttribute('data-tip', TIPS.net);
+    $$('[data-tipref]').forEach(el => el.setAttribute('data-tip', TIPS[el.dataset.tipref]));
     seg($('[data-k=essMode]'), [['self', '자가소비 우선'], ['tou', 'TOU 피크 방전']], () => S.essMode, v => { S.essMode = v; paintL3(); });
     seg($('[data-k=offGrid]'), [['grid', '연결'], ['off', '미연결 (오프그리드)']], () => S.offGrid || 'grid', v => { S.offGrid = v; paintL3(); });
     const gu = $('#gasUnit'); gu.innerHTML = Object.entries(GAS_UNITS).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join(''); gu.value = S.gasUnit;
@@ -222,6 +224,17 @@
   }
   function svg(w, h, body) { return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">${body}</svg>`; }
   const tipAttr = html => `data-tip="${html.replace(/"/g, '&quot;')}"`;
+  const TIPS = {
+    dhw: "<b>급탕 이동 상한 (HEMS 부하 이동)</b><br><b>옮기는 부하</b>: 세탁·식세기와 AWHP 급탕 재가열 두 가지뿐입니다. 난방·냉방·조리·조명 등은 옮기지 않습니다. 이 칸은 그중 <b>급탕</b>에만 걸리는 하루 최대 이동량(전기 kWh)이고, 세탁·식세기는 7~22시 시작·시간당 2.0kWh 한도만 둡니다.<br><b>이동 방법</b> (TOU 요금제일 때, 날마다): ① 그 시간 사용 중 PV로 못 채워 계통에서 받는 몫이 있는 가장 비싼 시간을 고르고 ② 같은 날 안의 더 싼 시간으로 옮깁니다(PV가 남는 시간은 매전 단가로 평가). 더 옮길 이득이 없을 때까지 반복하며, 급탕은 AWHP 압축기 최대 출력(3.91kW)을 넘지 않게 합니다. 끝으로 1년 전기 비용이 실제로 줄어드는 달에만 적용합니다(월 상계 크레딧이 남는 달 등은 제외).<br><b>상한을 두는 이유</b>: 급탕을 다른 시간에 데우려면 그사이 쓸 온수를 탱크에 미리 담아 두어야 합니다. 이 모델의 탱크(200L·55°C·재가열 폭 30%)가 추가로 담을 수 있는 열은 약 3kWh열, 전기로 약 1~1.5kWh라고 보고 기본값을 1.5kWh/일로 두었습니다(가정).<br><b>단순화한 이유</b>: 탱크 온도·난방·실내 온도는 1단계에서 15분 단위로 미리 계산해 둔 결과입니다. 브라우저에서는 '언제 쓰는지'만 옮길 수 있고, 옮긴 뒤의 탱크 온도·대기 손실이나 난방 예열(건물에 열 저장)은 다시 계산할 수 없습니다. 이를 정확히 반영하려면 HEMS 제어를 열 모델과 함께 사전계산 단계에서 다시 돌려야 하므로, 여기서는 탱크 용량을 상한으로 둔 근사를 썼습니다.",
+    net: '<b>월 상계 (Net metering)</b><br>남는 PV 전기를 계통으로 보내면 kWh 그대로 기록되고, 나중에 받은 전기에서 1:1로 차감됩니다(잉여는 다음 달로 무기한 이월). 계통이 <b>손실 0%의 무료 저장 장치</b> 역할을 하는 셈입니다.<br>반면 ESS는 충전→방전 과정에서 약 10%를 잃습니다(왕복 효율 90%). 그래서 월 상계에서는 잉여를 ESS에 담을수록 상쇄할 kWh가 줄어 <b>전기요금이 오히려 늘 수 있습니다</b>.<br>예) 춘천 Core 72 3인 AWHP, PV 4.8kW · ESS 없음: 연간 역송이 수전보다 259kWh 많아 Zero Bill 달성 · ESS 10kWh 추가: 충·방전 손실 310kWh로 51kWh 부족, Zero Bill 미달(자립률은 26% → 71%).<br>월 상계에서 ESS의 가치는 요금보다 자립률·정전 대비에 있습니다. 매전 없음·낮은 FIT 단가·TOU 요금에서는 ESS가 요금 절감에도 기여합니다.',
+  };
+  const infoIcon = html => `<span class="ii" ${tipAttr(html)}>!</span>`;
+  function ssTip(k) { // 에너지 자립률 KPI 설명(현재 값 포함)
+    return '<b>에너지 자립률 (Self-sufficiency)</b><br>집에서 쓴 전기 중 그 시각에 PV(직접 또는 ESS 경유)로 채운 비율입니다. = 1 − 계통 수전 ÷ 전력 사용량. 태양광·ESS 분야에서 통용되는 자립률(Self-sufficiency rate, Autarky rate) 정의와 같습니다.<br>' +
+      '<b>함께 보는 두 지표</b><br>· 자가소비율(Self-consumption) = 집에서 쓴 PV ÷ PV 발전량 — 분모가 사용량이 아니라 발전량입니다.<br>· 연간 발전 상쇄율 = PV 발전량 ÷ 전력 사용량 — 시간대를 따지지 않은 1년 총량 비교입니다.<br>' +
+      '<b>Zero Bill과의 관계</b><br>월 상계에서는 낮에 보낸 전기가 밤·겨울에 받은 전기를 kWh 단위로 상쇄합니다. 따라서 Zero Bill은 연간 발전 상쇄율이 약 100%이면 달성되며, 실시간 자립률과는 별개입니다. PV 발전은 낮에, 사용은 저녁·밤·겨울 난방에 몰리므로 ESS 없이 PV만 있으면 Zero Bill이어도 자립률은 낮게 나옵니다(예: 춘천 Core 72 3인 AWHP, PV 4.8kW — 상쇄율 104%, Zero Bill 달성, 자립률 26%). 자립률을 올리려면 낮의 잉여를 밤으로 옮기는 ESS가 필요합니다.' +
+      (k ? `<br><b>현재 조건</b>: 자립률 ${(k.selfSuff * 100).toFixed(0)}% · 자가소비율 ${(k.selfCons * 100).toFixed(0)}% · 연간 발전 상쇄율 ${(k.pvOffset * 100).toFixed(0)}%` : '');
+  }
   function legend(el, items) { $(el).innerHTML = items.map(([n, c, ln]) => `<span><i class="${ln ? 'ln' : ''}" style="background:${c}"></i>${n}</span>`).join(''); }
   function yAxis(ticks, y, L, W, fmt) {
     return ticks.map(t => `<line x1="${L}" x2="${W}" y1="${y(t)}" y2="${y(t)}" stroke="${t === 0 ? COL.axis : COL.grid}"/><text x="${L - 6}" y="${y(t) + 3.5}" text-anchor="end" font-size="10" fill="${COL.txt}">${fmt(t)}</text>`).join('');
@@ -252,7 +265,7 @@
     box.innerHTML = svg(W, H, body);
   }
   function stackedBars(el, cats, series, opt) {
-    const box = $(el), W = Math.max(320, box.clientWidth), H = opt.h || 210, L = 46, R = 8, T = 10, B = 24;
+    const box = $(el), W = Math.max(320, box.clientWidth), H = opt.h || 210, L = 46, R = opt.y2 ? 50 : 8, T = opt.y2 ? 18 : 10, B = 24;
     const tot = cats.map((_, i) => series.reduce((a, s) => a + s.values[i], 0));
     const ticks = axisTicks(0, Math.max(...tot, 1e-6) * 1.05, 4), top = ticks[ticks.length - 1], y = v => T + (top - v) / top * (H - T - B);
     const cw = (W - L - R) / cats.length, bw = Math.min(46, cw * 0.62);
@@ -265,11 +278,18 @@
         if (last) body += bar(x, y0 - (j ? 1 : 0), y1, bw, s.color);
         else body += `<rect x="${x}" y="${y1 + 1}" width="${bw}" height="${Math.max(0, y0 - y1 - 2 + (j ? 0 : 1))}" fill="${s.color}"/>`;
       });
-      const tip = `<b>${c}</b> 합계 ${(opt.vfmt || f0)(tot[i])} ${opt.unit || ''}<br>` + series.slice().reverse().map(s => `${s.name}: ${(opt.vfmt || f0)(s.values[i])}`).join('<br>');
+      const tip = `<b>${c}</b> 합계 ${(opt.vfmt || f0)(tot[i])} ${opt.unit || ''}<br>` + series.slice().reverse().map(s => `${s.name}: ${(opt.vfmt || f0)(s.values[i])}`).join('<br>') + (opt.y2 ? `<br>${opt.y2.name}: ${opt.y2.fmt(opt.y2.values[i])} ${opt.y2.unit}` : '');
       body += `<rect x="${L + i * cw}" y="${T}" width="${cw}" height="${H - T - B}" fill="transparent" ${tipAttr(tip)}/>`;
       body += `<text x="${L + i * cw + cw / 2}" y="${H - 7}" text-anchor="middle" font-size="10" fill="${COL.txt}">${c}</text>`;
     });
     if (opt.line) body += `<path d="${opt.line.values.map((v, i) => (i ? 'L' : 'M') + (L + i * cw + cw / 2) + ',' + y(v)).join('')}" fill="none" stroke="${opt.line.color}" stroke-width="2" pointer-events="none"/>`;
+    if (opt.y2) { // 보조 Y축: 계단형 점선(예: TOU 단가)
+      const v2 = opt.y2.values, t2 = axisTicks(0, Math.max(...v2, 1e-9) * 1.1, 4), top2 = t2[t2.length - 1], yy = v => T + (top2 - v) / top2 * (H - T - B);
+      let d = ''; v2.forEach((v, i) => { d += (i ? `L${L + i * cw},${yy(v)}` : `M${L},${yy(v)}`) + `L${L + (i + 1) * cw},${yy(v)}`; });
+      body += `<path d="${d}" fill="none" stroke="${opt.y2.color}" stroke-width="2" stroke-dasharray="5 3" pointer-events="none"/>`;
+      t2.forEach(t => { body += `<text x="${W - R + 5}" y="${yy(t) + 3.5}" font-size="10" fill="${opt.y2.color}">${opt.y2.fmt(t)}</text>`; });
+      body += `<text x="${W - 2}" y="9" font-size="10" text-anchor="end" fill="${opt.y2.color}">${opt.y2.unit}</text>`;
+    }
     box.innerHTML = svg(W, H, body);
   }
 
@@ -281,7 +301,7 @@
     const [cv, cu] = money(k.capexNet, true), [bv, bu] = money(k.benefit1, true), [nv, nu] = money(k.cumNet, true);
     const e1 = R3.years[0].energy;
     $('#kpis').innerHTML =
-      kpiHTML(OFFG() ? '에너지 자립률 (오프그리드)' : '에너지 자립률 (실시간)', (k.selfSuff * 100).toFixed(0), '%', `Self-sufficiency = 1 − ${OFFG() ? '공급 부족' : '계통 수전'} ${f0(e1.imp)} ÷ 사용 ${f0(k.useAfter)} kWh<br>연간 발전 상쇄율 ${(k.pvOffset * 100).toFixed(0)}% (PV 발전 ÷ 사용)${e1.curt > 0.5 ? ` · 버림 제외 ${(k.pvOffsetUsed * 100).toFixed(0)}%` : ''}${k.pvKw > 0 ? `<br>자가소비율 ${(k.selfCons * 100).toFixed(0)}% (Self-consumption: PV 중 집에서 쓴 몫)` : ''}`) +
+      kpiHTML((OFFG() ? '에너지 자립률 (오프그리드)' : '에너지 자립률 (실시간)') + infoIcon(ssTip(k)), (k.selfSuff * 100).toFixed(0), '%', `Self-sufficiency = 1 − ${OFFG() ? '공급 부족' : '계통 수전'} ${f0(e1.imp)} ÷ 사용 ${f0(k.useAfter)} kWh<br>연간 발전 상쇄율 ${(k.pvOffset * 100).toFixed(0)}% (PV 발전 ÷ 사용)${e1.curt > 0.5 ? ` · 버림 제외 ${(k.pvOffsetUsed * 100).toFixed(0)}%` : ''}${k.pvKw > 0 ? `<br>자가소비율 ${(k.selfCons * 100).toFixed(0)}% (Self-consumption: PV 중 집에서 쓴 몫)` : ''}`) +
       kpiHTML('초기 CAPEX (보조금 차감)', cv, cu, `설치 ${money(k.capexGross, true).join(' ')} · 보조금 ${money(k.subsidy, true).join(' ')}`) +
       kpiHTML('1년 차 연간 이득', bv, bu, `설치 전 ${money(R3.years[0].before.total, true).join(' ')} → 설치 후 ${money(R3.years[0].after.total, true).join(' ')}`) +
       kpiHTML(`${N}년 누적 순이익`, nv, nu, `교체 CAPEX ${money(R3.years.slice(1).reduce((a, y) => a + y.capT, 0), true).join(' ')} 포함`) +
@@ -539,8 +559,10 @@
     $('#dayTitle').textContent = `선택일 상세 · ${dateLabel(d)} · ${combo.occDays[d] ? '재실' : '비재실'}`;
     const ser = EU.map(([k, n, c]) => ({ name: n, color: c, values: Array.from(o[k].slice(d * 24, d * 24 + 24)) })).filter(s => s.values.some(v => v > 0.001));
     const pvkw = R3 ? R3.kpi.pvKw : 0;
-    legend('#legDay', ser.map(s => [s.name, s.color]).concat(pvkw ? [['PV 발전', COL.ink, true]] : []));
-    stackedBars('#chDay', Array.from({ length: 24 }, (_, i) => String(i)), ser, { unit: 'kWh', h: 210, vfmt: v => v.toFixed(2), fmt: v => v.toFixed(1), line: pvkw ? { color: COL.ink, values: META.pv1kw_kwh.slice(d * 24, d * 24 + 24).map(v => v * pvkw) } : null });
+    const TT = TARIFF[S.tariff], touOn = TT && TT.type === 'tou' && !OFFG();
+    const y2 = touOn ? { values: Array.from(E.touPriceArray(TT.tou, region().hemi).price.slice(d * 24, d * 24 + 24)), color: COL.s8, name: 'TOU 단가', unit: `${CUR_LABEL[TT.currency || 'KRW']}/kWh`, fmt: v => (TT.currency || 'KRW') === 'KRW' ? f1(v) : v.toFixed(3) } : null;
+    legend('#legDay', ser.map(s => [s.name, s.color]).concat(pvkw ? [['PV 발전', COL.ink, true]] : []).concat(y2 ? [[`TOU 단가 (오른쪽 축, 세전 ${y2.unit})`, COL.s8, true]] : []));
+    stackedBars('#chDay', Array.from({ length: 24 }, (_, i) => String(i)), ser, { unit: 'kWh', h: 210, vfmt: v => v.toFixed(2), fmt: v => v.toFixed(1), y2, line: pvkw ? { color: COL.ink, values: META.pv1kw_kwh.slice(d * 24, d * 24 + 24).map(v => v * pvkw) } : null });
     // 사람
     const pb = $('#chPpl'), W = Math.max(300, pb.clientWidth), L = 46, rowH = 22, n = combo.persons.length, Hh = n * rowH + 26;
     const SC = [['외출', COL.s4], ['재택', COL.s1], ['수면', '#3b4a63']], x = h => L + h * (W - L - 6) / 24;
@@ -666,7 +688,7 @@ ${D.costFields.filter(f => f[0] !== 'g' && f[0] !== 'ref').map(f => `<tr><td>${f
 
   // ---------------- 툴팁 ----------------
   const tip = $('#tip');
-  function showTip(e, html) { tip.innerHTML = html; tip.hidden = false; const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8), y = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8); tip.style.left = x + 'px'; tip.style.top = y + 'px'; }
+  function showTip(e, html) { tip.innerHTML = html; tip.classList.toggle('wide', html.length > 320); tip.hidden = false; const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8), y = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8); tip.style.left = x + 'px'; tip.style.top = y + 'px'; }
   function hideTip() { tip.hidden = true; }
   document.addEventListener('mousemove', e => { const t = e.target.closest && e.target.closest('[data-tip]'); if (t) showTip(e, t.getAttribute('data-tip')); else if (!e.target.closest('canvas')) hideTip(); });
 

@@ -151,6 +151,9 @@ table#tbl{border-collapse:separate;border-spacing:0;font-size:12px;min-width:100
 .occ i.sel{outline:2px solid var(--ink)}
 .tip{position:fixed;z-index:50;background:#1f2328;color:#fff;border-radius:6px;padding:6px 9px;font-size:11.5px;line-height:1.5;pointer-events:none;max-width:280px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
 .tip b{font-weight:700}
+.tip.wide{max-width:460px}
+.ii{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1.3px solid var(--sub);color:var(--sub);font-size:10px;font-weight:700;line-height:1;margin-left:5px;cursor:help;vertical-align:1px;pointer-events:auto;flex:none}
+.ii:hover{border-color:var(--ink);color:var(--ink)}
 .info{margin:16px 22px;padding:22px 26px;line-height:1.7;max-width:1200px}
 .info h2{font-size:17px;margin:18px 0 8px}
 .info h2:first-child{margin-top:0}

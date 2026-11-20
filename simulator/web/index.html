@@ -56,7 +56,7 @@
       <div>간절기<input type="text" data-k="hemsMid" inputmode="decimal"><b>%</b></div>
       <label class="chk"><input type="checkbox" data-k="hemsInclude"> HEMS 비용을 CAPEX에 포함</label>
       <div class="shiftrow"><label><input type="checkbox" data-k="hemsShift"> TOU 요금제일 때 부하 이동 (세탁·식세기, AWHP 급탕)</label>
-        <span>급탕 이동 상한<input type="text" data-k="hemsDhwCap" inputmode="decimal"><b>kWh/일</b></span></div>
+        <span>급탕 이동 상한<input type="text" data-k="hemsDhwCap" inputmode="decimal"><b>kWh/일</b><span class="ii" data-tipref="dhw">!</span></span></div>
       <div class="shiftrow hint" id="shiftNote"></div>
     </div>
     <details class="adv" id="advCost">
@@ -138,7 +138,7 @@
     <div class="hemsdrow">
       <label><input type="checkbox" data-k="hemsOn"> <b>HEMS 적용</b></label>
       <label><input type="checkbox" data-k="hemsShift"> TOU 부하 이동 (세탁·식세기, AWHP 급탕)</label>
-      <span>급탕 이동 상한 <input type="text" data-k="hemsDhwCap" inputmode="decimal"> kWh/일</span>
+      <span>급탕 이동 상한 <input type="text" data-k="hemsDhwCap" inputmode="decimal"> kWh/일<span class="ii" data-tipref="dhw">!</span></span>
       <span>계절별 절감률 동절기 <input type="text" data-k="hemsWinter" inputmode="decimal"> · 하절기 <input type="text" data-k="hemsSummer" inputmode="decimal"> · 간절기 <input type="text" data-k="hemsMid" inputmode="decimal"> %</span>
       <span>요금제 <select id="tariffSel2"></select></span>
     </div>
